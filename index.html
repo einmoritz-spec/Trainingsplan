@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Trainingsplan</title>
+
+<!-- PWA-Manifest (echte Datei statt Data-URI) -->
+<link rel="manifest" href="manifest.json">
+
+<meta name="theme-color" content="#121316" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5f4f1" media="(prefers-color-scheme: light)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Training">
+
+<!-- Icons (echte Dateien statt Data-URI, siehe assets/icons/) -->
+<link rel="icon" href="assets/icons/favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Poppins:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Roboto:wght@400;500;700&family=Lato:wght@400;700&family=Open+Sans:wght@400;600;700&family=Nunito:wght@400;600;700&family=Raleway:wght@400;600;700&family=Work+Sans:wght@400;600;700&family=DM+Sans:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=Manrope:wght@400;600;700&family=Rubik:wght@400;600;700&family=Karla:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Merriweather:wght@400;700&family=Lora:wght@400;600;700&family=Oswald:wght@400;600;700&family=Anton&family=Archivo+Black&family=Comfortaa:wght@400;600;700&family=Quicksand:wght@400;600;700&family=Caveat:wght@400;600;700&family=Dancing+Script:wght@400;600;700&family=Pacifico&family=Fira+Code:wght@400;500;600&family=Roboto+Mono:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Special+Elite&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+
+<!-- Ausgelagertes CSS (ehemals <style>-Block, Zeilen 20–2004 der Originaldatei) -->
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app" id="app"></div>
+<div class="mini-player" id="miniPlayer" style="display:none">
+  <button class="mini-player-open" id="miniPlayerOpenBtn" type="button" aria-label="Training öffnen">
+    <span class="mini-player-arrow" id="miniPlayerArrow"></span>
+    <span class="mini-player-mid">
+      <span class="mini-player-time" id="miniPlayerTime">00:00</span>
+      <span class="mini-player-exercise" id="miniPlayerExercise"></span>
+    </span>
+  </button>
+  <button class="mini-player-cancel" id="miniPlayerCancelBtn" type="button" aria-label="Training abbrechen">✕</button>
+</div>
+
+<!--
+  Ausgelagerte JS-Module (ehemals ein einziges <script>, Zeilen 2020–15826 der Originaldatei).
+  Es sind bewusst klassische, nicht-modulare <script>-Tags (kein type="module"):
+  Der Originalcode teilt sich einen einzigen globalen Scope, in dem Funktionen und
+  Variablen aus früheren Dateien von späteren Dateien direkt verwendet werden.
+  Die Ladereihenfolge unten entspricht exakt der Reihenfolge im Originalskript
+  und muss beibehalten werden.
+-->
+<script src="js/data/app-data.js"></script>
+<script src="js/01-storage.js"></script>
+<script src="js/02-state-theme.js"></script>
+<script src="js/03-input-widgets.js"></script>
+<script src="js/04-utils.js"></script>
+<script src="js/05-calendar.js"></script>
+<script src="js/06-navigation.js"></script>
+<script src="js/07-home.js"></script>
+<script src="js/08-stats-progress.js"></script>
+<script src="js/09-start-select.js"></script>
+<script src="js/10-plan-settings.js"></script>
+<script src="js/11-active-session.js"></script>
+<script src="js/12-session-summary.js"></script>
+<script src="js/13-session-detail-pdf.js"></script>
+<script src="js/14-app-init.js"></script>
+
+<!--
+  NEU (nicht im Original enthalten): Service-Worker-Registrierung.
+  Die App verlinkte bisher nur ein Manifest, hatte aber keinen Service Worker,
+  war also installierbar, aber nicht offlinefähig. sw.js ergänzt das.
+  Registrierung erfolgt mit relativem Pfad ("sw.js", nicht "/sw.js"),
+  damit es auch unter einem GitHub-Pages-Projektpfad (z. B. /reponame/) funktioniert.
+-->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch((err) => {
+      console.error('Service Worker Registrierung fehlgeschlagen:', err);
+    });
+  });
+}
+</script>
+</body>
+</html>
