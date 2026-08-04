@@ -1,0 +1,1661 @@
+
+:root{
+  --bg: #121316;
+  --surface: #1c1e22;
+  --surface-2: #24272c;
+  --text: #ece9e4;
+  --muted: #8a8e95;
+  --accent: #d9c74a;
+  --accent-2: #b3453a;
+  --accent-3: #6f9bd1;
+  --border: #33363b;
+  --radius: 10px;
+  --pause-icon-url: url("data:image/png;base64,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");
+}
+/* Light Mode: wird per JS auf <html> gesetzt (data-theme="light", siehe applyTheme() /
+   Einstellungen → Darstellung). Alle Farbrollen bleiben dieselben Variablennamen, nur die
+   Werte drehen sich um — jede Stelle in der App, die bereits var(--bg)/var(--text)/etc.
+   nutzt, funktioniert dadurch automatisch auch im Light Mode ohne weitere Anpassung. */
+html[data-theme="light"]{
+  --bg: #f5f4f1;
+  --surface: #ffffff;
+  --surface-2: #ececea;
+  --text: #1c1d20;
+  --muted: #6b6f76;
+  --border: #dcdad5;
+}
+
+*{ box-sizing: border-box; }
+html,body{ margin:0; padding:0; background: var(--bg); }
+/* Design → Schriftart: sobald eine eigene Schriftart gewählt ist (siehe applyFontFamily()),
+   setzt JS die Klasse "font-override" auf <html> — diese Regel erzwingt die gewählte Schrift
+   dann WIRKLICH überall, auch dort, wo einzelne Elemente sonst fest JetBrains Mono (Zahlen)
+   oder Bebas Neue (große Überschriften) verwenden. Die zwei Ausnahmen sorgen dafür, dass die
+   Schriftart-Vorschau im Auswahl-Rad bzw. in der Liste eigener Schriften weiterhin in ihrer
+   JEWEILS EIGENEN Schrift angezeigt wird, statt selbst auf die aktuell aktive Schrift
+   überschrieben zu werden — sonst könnte man die Optionen dort nicht mehr unterscheiden. */
+html.font-override :not(.scroll-wheel-item-text):not(.font-preview-item){
+  font-family: var(--font-app) !important;
+}
+body{
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-app, 'Inter', system-ui, sans-serif);
+  min-height: 100vh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+}
+/* Textmarkierung ist app-weit deaktiviert (verhindert, dass Android bei Long-Press auf
+   Buttons/Zeilen versehentlich Fließtext daneben markiert oder das native "Kopieren"-Menü
+   öffnet) — nur in echten Eingabefeldern soll man weiterhin Text auswählen/markieren können. */
+input, textarea{
+  -webkit-user-select:text; user-select:text; -webkit-touch-callout:default;
+}
+button{ font-family: inherit; cursor: pointer; }
+input{ font-family: inherit; }
+::selection{ background: var(--accent); color: #121316; }
+
+.app{ max-width: 640px; margin: 0 auto; padding: 20px 16px 100px; }
+
+/* ---------- Startseite: "Verlauf zuerst"-Layout (Daumenbereich) ---------- */
+/* Schiebt Verlauf/Nav-Zeile/"Training starten" als zusammenhängenden Block gezielt in den
+   unteren, mit dem Daumen leicht erreichbaren Bildschirmbereich, statt ihn direkt unter der
+   Überschrift zu zeigen — der Freiraum oben ist bewusst leer, damit z. B. beim Halten des
+   Handys mit einer Hand nichts im schwer erreichbaren oberen Bereich liegt. Nutzt dieselbe
+   sichtbare Höhe wie window.visualViewport (siehe wireViewportAwareOverlays), damit sich
+   das auch bei ein-/ausgeblendeter Adressleiste im mobilen Browser sauber anpasst. */
+.home-thumb-wrap{
+  display:flex; flex-direction:column;
+  min-height: calc(100vh - 120px); /* 100dvh wäre exakter, min-height als robuster Fallback */
+  min-height: calc(100dvh - 120px);
+}
+.home-thumb-spacer{ flex:1 1 auto; min-height:12px; }
+.home-thumb-block{ flex-shrink:0; }
+
+/* ---------- Trainingsauswahl: "Training importieren"/"Kategorie hinzufügen" unten ---------- */
+/* Hält die beiden Buttons unten am Bildschirmrand fest, statt direkt unter den Kacheln zu
+   hängen — bei wenigen Kacheln stünden sie sonst mitten auf dem Bildschirm statt am unteren
+   Rand. Gleiches Prinzip wie .home-thumb-wrap auf der Startseite. */
+.start-select-wrap{
+  display:flex; flex-direction:column;
+  min-height: calc(100vh - 40px);
+  min-height: calc(100dvh - 40px);
+}
+.start-select-spacer{ flex:1 1 auto; min-height:24px; }
+.add-category-row{ display:flex; justify-content:center; margin:6px 0 4px; }
+.add-category-btn-small{
+  width:34px; height:34px; border-radius:0; border:none;
+  background:none; color: var(--muted); font-size:20px; font-weight:300; line-height:1;
+  display:flex; align-items:center; justify-content:center; opacity:0.5;
+}
+.add-category-btn-small:active{ color: var(--text); opacity:0.8; }
+
+/* ---------- Top identity ---------- */
+.brand{ margin-bottom: 14px; }
+.brand h1{
+  font-family:'Bebas Neue', sans-serif;
+  font-size: clamp(24px, 8vw, 34px);
+  letter-spacing: 1px;
+  line-height: 1.05;
+  word-break: break-word;
+  margin:0;
+}
+.gear{
+  background:none; border:1px solid var(--border); color:var(--muted);
+  border-radius: 8px; padding:8px 12px; font-size:13px;
+}
+.gear:hover{ color: var(--text); border-color: var(--muted); }
+.back-row{ margin-bottom: 18px; }
+.back-btn-icon{
+  background:none; border:none; padding:6px; margin:-6px 0 0 -6px;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.back-btn-icon img{ width:22px; height:22px; display:block; }
+.back-row .gear{ display:inline-block; width:auto; padding:9px 16px; font-size:13px; }
+/* Light Mode: Zurück-Icon (helles PNG, für Dark Mode gezeichnet) und Teilen-Buttons sollen
+   schwarz statt kaum sichtbar hell erscheinen. Das Icon wird per Filter invertiert (aus dem
+   hellen Dark-Mode-Pfeil wird ein dunkler), die Teilen-Buttons bekommen direkt schwarze
+   Schrift/Rahmen statt var(--muted). */
+html[data-theme="light"] .back-btn-icon img{ filter: invert(1); }
+html[data-theme="light"] #btnShare,
+html[data-theme="light"] #btnSummaryShare{ color:#000; border-color:#000; }
+
+/* ---------- Buttons ---------- */
+.btn{
+  display:block; width:100%; text-align:center;
+  border-radius: var(--radius); border:1px solid var(--border);
+  background: var(--surface); color: var(--text);
+  padding: 16px; font-size:16px; font-weight:600;
+  transition: transform .08s ease, background .15s ease;
+}
+.btn:active{ transform: scale(0.98); }
+.btn-primary{
+  background: var(--accent); color: var(--accent-contrast, #121316); border-color: var(--accent);
+  font-family:'Bebas Neue', sans-serif; font-size:22px; letter-spacing:1px;
+  padding: 20px;
+}
+/* "Nochmal trainieren": behält Größe/Typografie von .btn-primary, aber nur Umriss statt
+   ausgefüllter Fläche — Rand + Schrift in der Akzentfarbe, dazu Icon+Text nebeneinander statt
+   des zentrierten Blocktexts (gleiches Muster wie .settings-reset-btn für "App zurücksetzen"). */
+.btn-repeat{
+  background:none; color: var(--accent); border-color: var(--accent);
+  display:flex; align-items:center; justify-content:center; gap:9px;
+}
+.btn-repeat-icon{ flex-shrink:0; }
+/* Generisches Muster für Ghost-Buttons mit einem Icon vor dem Text (z. B. "Als PDF
+   exportieren") — Icon nutzt stroke="currentColor", färbt sich also automatisch in der
+   jeweiligen Button-Schriftfarbe statt eine eigene feste Farbe/Emoji-Darstellung zu haben. */
+.btn-icon-label{ display:flex; align-items:center; justify-content:center; gap:8px; }
+.btn-icon-label-icon{ flex-shrink:0; }
+.btn-danger{ background: var(--accent-2); border-color: var(--accent-2); color:#fff; }
+.btn-ghost{ background:none; color:var(--muted); border:1px solid var(--border); font-weight:500; }
+.btn-small{ padding:8px 14px; font-size:13px; width:auto; display:inline-block; }
+
+/* ---------- History table ---------- */
+.section-label{
+  font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color: var(--muted);
+  margin: 28px 0 10px;
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+  display:flex; align-items:center; gap:8px;
+}
+.section-label-icon{ width:16px; height:16px; opacity:0.75; flex-shrink:0; pointer-events:none; }
+.section-label-link{
+  background:none; border:none; padding:0; font-family:inherit; text-align:left; cursor:pointer;
+}
+.history{ border-radius: var(--radius); overflow:hidden; border:1px solid var(--border); }
+.history-row{
+  display:flex; justify-content:space-between; align-items:center;
+  padding: 14px 16px; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+}
+.history-row *{ -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+.history-row:last-child{ border-bottom:none; }
+.history-row:active{ background: var(--surface-2); }
+.history-date{ font-weight:600; }
+.history-meta{ font-family:'JetBrains Mono', monospace; font-size:12px; color: var(--muted); margin-top:2px; }
+/* Dezenter grauer Hinweis-Tag bei Einheiten, die über die "Frei"-Kachel liefen (siehe
+   historyRowHTML()) — bewusst unauffällig (kein Rahmen/Hintergrund, nur leicht abgesetzte
+   Schrift), da es eine Zusatz-Info ist, kein Fehlerzustand. */
+.history-free-tag{
+  font-family:'JetBrains Mono', monospace; font-size:11px; color: var(--muted); opacity:0.55;
+  letter-spacing:0.3px; flex-shrink:0; margin:0 10px;
+}
+.history-empty{
+  padding: 24px 16px; color: var(--muted); text-align:center; font-size:14px;
+  background: var(--surface); border-radius: var(--radius); border:1px solid var(--border);
+}
+.history-toggle{
+  width:100%; background:none; border:1px dashed var(--border); color: var(--muted);
+  border-radius: var(--radius); padding:12px; font-size:13px; font-weight:600;
+  margin-top:10px; text-align:center;
+}
+.history-toggle:active{ color: var(--text); border-color: var(--muted); }
+.history-month-label{
+  font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color: var(--muted);
+  margin:16px 0 8px; padding:0 14px;
+}
+.history-month-label:first-child{ margin-top:14px; }
+
+/* ---------- Nav row / stat cards ---------- */
+/* Horizontal scrollbarer Wochenstreifen: scroll-snap-type sorgt dafür, dass beim Loslassen
+   immer eine ganze Woche exakt im Rahmen einrastet (kein "halb sichtbarer" Wochenwechsel);
+   scroll-snap-stop:always (auf .week-strip-slide, dem jeweiligen Slide) verhindert zusätzlich,
+   dass ein schneller Wisch mit Schwung mehrere Wochen auf einmal überspringt.
+   WICHTIG: der Pfeil-Hinweis wird NICHT mehr dynamisch per Scroll-Listener ein-/ausgeblendet
+   (frühere Versionen dieser Lösung: erst Overlay, dann eine eigene Flex-Spalte, deren Breite
+   sich je nach Scroll-Position änderte) — jede Art, die Breite/Sichtbarkeit während oder nach
+   dem Scrollen dynamisch zu verändern, veränderte den Scroll-Container und sorgte für sichtbares
+   Springen bzw. ein verzögertes "Reinschieben" des Pfeils. Stattdessen ist der Pfeil jetzt fest
+   Teil der Slide-Struktur JEDER vergangenen Woche (siehe weekStripHTML(): pro Woche ein
+   .week-strip-slide mit .week-strip [7 Tage] + optionalem .week-strip-arrow-inline-Button, nur
+   bei der aktuellen [letzten] Woche fehlt Letzterer) — dadurch ändert sich am Scroll-Container
+   selbst während des Scrollens NICHTS mehr, jede Woche ist von Anfang an exakt so breit wie ihr
+   Slide, der Pfeil ist bei vergangenen Wochen sofort da (kein Nachladen/Einschieben).
+   Kleines vertikales Padding auf .week-strip-scroll verhindert außerdem, dass der Info-Ring um
+   die heutige Zahl (box-shadow) am unteren Rand vom (durch overflow-x:auto implizit auch
+   aktiven) overflow-y abgeschnitten wird.
+*/
+.week-strip-wrap{ margin-bottom:20px; }
+.week-strip-scroll{
+  display:flex; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch;
+  scrollbar-width:none; padding:3px 0;
+}
+.week-strip-scroll::-webkit-scrollbar{ display:none; }
+.week-strip-slide{
+  display:flex; align-items:center; gap:6px; width:100%; flex:0 0 100%;
+  scroll-snap-align:start; scroll-snap-stop:always;
+}
+.week-strip{
+  display:flex; justify-content:space-between; gap:4px; flex:1; min-width:0;
+  background:none; border:none; padding:0; font:inherit; cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+/* Pfeil-Button: fester Bestandteil jeder vergangenen Woche (siehe Kommentar oben), eigener
+   Button neben .week-strip (kein verschachteltes <button> im <button>). Tap scrollt animiert
+   zurück zur aktuellen Woche, statt (wie .week-strip selbst) die Monatsübersicht zu öffnen. */
+.week-strip-arrow-inline{
+  flex:0 0 20px; display:flex; align-items:center; justify-content:center;
+  background:none; border:none; padding:0; -webkit-tap-highlight-color:transparent;
+}
+.week-strip-arrow-inline img{ width:14px; height:14px; display:block; opacity:0.32; filter:invert(1); }
+html[data-theme="light"] .week-strip-arrow-inline img{ filter:none; }
+.month-overview-back-sticky{
+  position:sticky; top:0; z-index:20; background:none; border:none; box-shadow:none;
+}
+.month-overview-block{ padding:22px 20px 6px; }
+.month-overview-title{ font-size:26px; font-weight:800; margin:0 0 4px; }
+.month-overview-subtitle{ font-size:14px; color:var(--muted); margin:0 0 18px; }
+/* Zweite, dezentere Zeile für Warm-up-/Deload-Zähler (siehe monthOverviewBlockHTML()) —
+   rückt näher an die erste Zeile heran (kein doppelter 18px-Abstand) und ist etwas kleiner. */
+.month-overview-tracking-subtitle{ font-size:12px; margin:-14px 0 18px; opacity:0.8; }
+.month-overview-grid{
+  display:grid; grid-template-columns:repeat(7, 1fr); row-gap:22px; column-gap:4px;
+}
+.month-overview-daylabel{ font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; text-align:center; letter-spacing:0.5px; padding-bottom:6px; }
+.month-overview-day{ display:flex; align-items:center; justify-content:center; }
+.month-overview-day-num{
+  width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+  font-size:15px; font-weight:600; color:var(--text); box-sizing:border-box;
+  border:none; font-family:inherit; padding:0;
+}
+button.month-overview-day-num{ cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.month-overview-day-num-filled{ font-weight:700; }
+.month-overview-report-btn{
+  display:flex; align-items:center; justify-content:center; gap:8px; width:100%;
+  margin-top:20px; padding:14px; border-radius:999px; border:none;
+  background:var(--surface-2); color:var(--accent); font-size:15px; font-weight:700;
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+.month-overview-report-btn svg{ width:18px; height:18px; flex:none; }
+.month-overview-sentinel{ height:1px; }
+.month-report-title{ font-size:24px; font-weight:800; margin:8px 0 18px; }
+/* ---------- Monatsbericht: einheitliches Card-Layout für alle Abschnitte ---------- */
+.month-report-card{
+  background: var(--surface); border:1px solid var(--border); border-radius: var(--radius);
+  padding:16px; margin-bottom:12px;
+}
+.month-report-card-title{
+  font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color: var(--muted);
+  margin-bottom:14px;
+}
+/* 2×2-Kennzahlenraster (Workouts/Ø Dauer/Volumen/Rekorde) — kompakt statt vier einzelner
+   Karten, mit optionalem kleinem Vormonats-Delta direkt neben dem Wert (gleiches Farbschema
+   grün/rot wie das Trend-Delta in den Verlaufsdiagrammen). */
+.month-report-stat-grid{ display:grid; grid-template-columns:1fr 1fr; row-gap:20px; }
+.month-report-stat-cell{ display:flex; flex-direction:column; }
+.month-report-stat-value{
+  font-family:'JetBrains Mono', monospace; font-size:23px; font-weight:700; color:var(--text);
+  display:flex; align-items:baseline; gap:6px; white-space:nowrap;
+}
+.month-report-stat-label{ font-size:11.5px; color:var(--muted); margin-top:3px; }
+.month-report-stat-delta{ font-family:'JetBrains Mono', monospace; font-size:11px; font-weight:700; }
+.month-report-stat-delta.up{ color:#7cc576; }
+.month-report-stat-delta.down{ color:var(--accent-2); }
+.month-report-chart{ margin-bottom:0; }
+.month-report-gains{ margin-top:0; }
+.month-report-gain-row{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:11px 0; border-bottom:1px solid var(--border);
+}
+.month-report-gain-row:first-child{ padding-top:0; }
+.month-report-gain-row:last-child{ padding-bottom:0; border-bottom:none; }
+.month-report-gain-name{ font-size:14px; color:var(--text); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.month-report-gain-right{ display:flex; align-items:baseline; gap:8px; flex-shrink:0; }
+.month-report-gain-value{ font-family:'JetBrains Mono', monospace; font-size:13px; color:var(--muted); }
+.month-report-gain-pct{ font-family:'JetBrains Mono', monospace; font-size:14px; font-weight:700; color:#7cc576; }
+/* Kompakte Highlight-Liste (Streak, meistrainierte Übung/Kategorie, Cardio) — Label über dem
+   Wert gestapelt statt nebeneinander: bei langen Werten (Übungsname + Sätze) quetschte eine
+   Zeile mit Label links/Wert rechts den Wert unschön ab (Ellipsis mitten im Text). Gestapelt
+   bleibt der Wert immer vollständig lesbar (bricht notfalls in eine zweite Zeile um), gleiches
+   Trennlinien-Muster wie .month-report-gain-row. */
+.month-report-highlight-row{
+  padding:10px 0; border-bottom:1px solid var(--border);
+}
+.month-report-highlight-row:first-child{ padding-top:0; }
+.month-report-highlight-row:last-child{ padding-bottom:0; border-bottom:none; }
+.month-report-highlight-label{ display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+.month-report-highlight-value{
+  font-family:'JetBrains Mono', monospace; font-size:14.5px; font-weight:700; color:var(--text);
+}
+/* Muskelgruppen-Verteilung: EIN durchgehender gestapelter Balken (Segmentbreite = Anteil an
+   den Sätzen) statt der großen Donuts aus dem Fortschritt-Tab — dort schon ausführlich
+   vorhanden, hier bewusst kompakt als schneller Überblick. Legende darunter als einspaltige
+   Liste (statt zweispaltigem Raster) — bei ungerader Gruppenanzahl wirkte eine leere zweite
+   Spalte unausgewogen, und die Prozentwerte standen je nach Namenslänge unterschiedlich weit
+   rechts; als Liste richten sich alle Prozentwerte an derselben rechten Kante aus. */
+.month-report-muscle-bar{
+  display:flex; width:100%; height:10px; border-radius:5px; overflow:hidden;
+  margin-bottom:6px; background: var(--surface-2);
+}
+.month-report-muscle-bar-seg{ height:100%; }
+.month-report-muscle-legend-item{
+  display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border);
+}
+.month-report-muscle-legend-item:last-child{ padding-bottom:0; border-bottom:none; }
+.month-report-muscle-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.month-report-muscle-legend-name{
+  font-size:13px; color:var(--text); flex:1; min-width:0; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap;
+}
+.month-report-muscle-legend-pct{ font-family:'JetBrains Mono', monospace; font-size:12.5px; color:var(--muted); flex-shrink:0; }
+/* Trainingstag-Popup (openDayTrainingPopup): bewusst schmalerer, dezenterer Look als die
+   Standard-.add-exercise-modal-Hülle — kleinerer Schließen-Button ohne Rahmen, kein Bebas-
+   Neue-Titel, engere Abstände/kleinere Zahlen. Scoped auf dieses eine Popup, andere Dialoge
+   mit derselben Hülle bleiben unverändert. */
+#dayTrainingPopupOverlay .add-exercise-modal{ max-width:300px; }
+#dayTrainingPopupOverlay .add-exercise-modal-header{ padding:12px 14px; }
+#dayTrainingPopupOverlay .add-exercise-modal-title{
+  font-family: var(--font-app, 'Inter', system-ui, sans-serif); font-size:14px; font-weight:600; color:var(--muted);
+}
+#dayTrainingPopupOverlay .add-exercise-modal-close{
+  background:none; border:none; width:26px; height:26px; font-size:14px; color:var(--muted);
+}
+/* Verlauf-Icon-Button links neben dem Schließen-X — führt direkt zur Trainingseinheit im
+   Verlauf (bzw. bei mehreren Einheiten am selben Tag zur Verlauf-Übersicht). Gleiche dezente
+   Optik wie der Schließen-Button (kein Rahmen, gleiche Größe). */
+#dayTrainingPopupOverlay .day-popup-history-btn{
+  background:none; border:none; width:26px; height:26px; color:var(--muted);
+  display:flex; align-items:center; justify-content:center;
+}
+#dayTrainingPopupOverlay .day-popup-history-btn img{ width:16px; height:16px; display:block; }
+.add-exercise-modal-header-icons{ display:flex; align-items:center; gap:2px; }
+#dayTrainingPopupOverlay .new-exercise-modal-body{ padding:14px 16px 18px; }
+.day-popup-block{ padding:0; }
+.day-popup-tile-name{ font-size:14px; font-weight:600; margin-bottom:12px; text-align:center; }
+.day-popup-stats{ display:flex; align-items:stretch; gap:4px; }
+.day-popup-stat{ display:flex; flex-direction:column; align-items:center; flex:1; min-width:0; }
+.day-popup-stat-value{ font-family:'JetBrains Mono', monospace; font-size:18px; font-weight:700; color:var(--text); }
+.day-popup-stat-label{ font-size:10.5px; color:var(--muted); margin-top:3px; }
+.day-popup-divider{ height:1px; background:var(--border); margin:10px 0; }
+.week-strip-day{ display:flex; flex-direction:column; align-items:center; gap:6px; flex:1; }
+.week-strip-label{ font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
+.week-strip-day-today .week-strip-label{ color:var(--text); }
+.week-strip-num{
+  width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+  font-size:14px; font-weight:600; color:var(--text); box-sizing:border-box;
+}
+.week-strip-num-filled{ font-weight:700; }
+.nav-row{ display:flex; gap:8px; margin-bottom:22px; }
+.nav-row .gear{
+  flex:1; text-align:center; padding:11px 6px; font-size:12.5px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.nav-row .nav-row-icon-only{ flex:0 0 auto; width:44px; padding:11px 0; font-size:16px; }
+.stats-row{ display:flex; gap:10px; margin-bottom:22px; }
+.stat-card{
+  flex:1; min-width:0; background: var(--surface); border:1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; transition: background .15s ease, border-color .15s ease;
+}
+.stat-card:active{ background: var(--surface-2); border-color: var(--muted); }
+.stat-value-row{ display:flex; align-items:baseline; gap:5px; flex-wrap:wrap; }
+.stat-value{ font-family:'JetBrains Mono', monospace; font-size:21px; font-weight:700; color: var(--accent); white-space:nowrap; }
+.stat-unit{ font-family: var(--font-app, 'Inter', sans-serif); font-size:12px; color: var(--muted); font-weight:600; }
+.stat-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:1px; color: var(--muted); margin-top:6px; }
+
+/* ---------- Kompakte Pill-Zusammenfassung (Abschluss-Screen) ---------- */
+.summary-pill{
+  display:flex; align-items:stretch; justify-content:space-between; gap:6px;
+  background: var(--surface); border:1px solid var(--border); border-radius: 18px;
+  padding: 14px 16px; margin: 6px 0 22px;
+}
+.summary-pill-item{ display:flex; flex-direction:column; align-items:center; flex:1; min-width:0; }
+.summary-pill-top{ display:flex; align-items:center; gap:7px; }
+.summary-pill-icon{ font-size:19px; line-height:1; flex-shrink:0; }
+.summary-pill-icon-img{ width:19px; height:19px; flex-shrink:0; object-fit:contain; }
+/* Bizeps-/Warndreieck-Icon sind schwarz gezeichnet (siehe ICON_BICEPS/ICON_WARNING) — im
+   dunklen Standard-Modus per filter:invert(1) weiss dargestellt, im Light Mode unveraendert,
+   gleiches Muster wie beim Zurück-Pfeil/Bearbeiten-Stift. */
+.history-empty-icon{ width:16px; height:16px; vertical-align:-3px; margin-left:2px; filter: invert(1); }
+html[data-theme="light"] .history-empty-icon{ filter: none; }
+.bodyweight-warning-icon{ width:18px; height:18px; flex-shrink:0; margin-top:1px; filter: invert(1); }
+html[data-theme="light"] .bodyweight-warning-icon{ filter: none; }
+.summary-pill-value{ font-family:'JetBrains Mono', monospace; font-size:20px; font-weight:700; color: var(--text); white-space:nowrap; }
+/* Bei Trainings ab 1h ist "H:MM:SS" (z. B. "1:19:32") deutlich breiter als "MM:SS" und sprengte
+   bisher bei fester 20px-Schrift die Pill-Spalte (Ziffern liefen über die Trennlinie). Wird
+   gesetzt, sobald die Dauer-Anzeige einen Doppelpunkt-Stundenanteil enthält (siehe renderSessionSummary()). */
+.summary-pill-value-long{ font-size:16px; letter-spacing:-0.3px; }
+.summary-pill-label{ font-size:12px; color: var(--muted); margin-top:4px; text-align:center; }
+.summary-pill-divider{ width:1px; align-self:stretch; background: var(--border); flex-shrink:0; }
+
+/* ---------- Abschluss-Screen nach Training ---------- */
+.summary-badge{
+  min-width:180px; padding:18px 28px; margin:6px auto 22px; border-radius:20px;
+  border:1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--surface-2) inset;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  width:fit-content;
+}
+.summary-badge-number{ font-family:'JetBrains Mono', monospace; font-size:34px; font-weight:700; color: var(--accent); display:flex; align-items:center; justify-content:center; gap:8px; }
+.summary-badge-icon-img{ width:30px; height:30px; object-fit:contain; }
+.summary-badge-label{ font-size:10px; text-transform:uppercase; letter-spacing:2px; color: var(--muted); margin-top:2px; }
+.summary-list{ margin-top:4px; }
+.summary-row{ cursor:pointer; }
+.metric-card-header{
+  display:flex; align-items:center; gap:14px; margin-bottom:18px;
+}
+.metric-card-thumb{ width:64px; height:64px; border-radius:14px; object-fit:cover; flex-shrink:0; }
+.metric-card-thumb-fallback{
+  width:64px; height:64px; border-radius:14px; background: var(--surface-2);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  font-family:'JetBrains Mono', monospace; font-weight:700; font-size:16px; color: var(--text);
+}
+.metric-card-title{ font-weight:700; font-size:19px; }
+.metric-card-subtitle{ font-size:13px; color: var(--muted); margin-top:2px; }
+.metric-card{
+  background: var(--surface); border:1px solid var(--border); border-radius: var(--radius);
+  padding:16px;
+}
+.metric-row{
+  display:flex; justify-content:space-between; align-items:baseline;
+  padding:10px 0; border-bottom:1px solid var(--border);
+  font-size:15px; color: var(--muted);
+}
+.metric-row:last-child{ border-bottom:none; }
+.metric-row-badges{ display:inline-flex; gap:6px; margin-left:6px; }
+.metric-badge{ font-weight:700; font-size:14px; }
+.metric-badge-alltime{ color:#d9c74a; }
+.metric-badge-last{ color:#7cc576; }
+.metric-row-value{ font-family:'JetBrains Mono', monospace; color: var(--text); font-weight:600; white-space:nowrap; }
+.metric-empty-note{ color: var(--muted); font-size:13px; text-align:center; padding:20px 0; }
+.summary-row{
+  display:flex; align-items:center; gap:12px;
+  padding:12px 14px; background: var(--surface); border:1px solid var(--border);
+  border-radius: var(--radius); margin-bottom:10px;
+}
+.summary-row-media{ flex-shrink:0; }
+.summary-thumb{
+  width:44px; height:44px; border-radius:10px; object-fit:cover; display:block;
+}
+.summary-thumb-fallback{
+  width:44px; height:44px; border-radius:10px; background: var(--surface-2);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono', monospace; font-weight:700; font-size:12px; color: var(--text);
+}
+.summary-row-mid{ flex:1; min-width:0; }
+.summary-row-name{ font-weight:600; }
+.summary-row-meta{ font-family:'JetBrains Mono', monospace; font-size:12px; color: var(--muted); margin-top:2px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.summary-row-stat{ display:inline-flex; align-items:center; gap:3px; font-weight:700; color: var(--text); }
+.summary-row-stat-icon{ width:15px; height:15px; object-fit:contain; }
+.summary-row-sets{ font-family:'JetBrains Mono', monospace; font-size:11px; color: var(--muted); margin-top:2px; opacity:0.8; }
+.summary-row-icon{ font-size:18px; font-weight:700; flex-shrink:0; }
+.summary-row-icon-img{ width:22px; height:22px; flex-shrink:0; object-fit:contain; }
+.summary-actions{ display:flex; gap:10px; margin-top:16px; }
+/* Steckt die "Erfolge"-Liste in einem Akkordeon-Körper (Trainingsdetailseite), verlieren die
+   einzelnen Zeilen ihre eigene Karten-Umrandung — sonst entstünde eine Box-in-Box-Optik
+   (äußere Akkordeon-Karte + innere Zeilen-Karten). Stattdessen nur eine Trennlinie zwischen
+   den Zeilen, wie bei anderen Listen innerhalb einer Karte (z. B. der Muskelgruppen-Legende).
+   Zeilen AUSSERHALB eines Akkordeons (z. B. die Zusammenfassung direkt nach dem Training)
+   bleiben von dieser Regel unberührt und behalten ihre eigene Karten-Optik. */
+.muscle-group-body .summary-list{ margin-top:0; }
+.muscle-group-body .summary-row{
+  background:none; border:none; border-radius:0; margin-bottom:0;
+  padding:12px 14px; border-bottom:1px solid var(--border);
+}
+.muscle-group-body .summary-row:last-child{ border-bottom:none; }
+.summary-actions .btn{ flex:1; }
+.summary-print-meta{ display:none; }
+.period-row{ display:flex; gap:8px; margin: 4px 0 18px; }
+.period-btn{
+  flex:1; padding:9px 4px; border-radius:8px; border:1px solid var(--border);
+  background: var(--surface); color: var(--muted); font-size:12px; font-weight:600;
+}
+.period-btn.active{ border-color: var(--accent); color: var(--accent); background: var(--surface-2); }
+.period-btn:active{ transform: scale(0.97); }
+
+/* ---------- Trainings-Widget (Balkendiagramm) ---------- */
+.training-widget{
+  position:relative;
+  background: var(--surface); border:1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; margin-bottom: 22px;
+}
+.training-widget-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.training-widget-header h3{
+  font-family:'Bebas Neue', sans-serif; font-size:19px; letter-spacing:0.5px; margin:0; color: var(--text);
+  padding-right:38px;
+}
+/* Nur noch das History-Icon, ohne Textlabel — in die obere rechte Ecke der Karte gesetzt statt
+   inline neben dem Titel, damit der Titel bei Bedarf mehr Platz hat. */
+.training-widget-history-btn{
+  position:absolute; top:14px; right:14px;
+  width:30px; height:30px; padding:0; flex-shrink:0;
+  background: var(--surface-2); border:1px solid var(--border); border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+}
+.training-widget-history-btn:active{ background: var(--surface); }
+.training-widget-history-btn img{ width:16px; height:16px; display:block; }
+.bar-chart-empty{ color: var(--muted); font-size:13px; text-align:center; padding: 20px 0; }
+.workouts-month-count{ font-family:'JetBrains Mono', monospace; color: var(--muted); font-size:11px; margin-left:6px; }
+.workouts-filter-row{ display:flex; gap:8px; margin-bottom:18px; }
+.workouts-filter-select{
+  flex:1; padding:10px 12px; border-radius:8px; border:1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font-size:13px; font-family:inherit;
+}
+
+
+/* ---------- Progress list ---------- */
+.progress-row{
+  display:flex; justify-content:space-between; align-items:center;
+  padding: 10px 16px; border-bottom:1px solid var(--border);
+}
+.progress-row:last-child{ border-bottom:none; }
+.progress-row:active{ background: var(--surface-2); }
+.progress-name{ font-weight:600; }
+.progress-meta{ font-family:'JetBrains Mono', monospace; font-size:12px; color: var(--muted); margin-top:2px; }
+.progress-chevron{ color: var(--muted); font-size:18px; }
+
+/* ---------- Charts ---------- */
+.chart-wrap{
+  background: var(--surface); border:1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; margin-bottom: 16px;
+}
+.chart-title{ font-size:12px; text-transform:uppercase; letter-spacing:1px; color: var(--muted); margin-bottom:2px; }
+.chart-title-value{ font-family:'JetBrains Mono', monospace; font-size:22px; font-weight:700; margin-bottom:10px; }
+.chart-axis{ stroke: var(--border); stroke-width:1; }
+.chart-grid{ stroke: var(--border); stroke-width:1; opacity:0.5; }
+.chart-label{ font-family:'JetBrains Mono', monospace; font-size:10px; fill: var(--muted); }
+.bar-chart-value-label{ font-family:'JetBrains Mono', monospace; font-size:17px; font-weight:700; fill: rgba(0,0,0,0.35); }
+.chart-empty{ color: var(--muted); font-size:13px; text-align:center; padding: 26px 0; }
+.progress-summary{ display:flex; gap:18px; font-family:'JetBrains Mono', monospace; font-size:12px; color: var(--muted); margin: 4px 0 18px; }
+
+/* ---------- Timer-Kasten (kompakt, wächst bei Pause) ---------- */
+.time-box{
+  position: relative; margin: 4px auto 20px; max-width: 260px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+  padding: 14px 24px; overflow: visible; cursor: pointer;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  transition: padding .25s ease, border-color .25s ease;
+}
+/* Während der Pause übernimmt der animierte SVG-Rahmen (.time-box-ring) die komplette
+   Umrandung — der normale CSS-border wird dafür unsichtbar, damit es nicht doppelt
+   umrandet aussieht (ein statischer Rahmen UND ein laufender Fortschrittsrahmen). */
+.time-box.resting{ padding: 18px 24px 22px; border-color: transparent; }
+/* Während der Pause tritt die normal weiterlaufende Trainingszeit optisch komplett zurück
+   (ausgeblendet) und der Pausen-Countdown rückt an ihre Stelle — größer und mittig —, damit
+   der Fokus eindeutig auf der Restzeit der Pause liegt statt auf zwei gleichzeitig
+   tickenden Uhren. Nur die Zeit selbst ist farbig (Akzentfarbe), das Wort "Pause" bleibt
+   dezent grau, damit die Zahl die Aufmerksamkeit bekommt.
+--------------------------------------------------- */
+.time-box.resting .time-box-time-row{ display:none; }
+.time-box-time-row{ display:flex; align-items:center; justify-content:center; position:relative; }
+.time-box-time{
+  font-family:'JetBrains Mono', monospace; font-size: 32px; font-weight:700;
+  color: var(--accent); letter-spacing:1px; transition: color .15s ease;
+}
+/* Ist die Trainingszeit pausiert, tritt die Zahl selbst optisch fast komplett zurück — Farbe
+   an die Rahmenfarbe (nah an der Box-Hintergrundfarbe) angeglichen statt am normalen
+   --muted-Grau, damit sie fast mit dem Hintergrund verschmilzt und die Aufmerksamkeit klar
+   auf dem Pause-Symbol liegt, nicht auf einer ohnehin eingefrorenen Zahl. */
+.time-box-time.time-paused{ color: var(--border); }
+/* Pause-Symbol (zwei Balken) — erscheint, sobald die Trainingszeit per Tap auf die Zeit
+   (siehe toggleSessionPause()) angehalten wurde. Wird bewusst NICHT über ein Font-Zeichen
+   gelöst (Rendering variiert stark je Gerät/Font), sondern als zwei simple Balken in der
+   Akzentfarbe. Liegt absolut positioniert MITTIG ÜBER der (jetzt grauen) Zeit, statt daneben
+   — pointer-events:none, damit es den Tap-zum-Pausieren auf der Zeit nicht blockiert.
+--------------------------------------------------- */
+.time-box-pause-icon{
+  display:none; position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%); pointer-events:none;
+  width:34px; height:34px; background: var(--accent);
+  -webkit-mask-image: var(--pause-icon-url); mask-image: var(--pause-icon-url);
+  -webkit-mask-size: contain; mask-size: contain;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+}
+.time-box-rest{
+  text-align:center; margin-top:0; height:0; overflow:hidden;
+  opacity:0; transition: opacity .15s ease, height .15s ease, margin-top .15s ease;
+}
+.time-box-rest.visible{ opacity:1; height:auto; margin-top:6px; }
+.time-box-rest-label{
+  display:block; font-family:'JetBrains Mono', monospace; font-size:15px; font-weight:700;
+  letter-spacing:1px; color: var(--muted);
+}
+.time-box-rest-time{
+  display:block; font-family:'JetBrains Mono', monospace; font-size:32px; font-weight:700;
+  color: var(--accent); letter-spacing:1px;
+}
+/* Der Pausen-Fortschritt läuft als Rahmen einmal komplett um die Box herum (statt als
+   gerader Balken unten) — ein <svg><rect></svg>, dessen Umriss per stroke-dasharray/
+   -dashoffset animiert wird (siehe tickRest()). Startpunkt ist die Mitte der Oberkante,
+   damit die Restzeit optisch "von oben im Uhrzeigersinn abläuft", ähnlich einer Analoguhr. */
+.time-box-ring{
+  position:absolute; inset:-1px; width:calc(100% + 2px); height:calc(100% + 2px);
+  pointer-events:none; opacity:0; transition: opacity .2s ease;
+}
+.time-box-ring.visible{ opacity:1; }
+.time-box-ring rect{
+  fill:none; stroke: var(--accent); stroke-width:2.5;
+  transition: stroke-dashoffset .1s linear;
+}
+
+/* ---------- Rest timer buttons ---------- */
+/* Ein zusammenhängender, abgerundeter Kasten statt drei einzelner Kreis-Buttons — intern per
+   dünner Trennlinie (border-right auf allen außer dem letzten Button) in drei gleich große
+   Bereiche geteilt. */
+.rest-row{
+  display:flex; justify-content:center; margin: 0 0 28px;
+  background: var(--surface); border:1px solid var(--border); border-radius:16px;
+  overflow:hidden; max-width:280px; margin-left:auto; margin-right:auto;
+}
+.rest-btn{
+  flex:1; height:56px; border-radius:0;
+  border:none; border-right:1px solid var(--border); background: transparent; color: var(--text);
+  font-family:'JetBrains Mono', monospace; font-size:15px; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+  transition: background .12s ease, color .15s ease;
+}
+.rest-btn:last-child{ border-right:none; }
+.rest-btn:active{ background: var(--surface-2); }
+.rest-btn.is-active{ background: var(--surface-2); color: var(--accent); }
+
+/* ---------- Übungs-Bilderleiste (aktives Training) ---------- */
+.thumb-strip{
+  display:flex; gap:10px; overflow-x:auto; padding: 16px 2px 10px;
+  margin-bottom:16px; -webkit-overflow-scrolling:touch;
+}
+.thumb{
+  width:60px; height:60px; flex-shrink:0; border-radius:14px;
+  border:3px solid var(--border); background: var(--surface-2); position:relative;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono', monospace; font-weight:700; font-size:14px; color: var(--text);
+  touch-action: none; user-select: none;
+}
+.thumb-media{
+  position:absolute; inset:0; border-radius:11px; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+}
+.thumb-img{
+  width:100%; height:100%; object-fit:cover; display:block; pointer-events:none;
+  -webkit-user-drag:none;
+}
+.thumb.active{ border-color: var(--accent); }
+.thumb.done{ opacity:0.5; }
+.thumb-check{
+  position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%;
+  background:#7cc576; color:#121316; font-size:11px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; border:2px solid var(--bg);
+}
+.thumb-add{
+  border-style:dashed; color: var(--muted); font-size:24px; font-weight:400;
+}
+.thumb-add:active{ border-color: var(--accent); color: var(--accent); }
+
+/* Supersatz: zwei per Drag&Drop verbundene Übungen (siehe wireThumbDrag()/createSuperset()).
+   Werden weiterhin als zwei einzelne Kacheln nebeneinander dargestellt, von einem gemeinsamen
+   Rahmen eng umschlossen (Rahmenbreite --ssb identisch zur Rahmenbreite normaler Kacheln,
+   siehe .thumb oben). Der globale *{box-sizing:border-box}-Reset gilt hier bewusst mit
+   (kein eigenes content-box), damit die Rechnung aufgeht: der Rahmen selbst frisst NICHT
+   zusätzlich Höhe — stattdessen sind die beiden inneren Kacheln um genau 2×--ssb kleiner als
+   eine normale einzelne Kachel, sodass Kachel + umschließender Rahmen in Summe exakt wieder
+   60px hoch sind, identisch zu einer einzelnen Kachel (also auf gleicher Höhe in der Leiste).
+   Der Rahmen selbst ist nur sichtbar (Akzentfarbe), solange man gerade eine der beiden
+   Übungen macht (Klasse thumb-superset-group-active, siehe renderActive()) — sonst
+   transparent, dann ist wie bei jeder anderen nicht-aktiven Übung kein Rahmen zu sehen. */
+.thumb-superset-group{
+  --ssb: 3px;
+  position:relative; display:flex; align-items:center; gap:4px; flex-shrink:0;
+  padding:0; border:var(--ssb) solid transparent; border-radius:16px;
+}
+.thumb-superset-group.thumb-superset-group-active{ border-color: var(--accent); }
+.thumb-superset-group .thumb{
+  width: calc(60px - 2 * var(--ssb)); height: calc(60px - 2 * var(--ssb));
+  border-width:0; border-radius:12px;
+}
+.thumb-superset-group .thumb.active{ outline:2px solid var(--accent); outline-offset:-2px; }
+.thumb-superset-label{
+  position:absolute; left:50%; top:-13px; transform:translateX(-50%);
+  font-family:'JetBrains Mono', monospace; font-size:8.5px; font-weight:600;
+  letter-spacing:.04em; text-transform:uppercase; color: var(--muted); white-space:nowrap;
+  opacity:.7; pointer-events:none;
+}
+/* Beim Ziehen einer einzelnen Übung über eine andere Übung ODER über eine bestehende Gruppe
+   (2er → wird zu 3er): erst grauer Rahmen (Hover), nach SUPERSET_HOLD_MS ein dickerer Rahmen in
+   Akzentfarbe (bereit zum Verknüpfen), siehe wireThumbDrag(). Gilt identisch für einzelne
+   Kacheln (.thumb) und für bereits bestehende Supersatz-Gruppen (.thumb-superset-group). */
+.thumb.thumb-superset-hover{ border-color:#9a9a9a; }
+.thumb.thumb-superset-armed{
+  border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent);
+}
+.thumb-superset-group.thumb-superset-hover{ border-color:#9a9a9a; }
+.thumb-superset-group.thumb-superset-armed{
+  border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* ---------- Exercise cards ---------- */
+.exercise-card{
+  background: var(--surface); border:1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 12px; position:relative;
+}
+.exercise-title-row{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.exercise-title{ font-weight:700; font-size:16px; }
+.exercise-target{ font-family:'JetBrains Mono', monospace; font-size:12px; color: var(--muted); margin-top:2px; margin-bottom:10px; }
+.icon-x{
+  background:none; border:none; color: var(--muted); font-size:16px; line-height:1;
+  padding:4px 6px; flex-shrink:0; border-radius:6px;
+}
+.icon-x:active{ color: var(--accent-2); background: var(--surface-2); }
+.set-check{
+  width:30px; height:30px; border-radius:8px; border:2px solid var(--border); flex-shrink:0;
+  background: var(--surface-2); color: transparent; font-size:15px; font-weight:700;
+}
+.set-check.checked{ background:#7cc576; border-color:#7cc576; color:#121316; }
+.set-row.set-done{ opacity:0.55; }
+.entry-menu{ margin: 0 0 12px; display:flex; flex-direction:column; gap:6px; }
+.entry-menu-item{
+  text-align:left; background: var(--surface-2); border:1px solid var(--border); color: var(--text);
+  border-radius:8px; padding:10px 12px; font-size:13px; font-weight:500;
+}
+.entry-menu-item:disabled{ opacity:.35; }
+.entry-menu-danger{ color: var(--accent-2); }
+.reference-block{
+  margin-top:16px; padding:10px 12px; background: var(--surface-2);
+  border-radius: var(--radius); border:1px dashed var(--border);
+}
+.reference-group{ margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+.reference-group:last-child{ margin-bottom:0; padding-bottom:0; border-bottom:none; }
+.reference-title{ font-size:10px; text-transform:uppercase; letter-spacing:1px; color: var(--muted); margin-bottom:4px; }
+.reference-row{
+  display:flex; justify-content:space-between; font-family:'JetBrains Mono', monospace;
+  font-size:12px; color: var(--muted); padding:1px 0;
+}
+.set-row{
+  display:grid; grid-template-columns: 22px 1fr 1fr 44px 32px 26px;
+  align-items:center; gap:6px; margin-bottom:8px;
+}
+.set-row.set-row-time{ grid-template-columns: 22px 1fr 32px 26px; }
+.sets-header{
+  display:grid; grid-template-columns: 22px 1fr 1fr 44px 32px 26px;
+  align-items:center; gap:6px; margin-bottom:8px;
+}
+.sets-header.sets-header-time{ grid-template-columns: 22px 1fr 32px 26px; }
+.sets-header-cell{
+  font-size:11px; text-transform:uppercase; letter-spacing:1px; color: var(--muted);
+  text-align:center;
+}
+.sets-header-cell:first-child{ text-align:left; }
+.sets-header-cell-toggle{
+  background:none; border:none; padding:2px 4px; font-family:inherit; cursor:pointer;
+  color: var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:1px;
+}
+.set-idx{
+  width:auto; font-family:'JetBrains Mono', monospace; color: var(--muted); font-size:13px;
+  display:flex; align-items:center; gap:4px;
+}
+.set-vol{
+  font-family:'JetBrains Mono', monospace; color: var(--muted); font-size:15px; text-align:center;
+}
+.set-row input{
+  background: var(--surface-2); border:1px solid var(--border); color: var(--text);
+  border-radius:8px; padding:10px 4px; font-family:'JetBrains Mono', monospace; font-size:15px; text-align:center;
+  min-width:0; width:100%;
+}
+.set-row input:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color: var(--accent); }
+.set-row input:disabled{ opacity:0.35; background: var(--surface); }
+/* Zusatzgewicht-Feld bei reinen Körpergewichtsübungen mit optionalem Zusatzgewicht (z. B.
+   Klimmzüge, Situps, Rückenstrecker — planEx.bodyweightExercise): bleibt voll bedienbar, wird
+   aber optisch zurückgenommen, da der Satz auch ganz ohne Eintrag bereits über das hinterlegte
+   Körpergewicht × Wdh sinnvoll berechnet wird (siehe effectiveSetWeight()). Ein normal
+   hervorgehobenes Pflichtfeld hätte hier fälschlich suggeriert, dass ein Gewicht eingetragen
+   werden muss. Bei Fokus/Eingabe wird es wieder voll sichtbar.
+*/
+.set-row input.weight-input-optional{
+  opacity: 0.45; border-style: dashed; color: var(--muted);
+}
+.set-row input.weight-input-optional:not(:placeholder-shown),
+.set-row input.weight-input-optional:focus{
+  opacity: 1; border-style: solid; color: var(--text);
+}
+/* Zweigeteiltes Sekunden-Feld (Plank/isometrische Zeit-Übungen, kein Kardiogerät): links das
+   normale Eingabefeld, rechts eine schmale Stoppuhr-Schaltfläche in Akzentfarbe — gleich hoch
+   wie das Feld (stretch), öffnet openPlankTimerOverlay(). */
+.seconds-field-row{ display:flex; align-items:stretch; gap:6px; min-width:0; width:100%; }
+.seconds-field-row input{ flex:1; min-width:0; }
+.seconds-timer-btn{
+  flex-shrink:0; width:38px; background:none; border:1px solid var(--accent); color: var(--accent);
+  border-radius:8px; display:flex; align-items:center; justify-content:center;
+}
+.seconds-timer-btn:active{ background: var(--surface-2); }
+/* Analoge Aufteilung für Kardio-Zeilen: Min:Sek-Feldpaar links, Stoppuhr-Button rechts —
+   dieselbe Höhe wie das Feldpaar (stretch), öffnet ebenfalls openPlankTimerOverlay(). */
+.mmss-field-row{ display:flex; align-items:stretch; gap:6px; min-width:0; width:100%; }
+.mmss-field-row .set-mmss{ flex:1; min-width:0; }
+.set-cardio-extra{
+  display:flex; gap:8px; flex-wrap:wrap; margin: -4px 0 10px 28px;
+}
+.set-cardio-field{ display:flex; flex-direction:column; gap:2px; }
+.set-cardio-field label{
+  font-size:9px; text-transform:uppercase; letter-spacing:0.5px; color: var(--muted);
+}
+.set-cardio-field input{
+  background: var(--surface-2); border:1px solid var(--border); color: var(--text);
+  border-radius:8px; padding:6px 4px; font-family:'JetBrains Mono', monospace; font-size:13px;
+  text-align:center; width:76px;
+}
+.set-cardio-field input:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color: var(--accent); }
+.set-mmss{ display:flex; align-items:center; gap:4px; min-width:0; }
+.set-mmss input{
+  background: var(--surface-2); border:1px solid var(--border); color: var(--text);
+  border-radius:8px; padding:10px 4px; font-family:'JetBrains Mono', monospace; font-size:15px;
+  text-align:center; min-width:0; width:100%;
+}
+.set-mmss input:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color: var(--accent); }
+.set-mmss-sep{ color: var(--muted); font-family:'JetBrains Mono', monospace; font-weight:700; flex-shrink:0; }
+.set-cardio-distance{
+  display:flex; align-items:center; font-family:'JetBrains Mono', monospace; font-size:13px;
+  color: var(--accent); font-weight:700; padding-top:2px;
+}
+.muscle-balance-chart-wrap{ display:flex; justify-content:center; margin:6px 0; transition: opacity .28s ease, filter .28s ease; }
+.muscle-balance-chart-wrap.donut-chart-dim{ opacity:0.1; filter: grayscale(0.6); }
+.muscle-balance-charts-row{ display:flex; gap:10px; margin-top:2px; }
+.muscle-balance-chart-col{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; }
+.muscle-balance-chart-col .section-label{ margin:0 0 2px; text-align:center; }
+.pie-center-value{ font-family:'JetBrains Mono', monospace; font-size:22px; font-weight:700; fill: var(--text); }
+.pie-center-label{ font-family:'JetBrains Mono', monospace; font-size:11px; fill: var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
+.muscle-balance-legend{
+  display:flex; flex-direction:column; background: var(--surface); border:1px solid var(--border);
+  border-radius: var(--radius); overflow:hidden; transition: opacity .28s ease, filter .28s ease;
+}
+.muscle-balance-legend.dimmed{ opacity:0.16; filter: grayscale(0.6); }
+.muscle-balance-legend-row{
+  display:flex; align-items:center; gap:12px; padding:12px 14px; border-bottom:1px solid var(--border);
+}
+.muscle-balance-legend-row:last-child{ border-bottom:none; }
+.muscle-balance-swatch{
+  min-width:46px; flex-shrink:0; padding:5px 8px; border-radius:8px; cursor:pointer;
+  background: var(--surface-2); border:1px solid currentColor;
+  font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:700; text-align:center;
+}
+.muscle-balance-legend-label{ flex:1; min-width:0; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.muscle-balance-legend-values{
+  display:flex; flex-direction:column; align-items:flex-end; gap:1px; flex-shrink:0;
+}
+.muscle-balance-legend-value{ color: var(--muted); font-family:'JetBrains Mono', monospace; font-size:13px; white-space:nowrap; }
+.muscle-balance-legend-subpct{ opacity:0.65; font-size:11px; }
+/* ---------- Muskelgruppen-Verteilung: antippbare Donut-Segmente mit Übungs-Drilldown ---------- */
+.donut-seg{ cursor:pointer; transition: opacity .28s ease; }
+.donut-seg-dim{ opacity:0.08; }
+.donut-seg-hidden{ opacity:0; pointer-events:none; }
+.donut-subseg{
+  opacity:0; transform: scale(0.92); transform-box: fill-box; transform-origin: center;
+  transition: opacity .3s ease, transform .3s ease; cursor:pointer;
+}
+.donut-subseg.donut-subseg-in{ opacity:1; transform: scale(1); }
+.pie-center-group{
+  transition: opacity .25s ease, transform .25s ease;
+  transform-box: fill-box; transform-origin: center;
+}
+.pie-center-hidden{ opacity:0; transform: translateY(12px); }
+.muscle-balance-breakdown{
+  margin-top:16px; opacity:0; transform: translateY(-6px);
+  transition: opacity .25s ease, transform .25s ease;
+}
+.muscle-balance-breakdown.open{ opacity:1; transform: translateY(0); }
+.muscle-balance-breakdown-header{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:8px; padding:0 2px;
+}
+.muscle-balance-breakdown-title{ font-weight:700; }
+.muscle-balance-breakdown-close{
+  background:none; border:none; color: var(--muted); width:28px; height:28px;
+  display:flex; align-items:center; justify-content:center; border-radius:8px; flex-shrink:0;
+}
+.muscle-balance-breakdown-close:active{ background: var(--surface-2); }
+.muscle-balance-swatch-static{
+  min-width:46px; flex-shrink:0; padding:5px 8px; border-radius:8px;
+  background: var(--surface-2); border:1px solid currentColor;
+  font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:700; text-align:center;
+}
+.add-set{
+  background:none; border:none; color: var(--accent); font-size:13px; font-weight:600; padding:6px 0;
+}
+/* Nutzt bewusst dieselben Spaltenbreiten wie .set-row/.sets-header (22px # | 1fr KG | 1fr WDH |
+   44px VOL | 32px Haken | 26px X), damit sich der Notiz-Stift pixelgenau unter der Lücke
+   zwischen KG- und WDH-Spalte zentrieren lässt (grid-column 2/span 2 über beide zusammen,
+   justify-self:center landet dadurch automatisch genau auf deren gemeinsamer Grenze).
+   grid-row:1 ist bei allen drei Kindern nötig: da sich ihre Spaltenbereiche überlappen (Plus
+   spannt 1–3, Stift sitzt in 2–3), würde die automatische Zeilenzuweisung sie sonst auf zwei
+   Zeilen verteilen statt sie wie gewünscht nebeneinander in einer Zeile zu belassen. */
+.add-set-row{
+  display:grid; grid-template-columns: 22px 1fr 1fr 44px 32px 26px;
+  align-items:center; gap:6px; margin-bottom:8px;
+}
+.add-set-row.set-row-time{ grid-template-columns: 22px 1fr 32px 26px; }
+.add-set-row .add-set{ grid-column: 1 / span 3; grid-row: 1; justify-self:start; }
+.add-set-row.set-row-time .add-set{ grid-column: 1 / span 2; }
+.add-set-row .note-btn{ grid-column: 2 / span 2; grid-row: 1; justify-self:center; }
+.add-set-row.set-row-time .note-btn{ grid-column: 2; }
+.add-set-row .check-all-btn{ grid-column: 5; grid-row: 1; justify-self:center; }
+.add-set-row.set-row-time .check-all-btn{ grid-column: 3; }
+.check-all-btn{
+  width:30px; height:30px; border-radius:8px; border:2px solid #7cc576;
+  background:#7cc576; color:#121316; font-size:15px; font-weight:700;
+  flex-shrink:0; display:flex; align-items:center; justify-content:center;
+}
+.check-all-btn:active{ opacity:0.8; }
+.note-btn{
+  background:none; border:none; color: var(--accent); padding:3px; border-radius:6px;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.note-btn:active{ background: var(--surface-2); }
+.exercise-note-display{
+  font-size:12.5px; color: var(--muted); padding:0 2px 12px; white-space:pre-wrap; line-height:1.4;
+}
+
+/* ---------- Stoppuhr-Overlay (Plank/isometrische Zeit-Übungen, siehe openPlankTimerOverlay) ---------- */
+/* Läuft mittig über der gesamten App mit unscharfem, abgedunkeltem Hintergrund. Tippen an
+   IRGENDEINER Stelle (der ganze Overlay ist der Klick-Ziel-Bereich) stoppt die Stoppuhr und
+   übernimmt die verstrichene Zeit automatisch ins Sekunden-Feld, das sie geöffnet hat. */
+.plank-timer-overlay{
+  position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+  background: rgba(10,10,12,0.55); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+.plank-timer-inner{ text-align:center; }
+.plank-timer-display{
+  font-family:'JetBrains Mono', monospace; font-size:64px; font-weight:700;
+  color: var(--accent); letter-spacing:2px;
+}
+.plank-timer-hint{ margin-top:14px; font-size:13px; color: var(--muted); }
+
+/* ---------- Übung hinzufügen (aktives Training) ---------- */
+/* ---------- Übung-hinzufügen-Modal (aktives Training) ---------- */
+.add-exercise-overlay{
+  position:fixed; left:0; right:0; top:0; background:rgba(0,0,0,0.6); z-index:50;
+  display:flex; align-items:flex-end; justify-content:center;
+  /* height wird zusätzlich per JS (wireViewportAwareOverlays) auf window.visualViewport.height
+     gesetzt, sobald sich die virtuelle Tastatur öffnet/schließt — normales 100%/100vh würde
+     sich weiterhin auf die volle Fensterhöhe INKLUSIVE des von der Tastatur verdeckten
+     Bereichs beziehen, wodurch Eingabefelder-Popups hinter der Tastatur verschwinden. */
+  height:100%;
+}
+.add-exercise-overlay.centered-overlay{
+  align-items:center; padding:24px;
+}
+.add-exercise-modal{
+  width:100%; max-width:640px; max-height:min(80vh, 80%); background: var(--bg);
+  border-top-left-radius:20px; border-top-right-radius:20px;
+  border:1px solid var(--border); border-bottom:none;
+  display:flex; flex-direction:column; overflow:hidden;
+  transition: transform .15s ease;
+}
+.centered-overlay .add-exercise-modal{
+  max-width:400px; border-radius:20px; border-bottom:1px solid var(--border);
+}
+.add-exercise-modal-header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px; border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.add-exercise-modal-title{ font-family:'Bebas Neue', sans-serif; font-size:22px; letter-spacing:0.5px; }
+.add-exercise-modal-close{
+  background:none; border:1px solid var(--border); color: var(--muted);
+  border-radius:8px; width:32px; height:32px; font-size:16px;
+}
+/* Stern-Button in einem Popup-Header (z.B. Übungsbild-Popup) etwas kleiner als in der
+   Übungsliste, damit er sich an die Größe des Schließen-Buttons daneben angleicht. */
+.add-exercise-modal-header .exercise-fav-btn{ width:32px; height:32px; }
+.add-exercise-modal-body{ overflow-y:auto; padding:12px 16px 24px; }
+/* ---------- Körpergewicht-Popup: eigene, kompaktere Optik statt der schweren Standard-
+   Elemente (großer umrandeter Schließen-Button, überdimensionierter .btn-primary-Speichern-
+   Knopf in Bebas-Neue-Heldenoptik) — bewusst scoped auf dieses eine Popup, andere Dialoge, die
+   dieselbe .add-exercise-modal-Hülle nutzen, bleiben unverändert. ---------- */
+.bodyweight-prompt-close{
+  background:none; border:none; color: var(--muted); width:32px; height:32px;
+  display:flex; align-items:center; justify-content:center; border-radius:8px; flex-shrink:0;
+}
+.bodyweight-prompt-close:active{ background: var(--surface-2); }
+.bodyweight-prompt-field{ position:relative; }
+.bodyweight-prompt-input{
+  width:100%; box-sizing:border-box; padding:14px 40px 14px 14px; border-radius:10px;
+  border:1px solid var(--border); background: var(--surface-2); color: var(--text);
+  font-size:16px; font-family: var(--font-app, 'Inter', system-ui, sans-serif);
+}
+.bodyweight-prompt-input:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color: var(--accent); }
+.bodyweight-prompt-unit{
+  position:absolute; right:14px; top:50%; transform:translateY(-50%);
+  color: var(--muted); font-size:14px; font-family:'JetBrains Mono', monospace; pointer-events:none;
+}
+/* "Speichern" bewusst NICHT in der großen .btn-primary-Heldenoptik (Bebas Neue, 22px, üppiges
+   Padding) — in diesem kompakten Popup neben dem gleich breiten "Später"-Button wirkte das
+   unverhältnismäßig klobig. Gleiche Größe wie .btn-ghost, nur gefüllt in der Akzentfarbe. */
+.bodyweight-prompt-save{
+  background: var(--accent); color: var(--accent-contrast, #121316); border-color: var(--accent);
+  font-weight:700; font-size:16px;
+}
+/* Kleiner Abstand zwischen den gestapelten Muskelgruppen-Akkordeons im "Übung hinzufügen"-
+   Dialog — ohne diese Regel kleben abgeklappte Köpfe direkt aneinander (siehe Screenshot-
+   Feedback), da .muscle-group-header selbst kein Standard-Margin mitbringt. Der erste Kopf
+   bleibt bündig mit dem Dialog-Rand oben. */
+.add-exercise-modal-body .muscle-group-header{ margin-top:6px; }
+.add-exercise-modal-body .muscle-group-header:first-child{ margin-top:0; }
+.add-exercise-group-label{
+  font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color: var(--muted);
+  margin:16px 2px 8px;
+}
+.add-exercise-group-label:first-child{ margin-top:2px; }
+.add-exercise-row{
+  display:flex; align-items:center; gap:12px;
+  padding: 10px 12px; background: var(--surface); border:1px solid var(--border);
+  border-radius: var(--radius); margin-bottom:8px;
+}
+.add-exercise-row:active{ background: var(--surface-2); }
+.add-exercise-thumb{ width:40px; height:40px; border-radius:9px; object-fit:cover; display:block; flex-shrink:0; }
+.add-exercise-thumb-fallback{
+  width:40px; height:40px; border-radius:9px; background: var(--surface-2);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  font-family:'JetBrains Mono', monospace; font-weight:700; font-size:12px; color: var(--text);
+}
+.add-exercise-mid{ flex:1; min-width:0; }
+.add-exercise-name{ font-weight:600; font-size:14px; }
+.add-exercise-meta{ font-family:'JetBrains Mono', monospace; font-size:11px; color: var(--muted); margin-top:2px; }
+.add-exercise-plus{ color: var(--accent); font-size:20px; font-weight:700; flex-shrink:0; }
+
+
+/* ---------- History-Kontextmenü (Long-Press) ---------- */
+.history-context-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:55;
+  display:flex; align-items:center; justify-content:center; padding:24px;
+}
+.history-context-menu{
+  width:auto; background: var(--surface); border:1px solid var(--border);
+  border-radius:16px; overflow:hidden;
+  display:flex; align-items:stretch; justify-content:center;
+}
+.history-context-icon-btn{
+  background:none; border:none; width:64px; height:64px; flex-shrink:0;
+  position:relative; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+  border-right:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+}
+.history-context-icon-btn:last-child{ border-right:none; }
+.history-context-icon-btn:active{ background: var(--surface-2); }
+
+/* Teilen-Symbol: eingebettetes Bild (vom Nutzer bereitgestelltes Icon) statt CSS-Konstruktion */
+.history-context-icon-btn.share img{
+  width:22px; height:22px; display:block; -webkit-user-select:none; user-select:none;
+  pointer-events:none; -webkit-touch-callout:none;
+}
+
+/* Löschen (rotes X) und Schließen (graues X): zwei rotierte Linien statt Textzeichen,
+   damit Android den Long-Press nicht als Textauswahl interpretiert. */
+.history-context-icon-btn.delete::before, .history-context-icon-btn.delete::after,
+.history-context-icon-btn.close::before, .history-context-icon-btn.close::after{
+  content:''; position:absolute; top:50%; left:50%; width:16px; height:2px; border-radius:1px;
+}
+.history-context-icon-btn.delete::before, .history-context-icon-btn.delete::after{ background: var(--accent-2); }
+.history-context-icon-btn.close::before, .history-context-icon-btn.close::after{ background: var(--muted); }
+.history-context-icon-btn.delete::before, .history-context-icon-btn.close::before{ transform: translate(-50%,-50%) rotate(45deg); }
+.history-context-icon-btn.delete::after, .history-context-icon-btn.close::after{ transform: translate(-50%,-50%) rotate(-45deg); }
+
+
+/* ---------- Neue-Übung-Modal ---------- */
+.new-exercise-modal-body{ overflow-y:auto; padding:16px; }
+.wizard-progress{
+  font-size:11px; text-transform:uppercase; letter-spacing:1px; color: var(--muted); margin-bottom:4px;
+}
+.wizard-subtitle{ font-size:12px; color: var(--muted); margin-top:4px; }
+/* Blocksatz für erklärende Fließtexte (Popup-Beschreibungen, Hinweise in den
+   Einstellungen etc.) — sorgt für einen sauberen, glatten rechten Textrand statt des
+   standardmäßig unruhigen Flatterrands bei mehrzeiligem Text. */
+.justify-text{ text-align: justify; text-justify: inter-word; }
+.wizard-choice-list{ display:flex; flex-direction:column; gap:10px; }
+.wizard-choice{
+  width:100%; text-align:left; background: var(--surface-2); border:1px solid var(--border);
+  border-radius:10px; padding:14px 16px; font-size:15px; color: var(--text); font-weight:500;
+}
+.wizard-choice:active{ background: var(--surface); }
+.wizard-choice.selected{ border-color: var(--accent); color: var(--accent); }
+
+/* ---------- Scroll-Wheel Zahleneingabe ---------- */
+.scroll-wheel-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:70;
+  display:flex; align-items:flex-end; justify-content:center;
+}
+.scroll-wheel-sheet{
+  width:100%; max-width:640px; background: var(--bg);
+  border-top-left-radius:20px; border-top-right-radius:20px;
+  border:1px solid var(--border); border-bottom:none;
+  animation: wheelSheetIn .22s ease;
+}
+@keyframes wheelSheetIn{ from{ transform:translateY(100%); } to{ transform:translateY(0); } }
+.scroll-wheel-header{
+  padding:16px 16px 12px; border-bottom:1px solid var(--border);
+  text-align:center;
+}
+.scroll-wheel-label{ font-weight:700; font-size:15px; color: var(--text); text-transform:uppercase; letter-spacing:1.5px; display:block; }
+.scroll-wheel-viewport{
+  position:relative; height:220px; overflow:hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%);
+}
+.scroll-wheel-highlight{
+  position:absolute; top:50%; left:0; right:0; height:44px; transform:translateY(-50%);
+  background: var(--surface-2); border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+  pointer-events:none;
+}
+.scroll-wheel-track{
+  /* Position wird komplett per JS über transform:translateY() gesteuert (eigene
+     Touch-Physik mit Momentum/Trägheit statt nativem overflow-scroll + CSS scroll-snap,
+     siehe openScrollWheelForInput) — kein natives Scrollen auf diesem Element. */
+  position:relative; top:50%; margin-top:-22px;
+  touch-action:none; will-change: transform;
+  -webkit-user-select:none; user-select:none;
+}
+.scroll-wheel-item{
+  height:44px; display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono', monospace; font-size:20px; color: var(--muted);
+  transition: color .12s ease, transform .12s ease, opacity .12s ease;
+  opacity:0.45; transform: scale(0.9);
+  -webkit-user-select:none; user-select:none; cursor:pointer;
+}
+.scroll-wheel-item.active{ color: var(--text); opacity:1; transform: scale(1.08); font-weight:700; }
+/* Textvarianten des Scroll-Rads (siehe openChoiceScrollWheel(), z. B. Schriftart-Picker in
+   Design → Schriftart): normale (nicht-monospace) Schrift statt der Zahlen-Variante, dazu
+   Innenabstand + Kürzung per Ellipsis, damit lange Namen nicht über den Rand hinauslaufen. Ein
+   optionales inline style="font-family:…" pro Option (siehe o.itemStyle) überschreibt das hier
+   gezielt, damit jeder Eintrag in seiner eigenen Schriftart angezeigt werden kann. */
+.scroll-wheel-item-text{
+  font-family: var(--font-app, 'Inter', system-ui, sans-serif); font-size:17px;
+  padding:0 22px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
+/* ---------- Schriftart-Picker (Design → Schriftart), siehe openFontPickerSheet() ----------
+   Eigenes, schlankes Popup statt des generischen Scroll-Rads: Suchfeld oben zum Filtern nach
+   Namen, darunter eine normal scrollbare (kein Snap/Momentum) Liste, die deutlich mehr Platz
+   bekommt als das Scroll-Rad-Sichtfenster (220px) — dadurch sieht man beim Scrollen mehr
+   Schriftarten auf einmal, und die Suche funktioniert unabhängig von der Listenlänge. */
+.font-picker-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:70;
+  display:flex; align-items:flex-end; justify-content:center;
+}
+.font-picker-sheet{
+  width:100%; max-width:480px; background: var(--bg);
+  border-top-left-radius:20px; border-top-right-radius:20px;
+  border:1px solid var(--border); border-bottom:none;
+  max-height:80vh; display:flex; flex-direction:column;
+  animation: wheelSheetIn .22s ease;
+}
+.font-picker-header{ padding:16px 16px 4px; text-align:center; flex-shrink:0; }
+.font-picker-title{ font-weight:700; font-size:15px; color: var(--text); text-transform:uppercase; letter-spacing:1.5px; }
+.font-picker-search-wrap{ padding:12px 16px; flex-shrink:0; }
+.font-picker-search{
+  width:100%; box-sizing:border-box; padding:11px 14px; border-radius:10px;
+  border:1px solid var(--border); background: var(--surface-2); color: var(--text);
+  font-size:15px; font-family: var(--font-app, 'Inter', system-ui, sans-serif);
+}
+.font-picker-search:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color: var(--accent); }
+.font-picker-search::placeholder{ color: var(--muted); }
+.font-picker-list{
+  overflow-y:auto; -webkit-overflow-scrolling:touch; flex:1; min-height:320px;
+  border-top:1px solid var(--border); padding:4px 0 max(10px, env(safe-area-inset-bottom));
+}
+.font-picker-item{
+  width:100%; text-align:left; background:none; border:none; border-bottom:1px solid var(--border);
+  padding:14px 20px; font-size:19px; color: var(--muted);
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+.font-picker-item:active{ background: var(--surface-2); }
+.font-picker-item.selected{ color: var(--text); font-weight:700; }
+.font-picker-item-check{ color: var(--accent); font-size:16px; flex-shrink:0; opacity:0; font-family:'Inter', sans-serif; }
+.font-picker-item.selected .font-picker-item-check{ opacity:1; }
+.font-picker-empty{ padding:32px 20px; text-align:center; color: var(--muted); font-size:13px; }
+
+/* ---------- Ziffernblock (Keypad) Zahleneingabe ---------- */
+.keypad-sheet{
+  width:100%; max-width:420px; margin:0 auto; background: var(--surface);
+  border-top-left-radius:20px; border-top-right-radius:20px;
+  border:1px solid var(--border); border-bottom:none;
+  padding:16px; animation: wheelSheetIn .22s ease;
+}
+.keypad-display-row{ display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.keypad-display{
+  flex:1; font-family:'JetBrains Mono', monospace; font-size:34px; font-weight:700;
+  color: var(--text); text-align:right; padding:10px 4px; min-height:48px;
+  overflow-x:auto; white-space:nowrap;
+}
+.keypad-confirm{
+  width:64px; height:64px; flex-shrink:0; border-radius:14px;
+  background: var(--surface-2); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+}
+.keypad-confirm:active{ background: var(--surface); }
+.keypad-check{ position:relative; width:22px; height:16px; display:block; }
+.keypad-check::before{
+  content:''; position:absolute; left:0; top:6px; width:9px; height:2.5px;
+  background: var(--accent); border-radius:1px; transform:rotate(45deg); transform-origin:left center;
+}
+.keypad-check::after{
+  content:''; position:absolute; left:6px; top:10.5px; width:17px; height:2.5px;
+  background: var(--accent); border-radius:1px; transform:rotate(-45deg); transform-origin:left center;
+}
+.keypad-grid{
+  display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;
+}
+.keypad-key{
+  background: var(--surface-2); border:1px solid var(--border); border-radius:14px;
+  height:64px; font-family:'JetBrains Mono', monospace; font-size:26px; font-weight:600;
+  color: var(--text); display:flex; align-items:center; justify-content:center;
+  -webkit-user-select:none; user-select:none;
+}
+.keypad-key:active{ background: var(--surface); }
+.keypad-key-disabled{ opacity:0.3; }
+.keypad-key-del{ position:relative; }
+.keypad-key-del::before{
+  content:''; position:absolute; left:50%; top:50%; width:20px; height:2.5px;
+  background: var(--muted); border-radius:1px; transform:translate(-50%,-50%) rotate(45deg);
+}
+.keypad-key-del::after{
+  content:''; position:absolute; left:50%; top:50%; width:20px; height:2.5px;
+  background: var(--muted); border-radius:1px; transform:translate(-50%,-50%) rotate(-45deg);
+}
+.keypad-inline{ padding:14px 16px 16px; border-top:1px solid var(--border); }
+.keypad-inline .keypad-display-row{ margin-bottom:12px; }
+.keypad-inline .keypad-key{ height:52px; font-size:22px; }
+.keypad-inline .keypad-confirm{ width:52px; height:52px; }
+
+/* ---------- Toggle-Switch (Einstellungen) ---------- */
+/* ---------- Akzentfarben-Auswahl (Einstellungen) ---------- */
+.accent-swatch-grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
+.accent-swatch{
+  aspect-ratio:1/1; border-radius:14px; border:2px solid transparent;
+  position:relative; transition: transform .1s ease;
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+}
+.accent-swatch:active{ transform: scale(0.92); }
+.accent-swatch.selected{ border-color: var(--text); }
+.accent-swatch.selected::after{
+  content:''; position:absolute; top:50%; left:50%; width:9px; height:5px;
+  transform:translate(-50%,-60%) rotate(-45deg);
+  border-left:2.5px solid #121316; border-bottom:2.5px solid #121316;
+}
+/* Kleiner Stern oben rechts markiert Favoriten aus der freien Farbpalette (Long-Press
+   entfernt sie wieder, siehe wireAccentFavoriteLongPress). Fünfzackiger Stern als
+   Polygon-Clip, da hierfür kein Unicode-Zeichen (nicht selektierbar) verwendet wird. */
+.accent-swatch[data-favorite="1"]::before{
+  content:''; position:absolute; top:4px; right:4px; width:11px; height:11px;
+  background:#fff; opacity:0.85;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+.accent-palette-field{
+  position:relative; width:100%; height:180px; border-radius:12px; overflow:hidden;
+  touch-action:none; -webkit-user-select:none; user-select:none;
+  /* Hue wird per JS als --hue-hex gesetzt (aktueller reiner Farbton bei voller Sättigung
+     und Helligkeit); links-nach-rechts läuft die Sättigung (weiß -> Farbton), oben-nach-
+     unten die Helligkeit (transparent -> schwarz), klassisches HSV-Auswahlfeld. */
+  background: linear-gradient(to bottom, transparent, #000),
+              linear-gradient(to right, #fff, var(--hue-hex, #ff0000));
+}
+.accent-palette-cursor{
+  position:absolute; width:22px; height:22px; border-radius:50%;
+  border:2.5px solid #fff; box-shadow:0 0 0 1.5px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.5);
+  transform:translate(-50%,-50%); pointer-events:none;
+}
+.accent-hue-slider{
+  position:relative; width:100%; height:22px; border-radius:11px; margin-top:14px;
+  touch-action:none; -webkit-user-select:none; user-select:none;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+.accent-hue-cursor{
+  position:absolute; top:50%; width:26px; height:26px; border-radius:50%;
+  border:2.5px solid #fff; box-shadow:0 0 0 1.5px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.5);
+  transform:translate(-50%,-50%); pointer-events:none; background: var(--hue-hex, #ff0000);
+}
+.accent-custom-btn{
+  width:100%; margin-top:14px; padding:13px 16px; border-radius:10px;
+  border:1px solid var(--border); background: var(--surface-2); color: var(--text);
+  font-size:14px; font-weight:500; display:flex; align-items:center; gap:10px;
+}
+.accent-custom-btn:active{ background: var(--surface); }
+.accent-custom-btn-icon{
+  width:22px; height:22px; border-radius:50%; flex-shrink:0; object-fit:cover; display:block;
+}
+.accent-picker-sheet{
+  width:100%; max-width:400px; margin:0 auto; background: var(--bg);
+  border-top-left-radius:20px; border-top-right-radius:20px;
+  border:1px solid var(--border); border-bottom:none; padding:16px;
+  animation: wheelSheetIn .22s ease;
+}
+.accent-picker-preview-row{ display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.accent-picker-preview{
+  width:36px; height:36px; border-radius:10px; border:1px solid var(--border); flex-shrink:0;
+}
+.accent-picker-hex-input{
+  flex:1; font-family:'JetBrains Mono', monospace; font-size:15px; color: var(--text);
+  background: var(--surface-2); border:1px solid var(--border); border-radius:8px;
+  padding:9px 12px; min-width:0;
+}
+.accent-picker-hex-input:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color: var(--accent); }
+.accent-picker-fav-btn{
+  width:40px; height:40px; border-radius:10px; border:1px solid var(--border);
+  background: var(--surface-2); flex-shrink:0; display:flex; align-items:center; justify-content:center;
+}
+.accent-picker-fav-btn:active{ background: var(--surface); }
+.accent-picker-fav-star{
+  width:20px; height:20px; display:block; position:relative; background: var(--muted);
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+.accent-picker-fav-star::after{
+  content:''; position:absolute; inset:2.5px; background: var(--surface-2);
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+.accent-picker-fav-btn.active .accent-picker-fav-star{ background: var(--accent); }
+.accent-picker-fav-btn.active .accent-picker-fav-star::after{ display:none; }
+
+.toggle-switch{
+  position:relative; display:inline-block; width:46px; height:26px; flex-shrink:0;
+  background: var(--surface-2); border:1px solid var(--border); border-radius:999px;
+  transition: background .18s ease;
+}
+.toggle-switch.on{ background: var(--accent); border-color: var(--accent); }
+.toggle-knob{
+  position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%;
+  background:#fff; transition: transform .18s ease;
+}
+.toggle-switch.on .toggle-knob{ transform: translateX(20px); background:#121316; }
+.new-exercise-modal-body .plan-row{ margin-bottom:0; }
+.new-exercise-modal-body .remove{ display:none; }
+
+/* ---------- Performancemodus: Steigerungs-Vorschlag — die betroffene Satz-Zeile bekommt
+   einfach die Klasse "perf-suggest-active" (siehe setsHTML() in renderActive()) und verwandelt
+   sich dadurch selbst in die Vorschlags-Ansicht: spürbar abgesetzter, akzentfarben getönter
+   Hintergrund (color-mix statt einfach nur var(--surface-2), damit es nicht wie derselbe Ton
+   wie die Karte/Felder darunter aussieht) + Akzentfarben-Umrandung um die GANZE Zeile. Die
+   Zahlenfelder selbst bekommen ebenfalls einen leicht abweichenden, dezent getönten Ton statt
+   der normalen Eingabefeld-Farbe — aber bewusst OHNE eigenen Akzentrahmen, das soll dem Auge
+   nach weiterhin wie EIN zusammenhängender Block wirken, nicht wie einzeln umrandete Felder.
+   Der Satz-Index links wird durch einen Pfeil-nach-oben in Akzentfarbe ersetzt (Symbol für
+   "Steigerung"), statt weiterhin eine (dann bedeutungslose) Nummer zu zeigen. Kein separates
+   Popup mehr nötig, dadurch auch keine Positionierungs-/Scroll-Probleme mehr. ---------- */
+.set-row.perf-suggest-active{
+  border:2px solid var(--accent); border-radius:12px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  padding:6px; margin: -6px -6px 8px;
+}
+.set-row.perf-suggest-active input{
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+}
+.perf-suggest-arrow{ color: var(--accent); display:block; margin:0 auto; }
+.perf-suggest-row-confirm{
+  width:30px; height:30px; border-radius:8px; border:2px solid #7cc576; flex-shrink:0;
+  background:#7cc576; color:#121316; font-size:15px; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+}
+.perf-suggest-row-reject{
+  background:none; border:none; color: var(--accent-2); font-size:16px; line-height:1;
+  padding:4px 6px; flex-shrink:0; border-radius:6px;
+  display:flex; align-items:center; justify-content:center;
+}
+/* Generischer runder Bestätigen-Button (✓), unabhängig vom Performancemodus-Vorschlag oben
+   entstanden, aber inzwischen auch von den "Eigene Pause"-Popups (customRestSubmit,
+   defaultRestCustomSubmit) wiederverwendet — Name aus Kompatibilitätsgründen beibehalten. */
+.perf-suggest-btn{
+  width:42px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+  font-size:17px; border:1px solid var(--border); color:#fff; flex-shrink:0;
+}
+.perf-suggest-btn-confirm{ background:#1c8a4a; border-color:#1c8a4a; }
+
+/* ---------- Einstellungen: einzeilige Zeilen ohne Akkordeon (Startseite, Körpergewicht, ---------- */
+/* ---------- Performancemodus, Daten, App zurücksetzen) — optisch exakt in der Größe ----- */
+/* ---------- eines Akkordeon-Kopfs (.muscle-group-header), nur ohne Aufklapp-Pfeil. ------ */
+.settings-static-row{ cursor:default; }
+.settings-static-row .mg-name{ font-family:'Bebas Neue', sans-serif; font-size:16px; letter-spacing:0.5px; }
+.settings-row-input{
+  width:110px; text-align:right; padding:9px 12px; border-radius:8px; border:1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font-size:15px; font-family:inherit;
+}
+.settings-row-btns{ display:flex; gap:8px; }
+/* Unauffälliges Zahlenfeld inline in einem Fließtext-Satz (z. B. Performancemodus-Schwelle)
+   — bewusst OHNE eigenen Kasten/Rand/Hintergrund wie .settings-row-input, nur eine dezente
+   Unterstreichung, damit die Zahl wie ein normales Wort im Satz wirkt statt wie ein separates
+   Formularfeld. */
+.inline-plain-input{
+  width:2.4em; text-align:center; padding:0 2px; border:none; border-bottom:1px solid var(--border);
+  background:none; color:var(--accent); font-size:inherit; font-family:inherit; font-weight:700;
+}
+/* "App zurücksetzen" in den Einstellungen: nur roter Rand + rote Schrift statt ausgefüllter
+   roter Fläche wie die übrigen .btn-danger-Buttons (z. B. im Bestätigungs-Popup) — dort bleibt
+   der ausgefüllte Stil bewusst unverändert, da es sich um einen eigenen, gezielten Wunsch nur
+   für diesen einen Button handelt. */
+.settings-reset-btn{
+  padding:13px 16px; border-radius: var(--radius);
+  background:none; border-color: var(--accent-2); color: var(--accent-2);
+}
+
+
+/* ---------- Plan editor ---------- */
+/* Flache Übersichtszeile (Bild + Name + Bearbeiten-Icon-Button) innerhalb eines aufgeklappten
+   Muskelgruppen-Akkordeons — alle Detail-Felder liegen jetzt im separaten Bearbeiten-Popup
+   (siehe openPlanRowEditPopup). Kein eigener Card-Rahmen mehr pro Zeile (das erzeugte bei
+   vielen Übungen zu viele verschachtelte Boxen); stattdessen trennt eine dünne Linie
+   zwischen den Zeilen, letzte Zeile einer Gruppe ohne Linie. Sehr knappes vertikales Padding,
+   damit die Liste insgesamt kompakt wirkt (kein Leerraum über/unter den Bildern).*/
+.plan-row{
+  display:flex; align-items:center; gap:8px;
+  padding:10px 16px; border-bottom:1px solid var(--border);
+}
+.plan-row:last-child{ border-bottom:none; }
+.plan-row-media{ flex-shrink:0; }
+.plan-row-thumb{ width:44px; height:44px; border-radius:10px; object-fit:cover; display:block; }
+.plan-row-thumb-fallback{
+  width:44px; height:44px; border-radius:10px; background: var(--surface-2);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono', monospace; font-weight:700; font-size:11px; color: var(--text);
+}
+.plan-row-name{
+  flex:1; min-width:0; font-size:13px; font-weight:600; color: var(--text);
+  line-height:1.25; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  overflow:hidden; text-overflow:ellipsis;
+}
+/* Kleiner, dezenter Zusatztext hinter "Adduktoren"/"Abduktoren" (siehe exerciseNameHTML()) —
+   em-basierte Schriftgröße, damit er sich an jeder Stelle (Liste, Titel, Tabellenzelle etc.)
+   automatisch passend zur umgebenden Schriftgröße verkleinert. */
+.exercise-name-hint{ font-size:0.78em; font-weight:400; color: var(--muted); }
+.plan-row-edit-btn{
+  flex-shrink:0; background: var(--surface-2); border:1px solid var(--border); color: var(--text);
+  border-radius:8px; width:38px; height:38px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.plan-row-edit-btn img{ width:18px; height:18px; display:block; }
+/* Das Icon (bearbeiten.png) ist dunkel/schwarz gezeichnet — passt so direkt für Light Mode,
+   für den (dunklen) Standard-Modus wird es invertiert, analog zum Zurück-Pfeil-Icon. */
+.plan-row-edit-btn img{ filter: invert(1); }
+html[data-theme="light"] .plan-row-edit-btn img{ filter: none; }
+/* Favoriten-Stern (Übungen-Liste + Übungsbild-Popup) — reiner Icon-Button ohne eigenen
+   Hintergrund/Rahmen, Farbe folgt via currentColor exakt der Akzentfarbe (siehe starIconSVG()). */
+.exercise-fav-btn{
+  flex-shrink:0; background:none; border:none; padding:0; color: var(--accent);
+  width:38px; height:38px; display:flex; align-items:center; justify-content:center;
+}
+/* Löschen-("Ausblenden")-Button, gleiche Größe/Optik wie .plan-row-edit-btn daneben, aber in
+   der Warnfarbe (--accent-2) — entfernt die Übung nicht endgültig, sondern nur aus dem
+   aktiven Plan (siehe hideExerciseFromPlan()), sie taucht danach im "Aus Vorlagen wählen"-
+   Picker wieder auf. */
+.plan-row-delete-btn{
+  flex-shrink:0; background: var(--surface-2); border:1px solid var(--border); color: var(--accent-2);
+  border-radius:8px; width:38px; height:38px; padding:0; font-size:16px; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+}
+.plan-row-delete-btn:active{ background: var(--border); }
+
+
+/* ---------- Übungen-Bearbeiten-Popup (Detail-Felder einer einzelnen Übung) ---------- */
+.plan-edit-image-actions{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+.plan-edit-modal-body input[type="text"]{
+  width:100%; background: var(--surface-2); border:1px solid var(--border); color: var(--text);
+  border-radius:8px; padding:10px 12px; font-size:15px; font-weight:600; margin-bottom:14px;
+}
+.plan-grid{ display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:14px; }
+.plan-grid label{ font-size:10px; text-transform:uppercase; letter-spacing:1px; color: var(--muted); display:block; margin-bottom:4px; }
+.plan-grid input{
+  width:100%; background: var(--surface-2); border:1px solid var(--border); color: var(--text);
+  border-radius:8px; padding:8px; font-family:'JetBrains Mono', monospace; text-align:center; font-size:14px;
+}
+.plan-row2{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:14px; }
+.plan-row2 label{ font-size:10px; text-transform:uppercase; letter-spacing:1px; color: var(--muted); display:block; margin-bottom:4px; }
+.plan-row2 select, .plan-row2 input[type="text"]{
+  width:100%; background: var(--surface-2); border:1px solid var(--border); color: var(--text);
+  border-radius:8px; padding:9px 10px; font-size:13px; font-weight:500; margin-bottom:0;
+}
+.plan-edit-remove{
+  background:none; border:none; color: var(--accent-2); font-size:13px; font-weight:600; padding:6px 0;
+}
+
+/* Übungsbild antippbar machen: dezenter Cursor/Feedback, ohne dass es wie ein eigener Button
+   aussieht (bleibt optisch ein reines Bild). */
+.plan-row-media, .exercise-thumb-clickable{ cursor:pointer; }
+.plan-row-media:active img, .exercise-thumb-clickable:active img{ opacity:0.8; }
+
+/* ---------- Übungsbild-Popup (großes Bild + Platzhalter für Übungs-Infos) ---------- */
+.exercise-image-popup-img{
+  width:100%; border-radius:14px; display:block; object-fit:cover; background: var(--surface-2);
+}
+.exercise-image-popup-placeholder{
+  width:100%; aspect-ratio:1/1; border-radius:14px; background: var(--surface-2);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono', monospace; font-weight:700; font-size:32px; color: var(--muted);
+}
+.exercise-image-popup-info{
+  margin-top:16px; padding:14px; border-radius: var(--radius); border:1px solid var(--border);
+  font-size:13px; color: var(--muted); line-height:1.5;
+}
+
+/* ---------- Übungen: Suche, Muskelgruppen-Akkordeon, Export/Import ---------- */
+.plan-search{
+  width:100%; background: var(--surface); border:1px solid var(--border); color: var(--text);
+  border-radius: var(--radius); padding:12px 14px; font-size:14px; margin-bottom:16px;
+}
+.plan-search:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color: var(--accent); }
+.muscle-group{ margin-bottom:10px; }
+.muscle-group-header{
+  width:100%; display:flex; align-items:center; justify-content:space-between;
+  background: var(--surface); border:1px solid var(--border); border-radius: var(--radius);
+  padding:13px 16px; color: var(--text); text-align:left;
+}
+/* touch-action:none NUR dort, wo per Long-Press-Drag umsortiert werden kann (siehe
+   wireMuscleGroupReorder(), genutzt in #modeEditRows/#freeRows) — überall sonst (z. B.
+   Einstellungen, Übungen-Tab) sind Akkordeon-Köpfe reine Tap-zum-Aufklappen-Buttons ohne
+   Drag, touch-action:none hätte dort nur natives vertikales Scrollen verhindert, sobald der
+   Finger auf einem (meist eingeklappten, also den Großteil des Bildschirms einnehmenden)
+   Kopf statt auf einem aufgeklappten Körper aufsetzt. */
+#modeEditRows .muscle-group-header, #freeRows .muscle-group-header{ touch-action: none; }
+/* #exerciseStatsList: früher hier pan-y (natives Scrollen), aber das erlaubt dem Browser, die
+   Seite direkt im Compositor zu scrollen OHNE auf JavaScript zu warten — dadurch konnte er
+   mitten im Long-Press-Drag doch übernehmen (die Seite "sprang" plötzlich weg, teils bis zum
+   Pull-to-refresh am oberen Rand), egal was preventDefault() im JS danach noch versucht. touch-
+   action:none zwingt den Browser, jede Bewegung erst durch JS laufen zu lassen — Zuverlässigkeit
+   des Drags geht hier vor butterweichem nativen Scroll-Momentum (siehe wireProgressStatsReorder(),
+   das dafür wieder manuelles window.scrollBy() während des Wartens auf den Long-Press nutzt,
+   exakt wie wireMuscleGroupReorder() bei #modeEditRows/#freeRows). */
+#exerciseStatsList .muscle-group-header{ touch-action: none; }
+.progress-stat-editbtn{
+  display:flex; align-items:center; justify-content:center; margin:14px auto 0;
+  background: var(--surface-2); border:1px solid var(--border); color: var(--text);
+  border-radius:8px; width:40px; height:40px; padding:0;
+}
+.progress-stat-editbtn img{ width:18px; height:18px; display:block; filter: invert(1); }
+html[data-theme="light"] .progress-stat-editbtn img{ filter: none; }
+/* Kompakte Checkbox-Zeile statt der zuvor genutzten großen Toggle-Switches — für Listen mit
+   vielen Einträgen (bis zu 11 Statistiken) wirkten die Schalter zu klobig. Ganze Zeile tappbar,
+   kleines Häkchen-Kästchen links (gleiches Muster wie .free-row-check), Rahmen färbt sich bei
+   aktivem Zustand in der Akzentfarbe statt eines separaten Schalters. */
+.stat-toggle-row{
+  display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+  padding:11px 14px; background: var(--surface); border:1px solid var(--border);
+  border-radius: var(--radius); margin-top:8px; color: var(--text); font-size:14px; font-weight:500;
+}
+.stat-toggle-row:first-child{ margin-top:0; }
+.stat-toggle-row.checked{ border-color: var(--accent); }
+.stat-toggle-row:active{ background: var(--surface-2); }
+.stat-toggle-check{
+  width:20px; height:20px; border-radius:6px; border:2px solid var(--border);
+  flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:700; color: transparent;
+}
+.stat-toggle-row.checked .stat-toggle-check{ background: var(--accent); border-color: var(--accent); color:#121316; }
+.muscle-group-header .mg-name{
+  font-family:'Bebas Neue', sans-serif; font-size:16px; letter-spacing:0.5px;
+  flex:1 1 auto; min-width:0;
+}
+.muscle-group-header .mg-meta{
+  font-family:'JetBrains Mono', monospace; font-size:11px; color: var(--muted);
+  display:flex; align-items:center; gap:8px; flex:0 0 auto; white-space:nowrap; margin-left:10px;
+}
+/* Der Aufklapp-Pfeil selbst, unabhängig vom Rest von .mg-meta (das ggf. noch einen kleinen
+   Badge-Text davor zeigt) — deutlich größer, damit er als Aufklapp-Indikator klar erkennbar
+   ist statt als winziges Zeichen fast unterzugehen. */
+.mg-arrow{ font-size:16px; line-height:1; color: var(--text); display:inline-block; }
+.muscle-group-body{ margin-top:10px; }
+/* Stecken Kopf und Körper zusammen in einer gemeinsamen Karte (.muscle-group als direkter
+   Elternknoten, siehe settingsAccordionSection() u. a.), wirkt das Ganze beim Aufklappen wie
+   EIN Element, das einfach länger wird — statt wie zwei separate Boxen mit sichtbarer Lücke
+   dazwischen. Der Körper übernimmt dafür Rand/Ecken/Hintergrund der Karte (nur oben durch
+   eine Trennlinie vom Kopf abgesetzt), der Kopf verliert seinen eigenen Rahmen und wird zur
+   obersten Zeile dieser Karte. Auch die Monats-Zeilen in der Workouts-Übersicht nutzen dieses
+   Muster (dort ggf. zusätzlich innerhalb einer Jahres-Karte verschachtelt) — die einzelnen
+   .history-row-Einträge im Body bekommen dadurch nur noch die eine Trennlinie zum Kopf plus je
+   eine dünne Linie zwischen mehreren Einheiten desselben Monats, keine eigene Umrandung mehr.*/
+.muscle-group{
+  border:1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); overflow:hidden;
+}
+.muscle-group > .muscle-group-header{ border:none; border-radius:0; background:none; }
+.muscle-group > .muscle-group-body{
+  margin-top:0; padding-top:0; padding-bottom:0; border-top:1px solid var(--border);
+}
+/* "Training nachtragen"-Wizard, Schritt "Welche Übungen?" (#pastExList): die Übungs-Checkbox-
+   Zeilen stecken hier in einer .muscle-group-Akkordeon-Karte — dort soll jede Zeile nur eine
+   dünne Trennlinie zur nächsten haben (wie .plan-row im Übungen-Editor), statt der normalen
+   .stat-toggle-row-Vollumrandung + Lücke. Sonst entstehen zu viele verschachtelte Linien
+   (Karten-Rahmen + Trennlinie zum Kopf + eigener Zeilen-Rahmen). Der "checked"-Zustand färbt
+   deshalb hier den Zeilenhintergrund statt (wie sonst) den Rahmen, da kein eigener Rahmen mehr
+   da ist, der sich einfärben könnte — das Häkchen-Kästchen selbst bleibt unverändert.*/
+#pastExList .stat-toggle-row{
+  border:none; border-radius:0; border-bottom:1px solid var(--border); margin-top:0;
+}
+#pastExList .muscle-group-body .stat-toggle-row:last-child{ border-bottom:none; }
+#pastExList .stat-toggle-row.checked{ background: var(--surface-2); }
+
+/* ---------- Workouts-Übersicht: Jahres-Zusammenfassung ---------- */
+.workouts-year-header{
+  width:100%; display:flex; align-items:center; justify-content:space-between;
+  background: var(--surface-2); border:1px solid var(--border); border-radius: var(--radius);
+  padding:14px 16px; color: var(--text); text-align:left; margin-top:18px;
+}
+.workouts-year-header:first-of-type{ margin-top:0; }
+.workouts-year-header .mg-name{
+  font-family:'Bebas Neue', sans-serif; font-size:19px; letter-spacing:0.5px; color: var(--accent);
+}
+.workouts-year-header .mg-meta{
+  font-family:'JetBrains Mono', monospace; font-size:11px; color: var(--muted);
+  display:flex; align-items:center; gap:8px;
+}
+.workouts-year-body{ margin-top:12px; padding-left:2px; }
+.workouts-year-body .muscle-group-header:first-child{ margin-top:0; }
+.io-row{ display:flex; gap:10px; margin: 4px 0 12px; }
+.io-row .btn{ flex:1; }
+.danger-zone{
+  margin-top:28px; padding-top:18px; border-top:1px dashed var(--border);
+}
+.danger-zone-title{
+  font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color: var(--accent-2);
+  margin-bottom:8px; font-weight:700;
+}
+.danger-zone-text{ font-size:12px; color: var(--muted); line-height:1.4; margin:0 0 12px; }
+
+/* ---------- Start-Auswahl (Ganzkörper/Ober/Unter/Frei) ---------- */
+.start-grid{
+  display:grid; grid-template-columns: 1fr 1fr; gap:14px;
+  width:100%; max-width: 320px; margin: 4px auto 24px;
+}
+/* Bei einer UNGERADEN Anzahl sichtbarer Kacheln (3 oder 5): alle bis auf die letzte bleiben
+   im normalen 2er-Raster, die letzte füllt die komplette Breite der letzten Zeile aus (statt
+   halb leer neben einer Lücke zu stehen) — dafür braucht sie ein anderes Seitenverhältnis,
+   da sie jetzt doppelt so breit wie hoch ist. :last-child statt einer festen nth-child-Zahl,
+   damit das unabhängig davon funktioniert, ob es 3 oder 5 Kacheln sind (z. B. durch
+   zusätzliche Custom-Kategorien, siehe MAX_CUSTOM_CATEGORIES). */
+.start-grid.count-odd .start-cell:last-child,
+.start-grid.count-odd .start-cell:last-child .start-option,
+.start-grid.count-odd .start-cell:last-child .start-cell-split{
+  grid-column: 1 / -1;
