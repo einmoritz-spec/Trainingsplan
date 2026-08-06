@@ -1800,6 +1800,11 @@ table.detail-table td{
   padding: 8px 5px; font-family:'JetBrains Mono', monospace; font-size:13px; text-align:center;
 }
 table.detail-table th:first-child, table.detail-table td:first-child{ text-align:left; }
+.detail-table-exname{
+  background:none; border:none; padding:0; margin:0; font:inherit; color:inherit;
+  text-align:left; cursor:pointer; text-decoration:underline; text-decoration-style:dotted;
+  text-decoration-color:var(--muted); text-underline-offset:3px;
+}
 table.detail-table tr.exercise-start td{ border-top:1px solid var(--border); }
 table.detail-table tbody tr:first-child td{ border-top:none; }
 /* Sicherheitsnetz: die Gewicht-Spalte trug bisher "kg" in JEDER Zeile mit (z.B. "102,5 kg"),
