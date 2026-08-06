@@ -71,6 +71,34 @@ function aggregateSessions(getValue, period){
   return sorted.map(s => ({ label: shortDate(s.date), value: getValue(s) }));
 }
 
+// Wie aggregateSessions(), aber NUR für die Muskelgruppen-Diagramme: Eine Session darf nur
+// dann einen Datenpunkt für eine Muskelgruppe liefern, wenn diese Gruppe in der Session
+// tatsächlich vorkam — sonst würde eine Session ohne z. B. Beinübungen als "0 kg"-Punkt in
+// den Beine-Verlauf einfließen. Ein solcher Nullpunkt sieht in der Line-Chart wie ein
+// Einbruch aus (und verfälscht das Delta in chartAccordionHTML, z. B. "-8.983 kg", obwohl die
+// Gruppe einfach nicht trainiert wurde) statt korrekt als "keine Daten" behandelt zu werden.
+// Maßgeblich ist NUR, ob die Muskelgruppe in der Session vorkam — nicht, ob dabei Gewicht
+// bewegt wurde (reine Körpergewichtsübungen zählen als "trainiert", auch mit 0 kg Volumen).
+function sessionTrainsGroup(s, group){
+  return s.entries.some(e => {
+    const planEx = plan.exercises.find(x => x.id === e.exerciseId);
+    return ((planEx && planEx.muscleGroup) || 'Sonstige') === group;
+  });
+}
+function aggregateSessionsForGroup(group, getValue, period){
+  const days = statsPeriodToDays(period);
+  const cutoff = days ? Date.now() - days * 86400000 : null;
+  const sorted = sessions
+    .filter(s => (!cutoff || new Date(s.date).getTime() >= cutoff) && sessionTrainsGroup(s, group))
+    .slice()
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
+  if (period === 'total'){
+    let running = 0;
+    return sorted.map(s => { running += getValue(s); return { label: shortDate(s.date), value: running }; });
+  }
+  return sorted.map(s => ({ label: shortDate(s.date), value: getValue(s) }));
+}
+
 let statsPeriod = 'month';
 const PERIOD_LABELS = { month: 'Monat', year: 'Jahr', total: 'Insgesamt' };
 
@@ -125,7 +153,7 @@ function renderStatsChart(metric){
     }, 0);
   }
   const groupChartsHTML = isTime ? '' : MUSCLE_GROUP_ORDER.filter(g => g !== 'Kardio').map(g => {
-    const groupPoints = aggregateSessions(s => sessionVolumeKgForGroup(s, g), statsPeriod).map(p => ({ label: p.label, value: p.value }));
+    const groupPoints = aggregateSessionsForGroup(g, s => sessionVolumeKgForGroup(s, g), statsPeriod);
     const groupTotal = groupPoints.reduce((a,p) => a + p.value, 0);
     if (!groupTotal) return ''; // Muskelgruppen ganz ohne protokolliertes Gewicht werden nicht mit angezeigt
     return chartAccordionHTML(statsChartOpen, `group-${g}`, g, groupPoints, muscleGroupColor(g), v => v.toLocaleString('de-DE') + ' kg',
@@ -560,8 +588,14 @@ function buildLineChart(points, color, valueFormatter){
     const anchor = i === 0 ? 'start' : (i === coords.length-1 ? 'end' : 'middle');
     return `<text class="chart-label" x="${c.x.toFixed(1)}" y="${h-6}" text-anchor="${anchor}">${c.label}</text>`;
   }).join('');
-  const valueLabels = coords.map(c =>
-    `<text class="chart-label" style="fill:${color};font-weight:700" x="${c.x.toFixed(1)}" y="${(c.y-8).toFixed(1)}" text-anchor="middle">${fmt(c.value)}</text>`).join('');
+  // Genau wie bei xLabels: erste/letzte Wert-Beschriftung an der Achse ausrichten statt
+  // zentriert auf den Punkt — sonst ragt bei text-anchor:middle die Hälfte der Zahl über den
+  // linken/rechten Rand der Zeichenfläche hinaus und wird dort abgeschnitten (sichtbar z. B.
+  // als "18.606" → ".606" ganz links oder "3.140" → "3.14" ganz rechts im Diagramm).
+  const valueLabels = coords.map((c,i) => {
+    const anchor = i === 0 ? 'start' : (i === coords.length-1 ? 'end' : 'middle');
+    return `<text class="chart-label" style="fill:${color};font-weight:700" x="${c.x.toFixed(1)}" y="${(c.y-8).toFixed(1)}" text-anchor="${anchor}">${fmt(c.value)}</text>`;
+  }).join('');
   // Zwei dezente Hilfslinien zusätzlich zur Grundlinie, damit sich Werte grob einordnen lassen,
   // auch ohne an jedem einzelnen Punkt die Beschriftung lesen zu müssen.
   const gridLines = [0.33, 0.66].map(f =>
