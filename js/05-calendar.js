@@ -601,10 +601,14 @@ function renderMonthReport(year, month){
     </div>
   `).join('');
 
-  // Muskelgruppen-Verteilung: gestapelter Balken + zweispaltige Legende, Top 5 Gruppen einzeln,
+  // Muskelgruppen-Verteilung: gestapelter Balken + zweispaltige Legende, Top-Gruppen einzeln,
   // der Rest (falls vorhanden) als gemeinsames "Sonstige"-Segment in der bestehenden Sonstige-
-  // Farbe, damit die Legende bei vielen Gruppen nicht ausufert.
-  const MAX_MUSCLE_SEGMENTS = 5;
+  // Farbe, damit die Legende bei vielen Gruppen nicht ausufert. Das Limit deckt bewusst ALLE
+  // festen Kategorien aus MUSCLE_GROUP_ORDER (app-data.js) ab — bei einem niedrigeren Wert
+  // (früher 5) wurde z. B. "Bauch" als 6. echte Kategorie fälschlich unter "Sonstige"
+  // einsortiert, obwohl die Übung ganz normal kategorisiert war. Nur eine ECHT unkategorisierte
+  // Übung landet jetzt noch im "Sonstige"-Sammelsegment.
+  const MAX_MUSCLE_SEGMENTS = MUSCLE_GROUP_ORDER.length;
   const topMuscleGroups = muscleGroupTop.slice(0, MAX_MUSCLE_SEGMENTS);
   const restMuscleCount = muscleGroupTop.slice(MAX_MUSCLE_SEGMENTS).reduce((a, [, v]) => a + v, 0);
   const muscleSegments = [...topMuscleGroups];
