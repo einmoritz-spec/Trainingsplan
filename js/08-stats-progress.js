@@ -82,7 +82,13 @@ function aggregateSessions(getValue, period){
 function sessionTrainsGroup(s, group){
   return s.entries.some(e => {
     const planEx = plan.exercises.find(x => x.id === e.exerciseId);
-    return ((planEx && planEx.muscleGroup) || 'Sonstige') === group;
+    if (((planEx && planEx.muscleGroup) || 'Sonstige') !== group) return false;
+    // Reicht nicht, dass der Eintrag existiert — er muss auch mindestens einen tatsächlich
+    // ausgefüllten Satz haben (gleiche hasData-Prüfung wie computeExerciseMetrics()), sonst
+    // zählt eine leere/übersprungene Übung im Session-Eintrag fälschlich als "trainiert" und
+    // erzeugt einen 0-kg-Ausreißer im Muskelgruppen-Verlauf (siehe Rücken-Bug: Punkt sackt auf
+    // 0 kg ab, obwohl die Gruppe an dem Tag schlicht nicht ausgeführt wurde).
+    return computeExerciseMetrics(e, planEx).hasData;
   });
 }
 function aggregateSessionsForGroup(group, getValue, period){
