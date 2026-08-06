@@ -50,64 +50,41 @@ function weekBucket(d){
   const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
   return { key: `${d.getFullYear()}-W${week}`, label: `KW ${week}`, sortKey: d.getFullYear()*100 + week };
 }
+// 'month'/'year' sind ein ROLLIERENDES Zeitfenster (letzte 30/365 Tage, siehe
+// statsPeriodToDays() weiter unten — derselbe Zeitraum-Filter wie beim Zeit-Donut auf
+// demselben Screen), KEIN Kalendermonat/-jahr-Bucket. Innerhalb des Fensters bekommt jede
+// Einheit ihren eigenen Punkt (vorher wurden alle Einheiten desselben Kalendermonats zu
+// einem einzigen Punkt summiert — bei z. B. 3 Einheiten im selben Monat blieb dadurch nur
+// 1 Punkt übrig und der Trend verschwand, obwohl der Hinweistext "ab der zweiten geloggten
+// Einheit" etwas anderes verspricht).
 function aggregateSessions(getValue, period){
-  const sorted = sessions.slice().sort((a,b) => new Date(a.date) - new Date(b.date));
+  const days = statsPeriodToDays(period);
+  const cutoff = days ? Date.now() - days * 86400000 : null;
+  const sorted = sessions
+    .filter(s => !cutoff || new Date(s.date).getTime() >= cutoff)
+    .slice()
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
   if (period === 'total'){
     let running = 0;
     return sorted.map(s => { running += getValue(s); return { label: shortDate(s.date), value: running }; });
   }
-  const buckets = new Map();
-  sorted.forEach(s => {
-    const d = new Date(s.date);
-    let key, label, sortKey;
-    if (period === 'week'){
-      const wb = weekBucket(d);
-      key = wb.key; label = wb.label; sortKey = wb.sortKey;
-    } else if (period === 'month'){
-      key = `${d.getFullYear()}-${d.getMonth()}`;
-      label = d.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' });
-      sortKey = d.getFullYear()*100 + d.getMonth();
-    } else {
-      key = `${d.getFullYear()}`;
-      label = `${d.getFullYear()}`;
-      sortKey = d.getFullYear();
-    }
-    if (!buckets.has(key)) buckets.set(key, { label, value: 0, sortKey });
-    buckets.get(key).value += getValue(s);
-  });
-  return [...buckets.values()].sort((a,b) => a.sortKey - b.sortKey);
+  return sorted.map(s => ({ label: shortDate(s.date), value: getValue(s) }));
 }
 
 let statsPeriod = 'month';
 const PERIOD_LABELS = { month: 'Monat', year: 'Jahr', total: 'Insgesamt' };
 
-// Bucketet eine Liste von {date, value}-Punkten nach Periode (analog aggregateSessions(),
-// aber für beliebige Datenpunkte statt konkret für Sessions). Bei 'total' bleibt jeder Punkt
-// einzeln erhalten (roh, eine Einheit = ein Punkt). Bei week/month/year wird pro Bucket der
-// Maximalwert genommen — für Fortschrittsdiagramme aussagekräftiger als eine Summe (z. B.
-// "bestes Gewicht in dieser Woche" statt einer wenig sinnvollen Gewichtssumme).
+// Filtert eine Liste von {date, value}-Punkten nach Periode (analog aggregateSessions(),
+// aber für beliebige Datenpunkte statt konkret für Sessions). 'month'/'year' sind — wie bei
+// aggregateSessions() — ein rollierendes 30-/365-Tage-Fenster (statsPeriodToDays()), kein
+// Kalendermonat/-jahr-Bucket: jeder Punkt (= eine Einheit, in der die Übung vorkam) bleibt
+// einzeln erhalten, nur außerhalb des Fensters liegende Punkte fallen weg. Bei 'total' bleibt
+// die Liste unverändert (kein Zeitfenster).
 function aggregateHistoryPoints(points, period){
-  if (period === 'total') return points;
-  const buckets = new Map();
-  points.forEach(p => {
-    const d = new Date(p.date);
-    let key, label, sortKey;
-    if (period === 'week'){
-      const wb = weekBucket(d);
-      key = wb.key; label = wb.label; sortKey = wb.sortKey;
-    } else if (period === 'month'){
-      key = `${d.getFullYear()}-${d.getMonth()}`;
-      label = d.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' });
-      sortKey = d.getFullYear()*100 + d.getMonth();
-    } else {
-      key = `${d.getFullYear()}`;
-      label = `${d.getFullYear()}`;
-      sortKey = d.getFullYear();
-    }
-    if (!buckets.has(key)) buckets.set(key, { label, value: p.value, sortKey });
-    else if (p.value > buckets.get(key).value) buckets.get(key).value = p.value;
-  });
-  return [...buckets.values()].sort((a,b) => a.sortKey - b.sortKey);
+  const days = statsPeriodToDays(period);
+  if (!days) return points;
+  const cutoff = Date.now() - days * 86400000;
+  return points.filter(p => new Date(p.date).getTime() >= cutoff);
 }
 
 let statsChartOpen = new Set();

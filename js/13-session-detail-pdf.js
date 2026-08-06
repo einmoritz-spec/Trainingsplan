@@ -33,7 +33,7 @@ function renderSessionDetail(id){
     const planEx = plan.exercises.find(x => x.id === e.exerciseId);
     return e.sets.map((set, i) => `
     <tr${i === 0 ? ' class="exercise-start"' : ''}>
-      <td>${i===0 ? exerciseNameHTML(e.name) : ''}</td>
+      <td>${i===0 ? `<button class="detail-table-exname" data-editexid="${e.exerciseId}" type="button">${exerciseNameHTML(e.name)}</button>` : ''}</td>
       <td>${i+1}</td>
       <td>${e.type === 'time' ? fmtSec(set.seconds) : (set.reps ?? '—')}</td>
       <td>${e.type === 'time' ? '—' : (set.weight ?? '—')}</td>
@@ -132,6 +132,17 @@ function renderSessionDetail(id){
     row.onclick = () => goExerciseSessionDetail(s.id, row.dataset.exerciseid);
   });
   wireSessionRowLongPress(s);
+  // Übungsname in der "Gesamtes Training"-Tabelle: normaler Tap öffnet direkt den
+  // Bearbeiten-/Austauschen-Editor (openSessionEntryEditor) — im Gegensatz zur "Erfolge"-
+  // Liste oben (nur Long-Press, nur Übungen mit Rekord/Verbesserung) deckt das ALLE Übungen
+  // der Einheit ab. Ohne diesen zweiten Zugang ließen sich falsch kategorisierte Übungen
+  // (z. B. versehentlich unter "Sonstiges" statt der richtigen Muskelgruppe geloggt) oft gar
+  // nicht korrigieren, wenn sie zufällig keinen Rekord/keine Verbesserung hatten — die
+  // Statistiken aktualisieren sich danach automatisch, da sie stets live aus session.entries
+  // berechnet werden (siehe Kommentar bei openSessionEntryEditor()).
+  app.querySelectorAll('.detail-table-exname[data-editexid]').forEach(btn => {
+    btn.onclick = () => openSessionEntryEditor(s, btn.dataset.editexid);
+  });
 
   document.getElementById('btnBack').onclick = () => history.back();
   document.getElementById('btnRepeat').onclick = () => repeatSession(s);
