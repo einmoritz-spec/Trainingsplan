@@ -746,13 +746,20 @@ function wireThumbDrag(){
           if (navigator.vibrate) navigator.vibrate(10);
         }, LONG_PRESS_MS);
 
-        // Vermisst die aktuelle (noch unverzerrte) Position jeder Einheit in Viewport-
-        // Koordinaten — Basis für die präzise Ziel-Erkennung in updateDragTarget().
-        const measureUnits = () => unitEls.map(el => {
-          if (!el) return null;
-          const r = el.getBoundingClientRect();
-          return { left: r.left, width: r.width, center: r.left + r.width / 2 };
-        });
+        // Vermisst Position und Breite jeder Einheit EINMALIG beim Start des eigentlichen
+        // Drags — bewusst in INHALTS-Koordinaten der Leiste (also inklusive scrollLeft), damit
+        // die Werte auch dann gültig bleiben, wenn die Leiste während des Ziehens automatisch
+        // weiterscrollt (siehe autoScrollLoop()).
+        const measureUnits = () => {
+          const stripLeft = strip ? strip.getBoundingClientRect().left : 0;
+          const stripScroll = strip ? strip.scrollLeft : 0;
+          return unitEls.map(el => {
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            const left = r.left - stripLeft + stripScroll;
+            return { left, width: r.width, center: left + r.width / 2 };
+          });
+        };
 
         const beginDrag = () => {
           mode = 'dragging';
@@ -790,12 +797,19 @@ function wireThumbDrag(){
           autoScrollFrameId = requestAnimationFrame(autoScrollLoop);
         };
 
-        // Kernstück des Umsortierens: bestimmt anhand der tatsächlichen (gemessenen) Position
-        // jeder Einheit, welcher Platz gerade am nächsten an der gezogenen Kachel liegt (statt
-        // wie vorher grob nach einer festen Schrittweite zu runden) — das Ziel wechselt dadurch
-        // exakt dort, wo man optisch hinzieht, und lässt sich so auch gezielt zwischen zwei
-        // bestimmte Übungen schieben. `clientX` kommt entweder von einem echten pointermove
-        // oder — beim automatischen Scrollen ohne Fingerbewegung — vom zuletzt bekannten `lastX`.
+        // Kernstück des Umsortierens ("Lücke aufziehen"):
+        // Gedanklich wird die gezogene Einheit aus der Reihe HERAUSGENOMMEN — die verbleibenden
+        // Einheiten rücken dadurch um deren Breite zusammen (compactedCenter unten). Aus dieser
+        // gedachten, während des gesamten Ziehens UNVERÄNDERLICHEN Anordnung ergibt sich die
+        // Einfügestelle schlicht als "wie viele der übrigen Einheiten liegen links von der
+        // gezogenen Kachel". Weil die Bezugswerte dabei fix sind (und nicht selbst mitwandern,
+        // wie es beim vorherigen "nächstes Zentrum"-Ansatz der Fall war), springt die Vorschau
+        // nicht mehr zwischen zwei Positionen hin und her — genau das war das Hackelige.
+        // Anschließend rücken ALLE Einheiten zwischen alter und neuer Position beiseite,
+        // inklusive der Einheit an der Zielstelle selbst: dadurch entsteht an der Einfügestelle
+        // eine echte, exakt passend breite Lücke, in der die gezogene Kachel sichtbar liegt.
+        // `clientX` kommt entweder von einem echten pointermove oder — beim automatischen
+        // Scrollen ohne Fingerbewegung — vom zuletzt bekannten `lastX`.
         const updateDragTarget = (clientX) => {
           if (!unitMetrics) return;
           const fromMetric = unitMetrics[fromUnitIdx];
@@ -808,47 +822,71 @@ function wireThumbDrag(){
           rootEl.style.transform = `translateX(${dx + scrollDelta}px) translateY(-6px) scale(1.1)`;
           rootEl.style.boxShadow = '0 10px 18px rgba(0,0,0,0.45)';
 
-          const draggedCenterNow = fromMetric.center + dx;
-          let newTarget = fromUnitIdx;
-          let bestDist = Infinity;
-          unitMetrics.forEach((m, i) => {
-            if (!m) return;
-            const centerNow = m.center - scrollDelta;
-            const dist = Math.abs(draggedCenterNow - centerNow);
-            if (dist < bestDist){ bestDist = dist; newTarget = i; }
-          });
-          targetUnitIdx = newTarget;
-
-          // Andere Kacheln rutschen nur soweit sie zwischen Start- und aktueller Zielposition
-          // liegen, um Platz für die gezogene Einheit zu machen — verschoben wird dabei um deren
-          // TATSÄCHLICHE gemessene Breite (statt einer pauschalen Schätzung), damit auch breitere
-          // Supersatz-Kästen sauber und ohne Ruckeln einrutschen.
+          // Breite, die die gezogene Einheit in der Reihe belegt (inkl. des Abstands zur
+          // nächsten Kachel) — exakt um diesen Betrag rücken die anderen beiseite.
           const draggedWidth = fromMetric.width + GAP_PX;
+          // Position der gezogenen Kachel in Inhalts-Koordinaten der Leiste.
+          const draggedCenter = fromMetric.center + dx + scrollDelta;
+
+          // Zentren der übrigen Einheiten in der gedachten "ohne die gezogene Einheit"-Reihe.
+          const compactedCenter = (i) => unitMetrics[i].center - (i > fromUnitIdx ? draggedWidth : 0);
+
+          let insertIdx = 0; // Position innerhalb der übrigen Einheiten, vor die eingefügt wird
+          for (let i = 0; i < unitMetrics.length; i++){
+            if (i === fromUnitIdx || !unitMetrics[i]) continue;
+            if (compactedCenter(i) < draggedCenter) insertIdx++;
+          }
+          targetUnitIdx = insertIdx;
+
           unitEls.forEach((t, i) => {
-            if (!t || t === rootEl) return;
-            if (i === newTarget){ t.style.transform = ''; return; }
+            if (!t || i === fromUnitIdx || !unitMetrics[i]) return;
+            // Laufende Nummer dieser Einheit innerhalb der übrigen (ohne die gezogene).
+            const k = i < fromUnitIdx ? i : i - 1;
             let offset = 0;
-            if (fromUnitIdx < newTarget && i > fromUnitIdx && i < newTarget) offset = -draggedWidth;
-            else if (fromUnitIdx > newTarget && i < fromUnitIdx && i > newTarget) offset = draggedWidth;
+            if (i < fromUnitIdx && k >= insertIdx) offset = draggedWidth;        // nach rechts, macht Platz
+            else if (i > fromUnitIdx && k < insertIdx) offset = -draggedWidth;   // nach links, füllt die alte Lücke
             t.style.transform = offset ? `translateX(${offset}px)` : '';
           });
 
           // Supersatz per Halten: nur beim Ziehen einer einzelnen (noch ungekoppelten) Übung,
           // und nur, falls die Supersatz-Funktion nicht in den Trainingstools ausgeschaltet
-          // wurde (siehe supersetsFeatureEnabled()). Ziel darf entweder eine andere einzelne
-          // Übung (→ neue 2er-Gruppe) ODER eine bestehende, noch nicht volle Gruppe sein (→ wird
-          // auf bis zu SUPERSET_MAX_SIZE erweitert, die gezogene Übung landet dabei immer als
-          // letztes Mitglied — siehe createSuperset()). Bleibt das Ziel ≥SUPERSET_HOLD_MS gleich,
-          // wird es erst grau, dann in Akzentfarbe markiert (bereit zum Verknüpfen beim Loslassen).
-          const targetUnit = units[newTarget];
-          const targetUnitSize = targetUnit ? (targetUnit.endIndex - targetUnit.startIndex + 1) : 0;
-          const targetEligible = canCreateSuperset && newTarget !== fromUnitIdx
-            && targetUnit && targetUnitSize < SUPERSET_MAX_SIZE;
-          if (targetEligible){
-            if (newTarget !== hoverTarget){
+          // wurde (siehe supersetsFeatureEnabled()). Anders als beim Umsortieren zählt hier
+          // nicht die Lücke, sondern über WELCHER Kachel die gezogene Kachel tatsächlich liegt:
+          // Ziel ist die Einheit, deren aktuell angezeigte Fläche sich am stärksten mit der
+          // gezogenen überlappt. Ohne echte Überlappung (also wenn die Kachel sauber in der
+          // Lücke sitzt) gibt es bewusst gar kein Ziel — Umsortieren endet dadurch nicht mehr
+          // versehentlich in einer Verknüpfung, dafür muss man jetzt spürbar auf eine Kachel
+          // draufziehen. Bleibt das Ziel >= SUPERSET_HOLD_MS gleich, wird es erst grau, dann in
+          // Akzentfarbe markiert (bereit zum Verknüpfen beim Loslassen).
+          let bestUnitIdx = null;
+          if (canCreateSuperset){
+            let bestOverlap = 0;
+            const draggedLeft = draggedCenter - fromMetric.width / 2;
+            const draggedRight = draggedCenter + fromMetric.width / 2;
+            unitEls.forEach((t, i) => {
+              if (i === fromUnitIdx || !unitMetrics[i]) return;
+              const u = units[i];
+              const size = u ? (u.endIndex - u.startIndex + 1) : 0;
+              if (!u || size >= SUPERSET_MAX_SIZE) return; // Ziel-Gruppe wäre bereits voll
+              const k = i < fromUnitIdx ? i : i - 1;
+              let shift = 0;
+              if (i < fromUnitIdx && k >= insertIdx) shift = draggedWidth;
+              else if (i > fromUnitIdx && k < insertIdx) shift = -draggedWidth;
+              const left = unitMetrics[i].left + shift;
+              const right = left + unitMetrics[i].width;
+              const overlap = Math.min(draggedRight, right) - Math.max(draggedLeft, left);
+              // Mindestens die halbe Kachelbreite muss überdeckt sein, damit es als "draufgezogen" zählt.
+              if (overlap > bestOverlap && overlap >= unitMetrics[i].width * 0.5){
+                bestOverlap = overlap;
+                bestUnitIdx = i;
+              }
+            });
+          }
+          if (bestUnitIdx !== null){
+            if (bestUnitIdx !== hoverTarget){
               clearSupersetHover();
-              hoverTarget = newTarget;
-              highlightEl = unitEls[newTarget];
+              hoverTarget = bestUnitIdx;
+              highlightEl = unitEls[bestUnitIdx];
               if (highlightEl) highlightEl.classList.add('thumb-superset-hover');
               hoverTimer = setTimeout(() => {
                 if (highlightEl){
@@ -917,12 +955,16 @@ function wireThumbDrag(){
           const finalVelocity = velocity;
           const finalTargetUnitIdx = targetUnitIdx;
           const finalSupersetArmed = supersetArmed;
+          // Ziel der Verknüpfung ist die überlappte Kachel (hoverTarget), NICHT die
+          // Einfügeposition der Umsortier-Vorschau — beides ist seit der Lücken-Darstellung
+          // bewusst getrennt, siehe updateDragTarget().
+          const finalSupersetUnitIdx = hoverTarget;
           finish();
           if (finalMode === 'dragging'){
-            if (canCreateSuperset && finalSupersetArmed && finalTargetUnitIdx !== fromUnitIdx){
+            if (canCreateSuperset && finalSupersetArmed && finalSupersetUnitIdx !== null && finalSupersetUnitIdx !== fromUnitIdx){
               // Losgelassen, während das Ziel ≥SUPERSET_HOLD_MS markiert war: die beiden
               // Übungen zu einem Supersatz verknüpfen statt normal umzusortieren.
-              createSuperset(unit.startIndex, units[finalTargetUnitIdx].startIndex);
+              createSuperset(unit.startIndex, units[finalSupersetUnitIdx].startIndex);
               renderActive();
             } else if (finalTargetUnitIdx !== fromUnitIdx){
               // Vor Ablauf der Haltezeit losgelassen (oder ein Supersatz-Paar bewegt): ganz
