@@ -192,6 +192,15 @@ function advanceToNextExercise(){
    weiter, keine Migration nötig.)
 --------------------------------------------------- */
 const SUPERSET_MAX_SIZE = 3;
+// Globaler Schalter fürs Verknüpfen zu Supersätzen im laufenden Training (siehe
+// openTrainingToolsPrompt() in 02-state-theme.js → Abschnitt "Supersätze") — standardmäßig
+// an, außer explizit deaktiviert. Betrifft NUR das Neu-Verknüpfen per Ziehen&Halten (siehe
+// wireThumbDrag()) UND das automatische Wiederherstellen gespeicherter Kopplungen beim
+// Trainingsstart (siehe applyStoredSupersetsToActive()) — bereits während einer laufenden
+// Einheit bestehende Gruppen werden durch bloßes Ausschalten NICHT rückwirkend aufgelöst.
+function supersetsFeatureEnabled(){
+  return plan.supersetsEnabled !== false;
+}
 function findSupersetGroupIds(exerciseId){
   if (!active || !Array.isArray(active.supersetPairs)) return null;
   return active.supersetPairs.find(g => g.includes(exerciseId)) || null;
@@ -300,7 +309,7 @@ function createSuperset(fromEntryIndex, targetEntryIndex){
 // gespeicherten Reihenfolge.
 function applyStoredSupersetsToActive(){
   active.supersetPairs = [];
-  if (!Array.isArray(plan.supersetPairs)) return;
+  if (!Array.isArray(plan.supersetPairs) || !supersetsFeatureEnabled()) return;
   plan.supersetPairs.forEach(group => {
     const entries = group.map(id => active.entries.find(e => e.exerciseId === id));
     if (entries.some(e => !e)) return; // nicht alle Mitglieder heute Teil der Einheit
@@ -649,18 +658,20 @@ function wireThumbDrag(){
     if (u.startIndex === u.endIndex) return firstThumb;
     return firstThumb ? firstThumb.closest('.thumb-superset-group') : null;
   });
-  const step = 70; // Kachelbreite (60px) + Abstand (10px); bei Supersatz-Kästen nur eine grobe
-                    // Näherung für die Vorschau-Verschiebung während des Ziehens, die tatsächliche
-                    // Einfüge-Position wird beim Loslassen über Objekt-Referenzen bestimmt.
+  const GAP_PX = 10; // Abstand zwischen den Kacheln (siehe .thumb-strip{gap:10px} in styles.css)
   const LONG_PRESS_MS = 350;
   const MOVE_CANCEL_PX = 8;
-  const SUPERSET_HOLD_MS = 700; // "eine Weile halten" = 0,7 Sekunden (vorher 0,9s, nochmal leicht verkürzt)
-  const UNLINK_HOLD_MS = 1200; // Supersatz auflösen: 1,2 Sekunden halten ohne zu ziehen (vorher 3s, deutlich verkürzt)
+  const SUPERSET_HOLD_MS = 900; // "eine Weile halten" = 0,9 Sekunden (vorher 0,7s — bewusst
+                                 // etwas länger, damit ein normales Umsortieren nicht mehr so
+                                 // leicht aus Versehen als Supersatz-Verknüpfung endet).
+  const UNLINK_HOLD_MS = 1200; // Supersatz auflösen: 1,2 Sekunden halten ohne zu ziehen
+  const EDGE_SCROLL_PX = 56;   // Randzone der Leiste, ab der beim Ziehen automatisch gescrollt wird
+  const EDGE_SCROLL_MAX_SPEED = 16; // px pro Frame direkt an der Kante, linear abnehmend zur Zonenmitte
 
   units.forEach((unit, unitIdx) => {
     const rootEl = unitEls[unitIdx];
     if (!rootEl) return;
-    const canCreateSuperset = unit.startIndex === unit.endIndex;
+    const canCreateSuperset = unit.startIndex === unit.endIndex && supersetsFeatureEnabled();
     // Bei einem Supersatz-Paar löst das Greifen JEDER der beiden inneren Kacheln dieselbe
     // Drag-Geste für die GESAMTE Einheit aus.
     const grabEls = canCreateSuperset ? [rootEl] : Array.from(rootEl.querySelectorAll('.thumb[data-thumb]'));
@@ -680,6 +691,18 @@ function wireThumbDrag(){
         let scrollAxis = null; // 'x' oder 'y', wird beim ersten deutlichen Ausschlag festgelegt
         let lastMoveTime = performance.now();
         let velocity = 0; // px/ms in der aktiven Scroll-Achse, für Momentum nach dem Loslassen
+
+        // Für die Ziel-Erkennung während des Ziehens (siehe updateDragTarget()): die
+        // tatsächlichen Positionen ALLER Einheiten in der Leiste, einmalig beim Start des
+        // eigentlichen Drags vermessen (nicht schon bei pointerdown, da bis dahin noch gar
+        // nicht feststeht, ob überhaupt gezogen wird). Dank echter, gemessener Breiten (statt
+        // einer pauschalen Schätzung) bleibt die Vorschau auch bei unterschiedlich breiten
+        // Supersatz-Kästen präzise — das war vorher die Hauptursache für ein "hackeliges"
+        // Verschieben und dafür, dass man nicht gezielt zwischen zwei bestimmte Übungen
+        // schieben konnte.
+        let unitMetrics = null;
+        let initialScrollLeft = strip ? strip.scrollLeft : 0;
+        let autoScrollFrameId = null;
 
         // Supersatz-Erkennung während des Ziehens: separat von der Reihenfolge-Vorschau.
         let hoverTarget = null;
@@ -723,12 +746,122 @@ function wireThumbDrag(){
           if (navigator.vibrate) navigator.vibrate(10);
         }, LONG_PRESS_MS);
 
+        // Vermisst die aktuelle (noch unverzerrte) Position jeder Einheit in Viewport-
+        // Koordinaten — Basis für die präzise Ziel-Erkennung in updateDragTarget().
+        const measureUnits = () => unitEls.map(el => {
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return { left: r.left, width: r.width, center: r.left + r.width / 2 };
+        });
+
         const beginDrag = () => {
           mode = 'dragging';
           clearTimeout(unlinkTimer);
+          initialScrollLeft = strip ? strip.scrollLeft : 0;
+          unitMetrics = measureUnits();
           rootEl.style.transition = 'none';
           rootEl.style.zIndex = 5;
           unitEls.forEach(t => { if (t && t !== rootEl) t.style.transition = 'transform .18s ease'; });
+          autoScrollFrameId = requestAnimationFrame(autoScrollLoop);
+        };
+
+        // Scrollt die Leiste automatisch weiter, solange der Finger beim Ziehen nahe an ihrem
+        // linken/rechten Rand steht (Geschwindigkeit wächst linear, je näher an der Kante) —
+        // sonst war eine weit hinten liegende Übung beim Ziehen praktisch nicht erreichbar,
+        // weil man nie weiter ziehen konnte, als der Bildschirm breit ist. Läuft unabhängig von
+        // neuen pointermove-Events per rAF, damit auch ein ruhig an der Kante gehaltener Finger
+        // weiterscrollt.
+        const autoScrollLoop = () => {
+          if (mode !== 'dragging' || !strip){ autoScrollFrameId = null; return; }
+          const rect = strip.getBoundingClientRect();
+          let speed = 0;
+          if (lastX < rect.left + EDGE_SCROLL_PX){
+            const depth = Math.min(1, (rect.left + EDGE_SCROLL_PX - lastX) / EDGE_SCROLL_PX);
+            speed = -depth * EDGE_SCROLL_MAX_SPEED;
+          } else if (lastX > rect.right - EDGE_SCROLL_PX){
+            const depth = Math.min(1, (lastX - (rect.right - EDGE_SCROLL_PX)) / EDGE_SCROLL_PX);
+            speed = depth * EDGE_SCROLL_MAX_SPEED;
+          }
+          if (speed !== 0){
+            const before = strip.scrollLeft;
+            strip.scrollLeft = Math.max(0, Math.min(strip.scrollWidth - strip.clientWidth, strip.scrollLeft + speed));
+            if (strip.scrollLeft !== before) updateDragTarget(lastX);
+          }
+          autoScrollFrameId = requestAnimationFrame(autoScrollLoop);
+        };
+
+        // Kernstück des Umsortierens: bestimmt anhand der tatsächlichen (gemessenen) Position
+        // jeder Einheit, welcher Platz gerade am nächsten an der gezogenen Kachel liegt (statt
+        // wie vorher grob nach einer festen Schrittweite zu runden) — das Ziel wechselt dadurch
+        // exakt dort, wo man optisch hinzieht, und lässt sich so auch gezielt zwischen zwei
+        // bestimmte Übungen schieben. `clientX` kommt entweder von einem echten pointermove
+        // oder — beim automatischen Scrollen ohne Fingerbewegung — vom zuletzt bekannten `lastX`.
+        const updateDragTarget = (clientX) => {
+          if (!unitMetrics) return;
+          const fromMetric = unitMetrics[fromUnitIdx];
+          if (!fromMetric) return;
+          const scrollDelta = (strip ? strip.scrollLeft : 0) - initialScrollLeft;
+          const dx = clientX - startX;
+          // Der Transform gleicht ein zwischenzeitliches Auto-Scrollen der Leiste mit aus,
+          // damit die gezogene Kachel optisch exakt am Finger bleibt, egal wie viel im
+          // Hintergrund schon gescrollt wurde.
+          rootEl.style.transform = `translateX(${dx + scrollDelta}px) translateY(-6px) scale(1.1)`;
+          rootEl.style.boxShadow = '0 10px 18px rgba(0,0,0,0.45)';
+
+          const draggedCenterNow = fromMetric.center + dx;
+          let newTarget = fromUnitIdx;
+          let bestDist = Infinity;
+          unitMetrics.forEach((m, i) => {
+            if (!m) return;
+            const centerNow = m.center - scrollDelta;
+            const dist = Math.abs(draggedCenterNow - centerNow);
+            if (dist < bestDist){ bestDist = dist; newTarget = i; }
+          });
+          targetUnitIdx = newTarget;
+
+          // Andere Kacheln rutschen nur soweit sie zwischen Start- und aktueller Zielposition
+          // liegen, um Platz für die gezogene Einheit zu machen — verschoben wird dabei um deren
+          // TATSÄCHLICHE gemessene Breite (statt einer pauschalen Schätzung), damit auch breitere
+          // Supersatz-Kästen sauber und ohne Ruckeln einrutschen.
+          const draggedWidth = fromMetric.width + GAP_PX;
+          unitEls.forEach((t, i) => {
+            if (!t || t === rootEl) return;
+            if (i === newTarget){ t.style.transform = ''; return; }
+            let offset = 0;
+            if (fromUnitIdx < newTarget && i > fromUnitIdx && i < newTarget) offset = -draggedWidth;
+            else if (fromUnitIdx > newTarget && i < fromUnitIdx && i > newTarget) offset = draggedWidth;
+            t.style.transform = offset ? `translateX(${offset}px)` : '';
+          });
+
+          // Supersatz per Halten: nur beim Ziehen einer einzelnen (noch ungekoppelten) Übung,
+          // und nur, falls die Supersatz-Funktion nicht in den Trainingstools ausgeschaltet
+          // wurde (siehe supersetsFeatureEnabled()). Ziel darf entweder eine andere einzelne
+          // Übung (→ neue 2er-Gruppe) ODER eine bestehende, noch nicht volle Gruppe sein (→ wird
+          // auf bis zu SUPERSET_MAX_SIZE erweitert, die gezogene Übung landet dabei immer als
+          // letztes Mitglied — siehe createSuperset()). Bleibt das Ziel ≥SUPERSET_HOLD_MS gleich,
+          // wird es erst grau, dann in Akzentfarbe markiert (bereit zum Verknüpfen beim Loslassen).
+          const targetUnit = units[newTarget];
+          const targetUnitSize = targetUnit ? (targetUnit.endIndex - targetUnit.startIndex + 1) : 0;
+          const targetEligible = canCreateSuperset && newTarget !== fromUnitIdx
+            && targetUnit && targetUnitSize < SUPERSET_MAX_SIZE;
+          if (targetEligible){
+            if (newTarget !== hoverTarget){
+              clearSupersetHover();
+              hoverTarget = newTarget;
+              highlightEl = unitEls[newTarget];
+              if (highlightEl) highlightEl.classList.add('thumb-superset-hover');
+              hoverTimer = setTimeout(() => {
+                if (highlightEl){
+                  highlightEl.classList.remove('thumb-superset-hover');
+                  highlightEl.classList.add('thumb-superset-armed');
+                }
+                supersetArmed = true;
+                if (navigator.vibrate) navigator.vibrate(15);
+              }, SUPERSET_HOLD_MS);
+            }
+          } else if (hoverTarget !== null){
+            clearSupersetHover();
+          }
         };
 
         const onMove = (ev) => {
@@ -763,62 +896,14 @@ function wireThumbDrag(){
           if (mode === 'armed') beginDrag();
 
           ev.preventDefault();
-          const dx = ev.clientX - startX;
-          rootEl.style.transform = `translateX(${dx}px) translateY(-6px) scale(1.1)`;
-          rootEl.style.boxShadow = '0 10px 18px rgba(0,0,0,0.45)';
-
-          const shift = Math.round(dx / step);
-          const newTarget = Math.max(0, Math.min(units.length - 1, fromUnitIdx + shift));
-          targetUnitIdx = newTarget;
-          // Andere Kacheln rutschen nur soweit sie zwischen Start- und aktueller Zielposition
-          // liegen — die aktuell anvisierte Zielkachel selbst bleibt bewusst an ihrem Platz
-          // stehen, damit die gezogene Kachel sie beim Darüberhalten sichtbar überlappt statt
-          // dass sie sofort ausweicht. Erst wenn weiter darüber hinaus gezogen wird (newTarget
-          // ändert sich weiter), rutscht auch diese Kachel zur Seite und eine neue wird zum
-          // "stehenbleibenden" Ziel.
-          unitEls.forEach((t, i) => {
-            if (!t || t === rootEl) return;
-            if (i === newTarget){ t.style.transform = ''; return; }
-            let offset = 0;
-            if (fromUnitIdx < newTarget && i > fromUnitIdx && i < newTarget) offset = -step;
-            else if (fromUnitIdx > newTarget && i < fromUnitIdx && i > newTarget) offset = step;
-            t.style.transform = offset ? `translateX(${offset}px)` : '';
-          });
-
-          // Supersatz per Halten: nur beim Ziehen einer einzelnen (noch ungekoppelten) Übung.
-          // Ziel darf entweder eine andere einzelne Übung (→ neue 2er-Gruppe) ODER eine
-          // bestehende, noch nicht volle Gruppe sein (→ wird auf bis zu SUPERSET_MAX_SIZE
-          // erweitert, die gezogene Übung landet dabei immer als letztes Mitglied — siehe
-          // createSuperset()). Bleibt das Ziel ≥SUPERSET_HOLD_MS gleich, wird es erst grau, dann
-          // in Akzentfarbe markiert (bereit zum Verknüpfen beim Loslassen).
-          const targetUnit = units[newTarget];
-          const targetUnitSize = targetUnit ? (targetUnit.endIndex - targetUnit.startIndex + 1) : 0;
-          const targetEligible = canCreateSuperset && newTarget !== fromUnitIdx
-            && targetUnit && targetUnitSize < SUPERSET_MAX_SIZE;
-          if (targetEligible){
-            if (newTarget !== hoverTarget){
-              clearSupersetHover();
-              hoverTarget = newTarget;
-              highlightEl = unitEls[newTarget];
-              if (highlightEl) highlightEl.classList.add('thumb-superset-hover');
-              hoverTimer = setTimeout(() => {
-                if (highlightEl){
-                  highlightEl.classList.remove('thumb-superset-hover');
-                  highlightEl.classList.add('thumb-superset-armed');
-                }
-                supersetArmed = true;
-                if (navigator.vibrate) navigator.vibrate(15);
-              }, SUPERSET_HOLD_MS);
-            }
-          } else if (hoverTarget !== null){
-            clearSupersetHover();
-          }
+          updateDragTarget(ev.clientX);
         };
 
         const finish = () => {
           clearTimeout(longPressTimer);
           clearTimeout(unlinkTimer);
           clearSupersetHover();
+          if (autoScrollFrameId){ cancelAnimationFrame(autoScrollFrameId); autoScrollFrameId = null; }
           grabEl.removeEventListener('pointermove', onMove);
           grabEl.removeEventListener('pointerup', onUp);
           grabEl.removeEventListener('pointercancel', onCancel);
@@ -835,8 +920,8 @@ function wireThumbDrag(){
           finish();
           if (finalMode === 'dragging'){
             if (canCreateSuperset && finalSupersetArmed && finalTargetUnitIdx !== fromUnitIdx){
-              // Losgelassen, während das Ziel ≥2s markiert war: die beiden Übungen zu einem
-              // Supersatz verknüpfen statt normal umzusortieren.
+              // Losgelassen, während das Ziel ≥SUPERSET_HOLD_MS markiert war: die beiden
+              // Übungen zu einem Supersatz verknüpfen statt normal umzusortieren.
               createSuperset(unit.startIndex, units[finalTargetUnitIdx].startIndex);
               renderActive();
             } else if (finalTargetUnitIdx !== fromUnitIdx){

@@ -1061,6 +1061,18 @@ function openTrainingToolsPrompt(entry, planEx){
           </div>
         </div>
 
+        <div class="tools-section">
+          <div class="tools-section-title-row">
+            <div class="tools-section-title-group">
+              <span class="tools-section-title" style="margin-bottom:0;">Supersätze</span>
+              <span class="tools-section-title-hint">Kacheln per Ziehen &amp; Halten verbinden</span>
+            </div>
+            <button class="toggle-switch ${plan.supersetsEnabled !== false ? 'on' : ''}" id="toolsSupersetsToggle" type="button" role="switch" aria-checked="${plan.supersetsEnabled !== false}" aria-label="Supersätze">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   `;
@@ -1141,6 +1153,21 @@ function openTrainingToolsPrompt(entry, planEx){
     });
     close();
     renderActive();
+  };
+
+  const toolsSupersetsToggleEl = document.getElementById('toolsSupersetsToggle');
+  if (toolsSupersetsToggleEl) toolsSupersetsToggleEl.onclick = async () => {
+    // Schaltet NUR die Möglichkeit ab, im laufenden Training per Ziehen&Halten NEUE Supersätze
+    // zu bilden (siehe wireThumbDrag() → canCreateSuperset / supersetsFeatureEnabled()) sowie
+    // das automatische Wiederherstellen gespeicherter Kopplungen beim nächsten Trainingsstart
+    // (siehe applyStoredSupersetsToActive()). Bereits gespeicherte Kopplungen in
+    // plan.supersetPairs werden dabei NICHT gelöscht — beim Wiedereinschalten greifen sie
+    // einfach wieder wie gewohnt.
+    plan.supersetsEnabled = plan.supersetsEnabled === false ? true : false;
+    await saveJSON('plan', plan);
+    const isOn = plan.supersetsEnabled !== false;
+    toolsSupersetsToggleEl.classList.toggle('on', isOn);
+    toolsSupersetsToggleEl.setAttribute('aria-checked', String(isOn));
   };
 
   const barWeightInputEl = document.getElementById('plateCalcBarWeightInput');
