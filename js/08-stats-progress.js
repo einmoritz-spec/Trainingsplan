@@ -103,16 +103,22 @@ function aggregateSessions(getValue, period){
 
 // Wie aggregateSessions(), aber NUR für die Muskelgruppen-Diagramme: Eine Session darf nur
 // dann einen Datenpunkt für eine Muskelgruppe liefern, wenn diese Gruppe in der Session
-// tatsächlich vorkam — sonst würde eine Session ohne z. B. Beinübungen als "0 kg"-Punkt in
-// den Beine-Verlauf einfließen. Ein solcher Nullpunkt sieht in der Line-Chart wie ein
-// Einbruch aus (und verfälscht das Delta in chartAccordionHTML, z. B. "-8.983 kg", obwohl die
-// Gruppe einfach nicht trainiert wurde) statt korrekt als "keine Daten" behandelt zu werden.
-// Maßgeblich ist NUR, ob die Muskelgruppe in der Session vorkam — nicht, ob dabei Gewicht
-// bewegt wurde (reine Körpergewichtsübungen zählen als "trainiert", auch mit 0 kg Volumen).
+// tatsächlich mit Gewicht trainiert wurde — sonst würde eine Session ohne z. B. Beinübungen als
+// "0 kg"-Punkt in den Beine-Verlauf einfließen. Ein solcher Nullpunkt sieht in der Line-Chart
+// wie ein Einbruch aus (und verfälscht das Delta in chartAccordionHTML, z. B. "-8.983 kg",
+// obwohl die Gruppe einfach nicht trainiert wurde) statt korrekt als "keine Daten" behandelt zu
+// werden. Maßgeblich ist, ob die Muskelgruppe in der Session mit einem Satz vorkam, der
+// TATSÄCHLICH Gewicht bewegt hat (reps UND weight gesetzt) — reine Körpergewichtsübungen ohne
+// Gewichtseingabe (z. B. Rückenstrecker an einem sonst reinen Beintag) zählen bewusst NICHT als
+// "Gruppe trainiert", sonst erzeugt genau so ein Satz einen echten 0-kg-Punkt im Verlauf der
+// Gruppe, der wie ein Trainingseinbruch aussieht, obwohl an dem Tag schlicht kein Gewicht für
+// diese Gruppe bewegt wurde. Solche Sessions werden stattdessen ganz aus dem Verlauf dieser
+// Gruppe ausgeklammert.
 function sessionTrainsGroup(s, group){
   return s.entries.some(e => {
     const planEx = plan.exercises.find(x => x.id === e.exerciseId);
-    return ((planEx && planEx.muscleGroup) || 'Sonstige') === group;
+    if (((planEx && planEx.muscleGroup) || 'Sonstige') !== group) return false;
+    return (e.sets || []).some(st => st.reps && st.weight);
   });
 }
 function aggregateSessionsForGroup(group, getValue, period){
