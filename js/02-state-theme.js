@@ -4,6 +4,7 @@ let freeSelected = new Set();
 let plan = null;
 let sessions = [];
 let lastPerformance = {}; // { [exerciseId]: [{reps, weight}, ...] } — letzter geloggter Stand je Übung
+let lastExportAt = null; // ISO-Datum des letzten Backup-Exports (Einstellungen → Daten → Exportieren), siehe renderHome()/BACKUP_REMINDER_DAYS
 
 // Baut lastPerformance komplett neu aus dem aktuellen sessions-Array auf (gleiche Struktur/
 // Reihenfolge wie in endSession() beim Anhängen: pro Übung die letzten bis zu 3 Sessions,
@@ -388,6 +389,7 @@ async function init(){
   plan = await loadJSON('plan', DEFAULT_PLAN);
   sessions = await loadAllSessions();
   lastPerformance = await loadJSON('lastPerformance', {});
+  lastExportAt = await loadJSON('lastExportAt', null);
   customFonts = await loadJSON('customFonts', []);
   registerCustomFontFaces();
   applyTheme();

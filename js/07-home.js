@@ -172,6 +172,16 @@ function isWeekStripEnabled(){
   return !(plan && plan.weekStripEnabled === false);
 }
 
+// Ab wie vielen Tagen seit dem letzten Export (siehe lastExportAt, 02-state-theme.js / 10-plan-
+// settings.js) die Backup-Erinnerung auf der Startseite erscheint.
+const BACKUP_REMINDER_DAYS = 30;
+function isBackupReminderDue(){
+  if (!sessions.length) return false; // ohne protokollierte Einheiten gibt es nichts Wichtiges zu sichern
+  if (!lastExportAt) return true; // noch nie exportiert
+  const daysSince = (Date.now() - new Date(lastExportAt).getTime()) / (1000 * 60 * 60 * 24);
+  return daysSince >= BACKUP_REMINDER_DAYS;
+}
+
 function renderHome(){
   const allSorted = sessions.slice().reverse();
   const recent = allSorted.slice(0, 5);
@@ -211,11 +221,22 @@ function renderHome(){
     ? `<div class="home-thumb-spacer"></div><div class="home-thumb-block">${historyFirstBlockHTML}</div>`
     : `${navRowHTML}<div style="margin:0 0 22px;">${startBtnHTML}</div>${historyHTML}`;
 
+  // Backup-Erinnerung: dezenter Hinweis, kein blockierendes Popup — alle lokalen Daten
+  // (localStorage/IndexedDB) sind ein Geräteverlust oder ein "Browserdaten löschen" von einem
+  // Totalverlust entfernt, ohne eigenes Backend gibt es keine andere Absicherung.
+  const backupReminderHTML = isBackupReminderDue() ? `
+    <div class="backup-reminder" id="backupReminder">
+      <span class="backup-reminder-text">${lastExportAt ? 'Letztes Backup ist über ' + BACKUP_REMINDER_DAYS + ' Tage her.' : 'Noch kein Backup deiner Trainingsdaten erstellt.'}</span>
+      <button class="backup-reminder-btn" id="btnBackupReminder" type="button">Jetzt sichern</button>
+    </div>
+  ` : '';
+
   app.innerHTML = `
     <div class="${isHistoryFirst ? 'home-thumb-wrap' : ''}">
       <div class="brand" style="margin-bottom:${isHistoryFirst ? '20px' : '14px'};">
         <h1>Trainingsplan</h1>
       </div>
+      ${backupReminderHTML}
       ${isWeekStripEnabled() ? weekStripHTML() : ''}
       ${bodyHTML}
     </div>
@@ -226,6 +247,15 @@ function renderHome(){
   document.getElementById('btnProgress').onclick = () => goProgressList();
   document.getElementById('btnSettings').onclick = () => goSettings();
   document.getElementById('btnHistoryLabel').onclick = () => goWorkoutsOverview();
+  if (document.getElementById('btnBackupReminder')){
+    // Führt direkt in die Einstellungen zum Exportieren-Button statt nur die Seite zu öffnen —
+    // Backup-Erinnerung soll in einem Tap zur Handlung führen, nicht nur zur Fundstelle.
+    document.getElementById('btnBackupReminder').onclick = () => {
+      goSettings();
+      const btn = document.getElementById('btnExport');
+      if (btn) btn.click();
+    };
+  }
   wireWeekStrip();
   if (document.getElementById('btnHistoryToggle')){
     document.getElementById('btnHistoryToggle').onclick = () => goWorkoutsOverview();

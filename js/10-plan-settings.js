@@ -1209,17 +1209,23 @@ function renderSettings(){
   };
 
   const btnExportEl = document.getElementById('btnExport');
-  if (btnExportEl) btnExportEl.onclick = () => {
-    const payload = { version: 1, exportedAt: new Date().toISOString(), plan, sessions, lastPerformance };
+  if (btnExportEl) btnExportEl.onclick = async () => {
+    const nowISO = new Date().toISOString();
+    const payload = { version: 1, exportedAt: nowISO, plan, sessions, lastPerformance };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `trainingsplan-export-${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `trainingsplan-export-${nowISO.slice(0,10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    // Zeitpunkt merken für die Backup-Erinnerung auf der Startseite (siehe renderHome(),
+    // BACKUP_REMINDER_DAYS) — ein Download-Klick ist kein hundertprozentiger Beweis, dass die
+    // Datei auch tatsächlich irgendwo gesichert wurde, aber der beste verfügbare Anhaltspunkt.
+    lastExportAt = nowISO;
+    await saveJSON('lastExportAt', lastExportAt);
   };
   document.getElementById('btnImport').onclick = () => {
     document.getElementById('importFile').click();
@@ -1263,11 +1269,13 @@ function renderSettings(){
       plan = JSON.parse(JSON.stringify(DEFAULT_PLAN));
       sessions = [];
       lastPerformance = {};
+      lastExportAt = null;
       planSearchQuery = '';
       planGroupOpen = new Set();
       await saveJSON('plan', plan);
       await saveAllSessionsBulk(sessions);
       await saveJSON('lastPerformance', lastPerformance);
+      await deleteJSON('lastExportAt');
       await saveJSON('activeSession', null);
       // Ohne diesen Aufruf blieben --accent/Hell-Dunkel-Klasse auf dem alten, vor dem Reset
       // gewählten Stand stehen — die Einstellungen zeigten zwar korrekt "Dunkel"/"Gelb" als
