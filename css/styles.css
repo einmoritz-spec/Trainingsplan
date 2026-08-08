@@ -559,6 +559,23 @@ html[data-theme="light"] .bodyweight-warning-icon{ filter: none; }
 .chart-label{ font-family:'JetBrains Mono', monospace; font-size:10px; fill: var(--muted); }
 .bar-chart-value-label{ font-family:'JetBrains Mono', monospace; font-size:17px; font-weight:700; fill: rgba(0,0,0,0.35); }
 .chart-empty{ color: var(--muted); font-size:13px; text-align:center; padding: 26px 0; }
+/* Tap-Tooltip auf Kurvendiagramm-Punkten (buildLineChart(), 08-stats-progress.js): pro Punkt
+   eine unsichtbare, große Tap-Fläche (.chart-dot) über dem sichtbaren kleinen Punkt
+   (.chart-dot-visible) — sonst wäre der reine 3.5px-Radius-Punkt auf einem Touchscreen kaum
+   zuverlässig zu treffen. Die Tooltip-Box selbst (.chart-tt-*) liegt als eigene <g> im SVG
+   bereits fertig positioniert vor und wird nur per JS (wireLineCharts()) ein-/ausgeblendet,
+   nicht neu berechnet — dadurch bleibt die Positionierung exakt synchron mit dem beim Bau des
+   Diagramms bereits bekannten Layout (Rand-Anhäufung links/rechts, Kippen nach unten oben am
+   Diagrammrand), ohne dass JS zur Laufzeit erneut Koordinaten ausrechnen müsste. */
+.chart-dot{ cursor:pointer; }
+.chart-tt-bg{ fill: var(--surface-2); stroke: var(--border); stroke-width:1; }
+.chart-tt-value{ font-family:'JetBrains Mono', monospace; font-size:11px; font-weight:700; }
+.chart-tt-date{ font-family:'JetBrains Mono', monospace; font-size:9px; fill: var(--muted); }
+/* Breiter-als-Bildschirm-Modus für Diagramme mit vielen Punkten (isWide in buildLineChart()):
+   swipen statt Pinch-Zoom. wireLineCharts() scrollt beim Rendern automatisch ans rechte Ende
+   (aktuellstes Datum), man wischt nach links in die Vergangenheit. */
+.line-chart-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.line-chart-scroll svg{ display:block; }
 .progress-summary{ display:flex; gap:18px; font-family:'JetBrains Mono', monospace; font-size:12px; color: var(--muted); margin: 4px 0 18px; }
 
 /* ---------- Timer-Kasten (kompakt, wächst bei Pause) ---------- */
