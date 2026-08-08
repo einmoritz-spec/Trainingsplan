@@ -18,11 +18,19 @@
 <!-- Icons (echte Dateien statt Data-URI, siehe assets/icons/) -->
 <link rel="icon" href="assets/icons/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<!-- Maskable-Variante zusätzlich zum "any"-Icon aus manifest.json referenzieren, damit
+     Android/iOS bei der Installation direkt die für Icon-Masken (Kreis, Squircle, ...)
+     vorbereitete Version mit ausreichendem Rand nutzen, statt ein potenziell beschnittenes
+     "any"-Icon zu maskieren. -->
+<link rel="icon" href="assets/icons/icon-512-maskable.png" sizes="512x512" type="image/png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Poppins:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Roboto:wght@400;500;700&family=Lato:wght@400;700&family=Open+Sans:wght@400;600;700&family=Nunito:wght@400;600;700&family=Raleway:wght@400;600;700&family=Work+Sans:wght@400;600;700&family=DM+Sans:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=Manrope:wght@400;600;700&family=Rubik:wght@400;600;700&family=Karla:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Merriweather:wght@400;700&family=Lora:wght@400;600;700&family=Oswald:wght@400;600;700&family=Anton&family=Archivo+Black&family=Comfortaa:wght@400;600;700&family=Quicksand:wght@400;600;700&family=Caveat:wght@400;600;700&family=Dancing+Script:wght@400;600;700&family=Pacifico&family=Fira+Code:wght@400;500;600&family=Roboto+Mono:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Special+Elite&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<!-- Lokal statt von cdnjs geladen (js/vendor/, Version 2.5.1 unverändert): der SW cachte
+     Cross-Origin-Antworten bisher gar nicht (siehe sw.js), der PDF-Export war dadurch offline
+     tot. Als lokale Same-Origin-Datei läuft sie über den ganz normalen App-Shell-Precache. -->
+<script src="js/vendor/jspdf.umd.min.js" defer></script>
 
 <!-- Ausgelagertes CSS (ehemals <style>-Block, Zeilen 20–2004 der Originaldatei) -->
 <link rel="stylesheet" href="css/styles.css">
@@ -41,6 +49,21 @@
 </div>
 
 <!--
+  NEU: Hinweis-Leiste, sobald ein bereits im Hintergrund installierter neuer Service Worker
+  die Kontrolle übernommen hat (siehe Registrierungs-Skript unten). skipWaiting()/
+  clients.claim() in sw.js sorgen dafür, dass das sehr schnell nach einem Deploy passiert —
+  der bereits im Tab laufende JS/CSS-Code ist dann aber trotzdem noch der ALTE Stand, nur ein
+  echtes Neuladen holt die neuen Dateien. Ohne diesen Hinweis könnten alter JS-Code und neuer,
+  vom SW ausgelieferter CSS/HTML-Stand unbemerkt nebeneinander laufen. Bewusst kein
+  automatischer Reload: würde z. B. mitten in einem laufenden Training den Bildschirm
+  wegreißen, siehe 11a-active-session.js.
+-->
+<div class="update-toast" id="updateToast" style="display:none">
+  <span class="update-toast-text">Neue Version verfügbar.</span>
+  <button class="update-toast-btn" id="updateToastBtn" type="button">Neu laden</button>
+</div>
+
+<!--
   Ausgelagerte JS-Module (ehemals ein einziges <script>, Zeilen 2020–15826 der Originaldatei).
   Es sind bewusst klassische, nicht-modulare <script>-Tags (kein type="module"):
   Der Originalcode teilt sich einen einzigen globalen Scope, in dem Funktionen und
@@ -56,10 +79,16 @@
 <script src="js/05-calendar.js"></script>
 <script src="js/06-navigation.js"></script>
 <script src="js/07-home.js"></script>
-<script src="js/08-stats-progress.js"></script>
-<script src="js/09-start-select.js"></script>
+<script src="js/08a-stats-progress-charts.js"></script>
+<script src="js/08b-stats-muscle-balance.js"></script>
+<script src="js/08c-stats-progress-list.js"></script>
+<script src="js/09a-start-select.js"></script>
+<script src="js/09b-start-select-mode-settings.js"></script>
+<script src="js/09c-start-select-tiles.js"></script>
 <script src="js/10-plan-settings.js"></script>
-<script src="js/11-active-session.js"></script>
+<script src="js/11a-active-session.js"></script>
+<script src="js/11b-active-session-render.js"></script>
+<script src="js/11c-active-session-rest.js"></script>
 <script src="js/12-session-summary.js"></script>
 <script src="js/13-session-detail-pdf.js"></script>
 <script src="js/14-app-init.js"></script>
@@ -70,11 +99,32 @@
   war also installierbar, aber nicht offlinefähig. sw.js ergänzt das.
   Registrierung erfolgt mit relativem Pfad ("sw.js", nicht "/sw.js"),
   damit es auch unter einem GitHub-Pages-Projektpfad (z. B. /reponame/) funktioniert.
+
+  Zusätzlich: Update-Erkennung über den "updatefound"-Event der Registrierung. Wichtig ist
+  die hadControllerBefore-Prüfung — ohne sie würde auch der ganz normale ERSTBESUCH (bei dem
+  ja ebenfalls ein Service Worker neu installiert wird) fälschlich als "Update verfügbar"
+  gemeldet, obwohl es beim ersten Laden nichts Neues zu holen gibt.
 -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch((err) => {
+    const hadControllerBefore = !!navigator.serviceWorker.controller;
+
+    navigator.serviceWorker.register('sw.js').then((registration) => {
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && hadControllerBefore) {
+            const toast = document.getElementById('updateToast');
+            const btn = document.getElementById('updateToastBtn');
+            if (!toast || !btn) return;
+            toast.style.display = 'flex';
+            btn.onclick = () => location.reload();
+          }
+        });
+      });
+    }).catch((err) => {
       console.error('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
