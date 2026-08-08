@@ -417,6 +417,20 @@ async function init(){
     }
   });
   if (plan.bodyWeight === undefined) plan.bodyWeight = null;
+  // Körpergewichts-VERLAUF (Liste aus {date, weight}) zusätzlich zum reinen Einzelwert
+  // plan.bodyWeight (der weiterhin unverändert für effectiveSetWeight()/Steckscheiben-Limit/
+  // etc. als "aktuell bekanntes Gewicht" dient, siehe 04-utils.js). Bestandsnutzer mit bereits
+  // gesetztem bodyWeight, aber noch ohne Log, bekommen hier EINMALIG einen ersten Eintrag mit
+  // dem heutigen Datum, damit der neue Verlaufs-Chart nicht komplett leer startet, obwohl
+  // eigentlich schon ein Wert bekannt ist.
+  if (!Array.isArray(plan.bodyWeightLog)) plan.bodyWeightLog = [];
+  if (!plan._bodyWeightLogMigration){
+    if (plan.bodyWeightLog.length === 0 && plan.bodyWeight != null){
+      plan.bodyWeightLog.push({ date: new Date().toISOString(), weight: plan.bodyWeight });
+    }
+    plan._bodyWeightLogMigration = true;
+    planChanged = true;
+  }
   if (!plan._assistedFlagMigration){
     const assistedIds = new Set(['e1']); // Klimmzugmaschine: unterstützt, Volumen = Körpergewicht - eingestelltes Gewicht
     assistedIds.forEach(id => {

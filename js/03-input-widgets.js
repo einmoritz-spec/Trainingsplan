@@ -789,7 +789,7 @@ function openFontPickerSheet(){
   overlay.onclick = (ev) => { if (ev.target === overlay) finish(); };
 }
 
-function openBodyWeightPrompt(){
+function openBodyWeightPrompt(onSaved){
   const existing = document.getElementById('bodyWeightPromptOverlay');
   if (existing) existing.remove();
 
@@ -833,8 +833,11 @@ function openBodyWeightPrompt(){
   const save = async () => {
     const v = input.value === '' ? null : parseGermanNumber(input.value);
     if (v !== null && !isNaN(v) && v > 0){
-      plan.bodyWeight = v;
+      logBodyWeight(v);
       await saveJSON('plan', plan);
+      close();
+      if (onSaved) onSaved();
+      return;
     }
     close();
   };

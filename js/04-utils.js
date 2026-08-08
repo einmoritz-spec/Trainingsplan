@@ -49,3 +49,24 @@ function fmtDate(iso){
 }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
+// Trägt einen neuen Körpergewichts-Wert sowohl als aktuellen Stand (plan.bodyWeight, wie
+// bisher — bleibt für effectiveSetWeight()/Steckscheiben-Limit unverändert maßgeblich) als
+// auch im Verlauf (plan.bodyWeightLog) ein. Pro Kalendertag wird nur EIN Eintrag geführt: ein
+// zweites Eintragen am selben Tag überschreibt den bereits vorhandenen Eintrag dieses Tages
+// statt einen weiteren Punkt anzuhängen — mehrere Punkte am selben Tag würden im Verlaufs-
+// Chart (renderBodyWeightChart(), 08-stats-progress.js) nur als bedeutungsloses Auf-und-Ab
+// erscheinen, ohne einen echten zeitlichen Verlauf abzubilden. Ruft NICHT selbst saveJSON()
+// auf — das übernehmen die Aufrufer wie bisher (öffnet ihnen z. B. den Weg, mehrere
+// Plan-Änderungen in einem Rutsch zu speichern).
+function logBodyWeight(weight, dateISO){
+  if (!plan) return;
+  plan.bodyWeight = weight;
+  if (!Array.isArray(plan.bodyWeightLog)) plan.bodyWeightLog = [];
+  const iso = dateISO || new Date().toISOString();
+  const dayKey = iso.slice(0, 10);
+  const existingIdx = plan.bodyWeightLog.findIndex(e => e.date.slice(0, 10) === dayKey);
+  if (existingIdx >= 0) plan.bodyWeightLog[existingIdx] = { date: iso, weight };
+  else plan.bodyWeightLog.push({ date: iso, weight });
+  plan.bodyWeightLog.sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+

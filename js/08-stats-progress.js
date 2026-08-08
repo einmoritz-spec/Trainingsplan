@@ -50,13 +50,42 @@ function weekBucket(d){
   const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
   return { key: `${d.getFullYear()}-W${week}`, label: `KW ${week}`, sortKey: d.getFullYear()*100 + week };
 }
+// Ab wie vielen Punkten der 'total'-Verlauf (siehe aggregateSessions()/
+// aggregateSessionsForGroup() unten) statt eines Punkts PRO EINHEIT auf einen Punkt PRO
+// KALENDERMONAT umgestellt wird. Unterhalb der Schwelle bleibt die bisherige feingranulare
+// Darstellung (ein Punkt je Einheit) erhalten, weil sie dort noch gut lesbar ist. Oberhalb
+// würde buildLineChart() (viele hundert Punkte bei jahrelanger Nutzung) nur noch eine
+// verwaschene Strichcode-Linie ohne erkennbaren Trend zeichnen.
+const TOTAL_BUCKET_THRESHOLD = 60;
+const MONTH_SHORT_NAMES = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+function monthShortLabel(d){
+  return `${MONTH_SHORT_NAMES[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+}
+// Baut aus chronologisch sortierten Sessions eine kumulative Verlaufslinie, aber mit
+// höchstens einem Punkt pro Kalendermonat (Wert = Summe/"running" bis EINSCHLIESSLICH des
+// jeweiligen Monats) statt einem Punkt pro einzelner Einheit. Der kumulative Charakter
+// bleibt dabei erhalten — nur die Auflösung der X-Achse wird gröber.
+function bucketedCumulativePoints(sorted, getValue){
+  let running = 0;
+  const byMonth = new Map();
+  sorted.forEach(s => {
+    running += getValue(s);
+    const d = new Date(s.date);
+    const mk = d.getFullYear() * 100 + d.getMonth();
+    byMonth.set(mk, { label: monthShortLabel(d), value: running, date: s.date });
+  });
+  return Array.from(byMonth.values());
+}
 // 'month'/'year' sind ein ROLLIERENDES Zeitfenster (letzte 30/365 Tage, siehe
 // statsPeriodToDays() weiter unten — derselbe Zeitraum-Filter wie beim Zeit-Donut auf
 // demselben Screen), KEIN Kalendermonat/-jahr-Bucket. Innerhalb des Fensters bekommt jede
 // Einheit ihren eigenen Punkt (vorher wurden alle Einheiten desselben Kalendermonats zu
 // einem einzigen Punkt summiert — bei z. B. 3 Einheiten im selben Monat blieb dadurch nur
 // 1 Punkt übrig und der Trend verschwand, obwohl der Hinweistext "ab der zweiten geloggten
-// Einheit" etwas anderes verspricht).
+// Einheit" etwas anderes verspricht). Bei 'total' UND mehr als TOTAL_BUCKET_THRESHOLD
+// Einheiten wird dagegen bewusst auf Monats-Buckets umgeschaltet (siehe
+// bucketedCumulativePoints() oben) — sonst wird die Linie bei jahrelanger Nutzung
+// unlesbar dicht.
 function aggregateSessions(getValue, period){
   const days = statsPeriodToDays(period);
   const cutoff = days ? Date.now() - days * 86400000 : null;
@@ -65,10 +94,11 @@ function aggregateSessions(getValue, period){
     .slice()
     .sort((a,b) => new Date(a.date) - new Date(b.date));
   if (period === 'total'){
+    if (sorted.length > TOTAL_BUCKET_THRESHOLD) return bucketedCumulativePoints(sorted, getValue);
     let running = 0;
-    return sorted.map(s => { running += getValue(s); return { label: shortDate(s.date), value: running }; });
+    return sorted.map(s => { running += getValue(s); return { label: shortDate(s.date), value: running, date: s.date }; });
   }
-  return sorted.map(s => ({ label: shortDate(s.date), value: getValue(s) }));
+  return sorted.map(s => ({ label: shortDate(s.date), value: getValue(s), date: s.date }));
 }
 
 // Wie aggregateSessions(), aber NUR für die Muskelgruppen-Diagramme: Eine Session darf nur
@@ -82,13 +112,7 @@ function aggregateSessions(getValue, period){
 function sessionTrainsGroup(s, group){
   return s.entries.some(e => {
     const planEx = plan.exercises.find(x => x.id === e.exerciseId);
-    if (((planEx && planEx.muscleGroup) || 'Sonstige') !== group) return false;
-    // Reicht nicht, dass der Eintrag existiert — er muss auch mindestens einen tatsächlich
-    // ausgefüllten Satz haben (gleiche hasData-Prüfung wie computeExerciseMetrics()), sonst
-    // zählt eine leere/übersprungene Übung im Session-Eintrag fälschlich als "trainiert" und
-    // erzeugt einen 0-kg-Ausreißer im Muskelgruppen-Verlauf (siehe Rücken-Bug: Punkt sackt auf
-    // 0 kg ab, obwohl die Gruppe an dem Tag schlicht nicht ausgeführt wurde).
-    return computeExerciseMetrics(e, planEx).hasData;
+    return ((planEx && planEx.muscleGroup) || 'Sonstige') === group;
   });
 }
 function aggregateSessionsForGroup(group, getValue, period){
@@ -99,14 +123,18 @@ function aggregateSessionsForGroup(group, getValue, period){
     .slice()
     .sort((a,b) => new Date(a.date) - new Date(b.date));
   if (period === 'total'){
+    if (sorted.length > TOTAL_BUCKET_THRESHOLD) return bucketedCumulativePoints(sorted, getValue);
     let running = 0;
-    return sorted.map(s => { running += getValue(s); return { label: shortDate(s.date), value: running }; });
+    return sorted.map(s => { running += getValue(s); return { label: shortDate(s.date), value: running, date: s.date }; });
   }
-  return sorted.map(s => ({ label: shortDate(s.date), value: getValue(s) }));
+  return sorted.map(s => ({ label: shortDate(s.date), value: getValue(s), date: s.date }));
 }
 
 let statsPeriod = 'month';
-const PERIOD_LABELS = { month: 'Monat', year: 'Jahr', total: 'Insgesamt' };
+// 'quarter' (90 Tage) schließt dieselbe Lücke wie beim bereits vorhandenen 90-Tage-Zeitraum
+// der Muskelbalance (siehe muscleBalancePeriod weiter unten) — ein rollierendes Fenster
+// zwischen "Monat" und "Jahr" für den mittelfristigen Verlauf.
+const PERIOD_LABELS = { month: 'Monat', quarter: 'Quartal', year: 'Jahr', total: 'Insgesamt' };
 
 // Filtert eine Liste von {date, value}-Punkten nach Periode (analog aggregateSessions(),
 // aber für beliebige Datenpunkte statt konkret für Sessions). 'month'/'year' sind — wie bei
@@ -201,6 +229,49 @@ function renderStatsChart(metric){
     };
   });
   if (isTime) wireTimeDonutSection(statsPeriodToDays(statsPeriod));
+  wireLineCharts(app);
+}
+
+// Körpergewichts-VERLAUF (plan.bodyWeightLog, siehe logBodyWeight() in 04-utils.js und die
+// Migration in 02-state-theme.js) — eigener, simpler Screen mit genau einem Diagramm (anders
+// als renderStatsChart()/renderExerciseProgress() mit mehreren auf-/zuklappbaren Diagrammen),
+// da es hier nur eine einzige Kennzahl gibt. Nutzt bewusst dieselben PERIOD_LABELS/
+// aggregateHistoryPoints() wie der Übungsfortschritt, damit sich "Monat/Quartal/Jahr/
+// Insgesamt" app-weit einheitlich verhält.
+let bodyWeightChartPeriod = 'month';
+function renderBodyWeightChart(){
+  const log = Array.isArray(plan.bodyWeightLog) ? plan.bodyWeightLog : [];
+  const points = aggregateHistoryPoints(log, bodyWeightChartPeriod)
+    .map(e => ({ label: shortDate(e.date), value: e.weight, date: e.date }));
+  const formatter = v => formatGermanNumber(Math.round(v * 10) / 10) + ' kg';
+  const current = log.length ? log[log.length - 1].weight : null;
+  const summaryLine = current != null ? `Aktuell: ${formatGermanNumber(current)} kg` : 'Noch kein Wert erfasst';
+
+  app.innerHTML = `
+    <div class="brand"><h1>Körpergewicht</h1></div>
+    <div class="back-row"><button class="back-btn-icon" id="btnBack" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button></div>
+    <div class="progress-summary">
+      <span>${log.length} ${log.length === 1 ? 'Eintrag' : 'Einträge'}</span>
+      <span>${summaryLine}</span>
+    </div>
+    <div class="period-row">
+      ${Object.keys(PERIOD_LABELS).map(p => `
+        <button class="period-btn ${bodyWeightChartPeriod === p ? 'active' : ''}" data-period="${p}">${PERIOD_LABELS[p]}</button>
+      `).join('')}
+    </div>
+    ${buildLineChart(points, cssVar('--accent-3'), formatter)}
+    <button class="btn btn-ghost" id="btnLogBodyWeight" type="button" style="width:100%; margin-top:14px;">Neuen Wert eintragen</button>
+  `;
+
+  document.getElementById('btnBack').onclick = () => history.back();
+  app.querySelectorAll('.period-btn').forEach(btn => {
+    btn.onclick = () => {
+      bodyWeightChartPeriod = btn.dataset.period;
+      renderBodyWeightChart();
+    };
+  });
+  document.getElementById('btnLogBodyWeight').onclick = () => openBodyWeightPrompt(() => renderBodyWeightChart());
+  wireLineCharts(app);
 }
 
 /* ---------------------------------------------------
@@ -564,6 +635,16 @@ function chartTitleHTML(title, points, color, formatter){
     ${last !== null ? `<div class="chart-title-value" style="color:${color};">${fmt(last)}</div>` : ''}
   `;
 }
+// Ab welcher rechnerischen Breite (siehe wideW unten) ein Diagramm NICHT mehr in die
+// Standard-Fläche (BASE_W, bisher fest 560) gequetscht, sondern breiter gerendert und in
+// einen horizontal scrollbaren Streifen (.line-chart-scroll) gepackt wird — swipen statt
+// echtem Pinch-Zoom, das auf einem Vanilla-JS-Screen ohne Library ungleich aufwendiger und
+// fehleranfälliger wäre (Multitouch-Gesten, Momentum, Re-Aggregation je Zoomstufe). Ergibt
+// sich automatisch aus der Punktzahl (WIDE_POINT_GAP Mindestabstand pro Punkt) statt eines
+// festen Punktzahl-Schwellwerts — bei wenigen Punkten bleibt das bisherige Verhalten (100%
+// responsive, füllt die Kartenbreite) unverändert erhalten.
+const CHART_BASE_W = 560;
+const WIDE_POINT_GAP = 46;
 function buildLineChart(points, color, valueFormatter){
   const fmt = valueFormatter || (v => v);
   if (!points.length) return '<div class="chart-empty">Noch keine Daten — nach der ersten geloggten Einheit erscheint hier der Verlauf.</div>';
@@ -571,21 +652,64 @@ function buildLineChart(points, color, valueFormatter){
   // meist ganz oben im Diagramm landen und darunter nur gähnende Leere lassen. Ein kurzer
   // Hinweis statt eines fast leeren Achsenkreuzes ist an dieser Stelle klarer.
   if (points.length === 1) return '<div class="chart-empty">Noch zu wenig Daten für einen Verlauf — ab der zweiten geloggten Einheit erscheint hier der Trend.</div>';
-  const w = 560, h = 150, padL = 8, padR = 8, padT = 20, padB = 24;
+
+  const h = 150, padL = 10, padR = 10, padT = 32, padB = 24;
+  const wideW = padL + padR + WIDE_POINT_GAP * (points.length - 1);
+  const isWide = wideW > CHART_BASE_W;
+  const w = isWide ? wideW : CHART_BASE_W;
   const innerW = w - padL - padR, innerH = h - padT - padB;
+
   const values = points.map(p => p.value);
   const maxV = Math.max(...values);
   const minV = Math.min(0, Math.min(...values));
   const range = (maxV - minV) || 1;
-  const stepX = points.length > 1 ? innerW/(points.length - 1) : 0;
+
+  // Zeitproportionale X-Achse: Punkte werden entlang ihres tatsächlichen Datums verteilt statt
+  // gleichmäßig nach Index — ein zweimonatiges Trainingsloch zeigt sich dadurch auch wirklich
+  // als Lücke in der Linie, statt optisch genauso eng wie tägliche Einheiten zusammenzurücken.
+  // Fällt bei fehlenden/ungültigen Daten (z. B. falls ein Aufrufer kein .date mitgibt) robust
+  // auf den bisherigen gleichmäßigen Index-Abstand zurück, statt kaputtzugehen.
+  const times = points.map(p => p.date ? new Date(p.date).getTime() : NaN);
+  const hasValidDates = times.every(t => !isNaN(t));
+  const minT = hasValidDates ? Math.min(...times) : 0;
+  const timeRange = hasValidDates ? (Math.max(...times) - minT) : 0;
+  const stepX = innerW / (points.length - 1);
+  const xFor = (i) => (hasValidDates && timeRange > 0) ? padL + ((times[i] - minT) / timeRange) * innerW : padL + stepX * i;
+
   const coords = points.map((p,i) => ({
-    x: padL + stepX*i,
+    x: xFor(i),
     y: padT + innerH - ((p.value - minV)/range)*innerH,
     ...p
   }));
   const path = coords.map((c,i) => (i===0?'M':'L') + c.x.toFixed(1) + ',' + c.y.toFixed(1)).join(' ');
-  const dots = coords.map(c => `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5" fill="${color}"/>`).join('');
-  const everyN = Math.max(1, Math.ceil(coords.length/6));
+
+  // Tap-Tooltip statt fester Wertelabels über JEDEM Punkt: Bei vielen Punkten überlappten sich
+  // die alten Dauerlabels ohnehin nur noch, und der letzte Wert steht bereits im Akkordeon-Kopf
+  // (chartAccordionHTML()). Jeder Punkt bekommt eine unsichtbar große Tap-Fläche (r=12, sonst
+  // auf einem Touchscreen kaum zuverlässig zu treffen) über dem sichtbaren kleinen Punkt, dazu
+  // eine standardmäßig versteckte Tooltip-Box (.chart-tt) mit Datum+Wert — Position/Kippen an
+  // den Rändern wird HIER beim Bauen fix vorausberechnet, wireLineCharts() blendet beim Tap nur
+  // noch ein/aus, ohne selbst Koordinaten ausrechnen zu müssen.
+  const dots = coords.map((c,i) =>
+    `<circle class="chart-dot" data-dot="${i}" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="12" fill="transparent"/>` +
+    `<circle class="chart-dot-visible" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5" fill="${color}"/>`
+  ).join('');
+  const tooltips = coords.map((c,i) => {
+    const dateLabel = c.date ? new Date(c.date).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' }) : c.label;
+    const valueLabel = String(fmt(c.value));
+    const boxW = Math.max(56, 8 * valueLabel.length, 8 * dateLabel.length);
+    const boxX = Math.min(Math.max(c.x - boxW/2, padL), w - padR - boxW);
+    const flipDown = (c.y - padT) < 36;
+    const boxY = flipDown ? c.y + 10 : c.y - 42;
+    return `
+      <g class="chart-tt" data-tt="${i}" style="display:none;">
+        <rect x="${boxX.toFixed(1)}" y="${boxY.toFixed(1)}" width="${boxW.toFixed(1)}" height="30" rx="6" class="chart-tt-bg"/>
+        <text x="${(boxX+boxW/2).toFixed(1)}" y="${(boxY+13).toFixed(1)}" text-anchor="middle" class="chart-tt-value" style="fill:${color};">${valueLabel}</text>
+        <text x="${(boxX+boxW/2).toFixed(1)}" y="${(boxY+25).toFixed(1)}" text-anchor="middle" class="chart-tt-date">${dateLabel}</text>
+      </g>`;
+  }).join('');
+
+  const everyN = Math.max(1, Math.ceil(coords.length/(isWide ? 10 : 6)));
   // Erste/letzte Beschriftung an der Achse ausrichten statt zentriert auf den Punkt — sonst
   // ragt die Hälfte des Textes über den linken/rechten Rand der Zeichenfläche hinaus und wird
   // dort abgeschnitten (sichtbar z. B. beim allerersten Datum ganz links).
@@ -594,24 +718,47 @@ function buildLineChart(points, color, valueFormatter){
     const anchor = i === 0 ? 'start' : (i === coords.length-1 ? 'end' : 'middle');
     return `<text class="chart-label" x="${c.x.toFixed(1)}" y="${h-6}" text-anchor="${anchor}">${c.label}</text>`;
   }).join('');
-  // Genau wie bei xLabels: erste/letzte Wert-Beschriftung an der Achse ausrichten statt
-  // zentriert auf den Punkt — sonst ragt bei text-anchor:middle die Hälfte der Zahl über den
-  // linken/rechten Rand der Zeichenfläche hinaus und wird dort abgeschnitten (sichtbar z. B.
-  // als "18.606" → ".606" ganz links oder "3.140" → "3.14" ganz rechts im Diagramm).
-  const valueLabels = coords.map((c,i) => {
-    const anchor = i === 0 ? 'start' : (i === coords.length-1 ? 'end' : 'middle');
-    return `<text class="chart-label" style="fill:${color};font-weight:700" x="${c.x.toFixed(1)}" y="${(c.y-8).toFixed(1)}" text-anchor="${anchor}">${fmt(c.value)}</text>`;
-  }).join('');
   // Zwei dezente Hilfslinien zusätzlich zur Grundlinie, damit sich Werte grob einordnen lassen,
   // auch ohne an jedem einzelnen Punkt die Beschriftung lesen zu müssen.
   const gridLines = [0.33, 0.66].map(f =>
     `<line class="chart-grid" x1="${padL}" y1="${(padT+innerH*f).toFixed(1)}" x2="${w-padR}" y2="${(padT+innerH*f).toFixed(1)}"/>`).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="Verlaufsdiagramm">
+
+  const svg = `<svg viewBox="0 0 ${w} ${h}" width="${isWide ? w : '100%'}" height="${h}" role="img" aria-label="Verlaufsdiagramm, Punkte antippen für Details" data-wide="${isWide ? '1' : '0'}">
     ${gridLines}
     <line class="chart-axis" x1="${padL}" y1="${padT+innerH}" x2="${w-padR}" y2="${padT+innerH}"/>
     <path d="${path}" fill="none" stroke="${color}" stroke-width="2"/>
-    ${dots}${valueLabels}${xLabels}
+    ${dots}${tooltips}${xLabels}
   </svg>`;
+  // Im Breit-Modus (isWide) in einen scrollbaren Streifen packen — man wischt nach links in die
+  // Vergangenheit; wireLineCharts() scrollt beim Rendern automatisch ans rechte Ende
+  // (aktuellstes Datum), damit man nicht erst manuell dorthin scrollen muss.
+  return isWide ? `<div class="line-chart-scroll">${svg}</div>` : svg;
+}
+
+// Blendet nach dem Rendern einer Seite die Tap-Tooltips aller enthaltenen Kurvendiagramme ein/
+// aus und scrollt breite (isWide, siehe buildLineChart()) Diagramme initial ans rechte Ende
+// (aktuellstes Datum). Muss nach JEDEM app.innerHTML-Aufbau erneut laufen, der Kurvendiagramme
+// enthalten kann (renderStatsChart(), renderExerciseProgress(), renderBodyWeightChart()) — auch
+// nach dem Auf-/Zuklappen eines Akkordeons, da dessen Body dabei komplett neu gerendert wird.
+function wireLineCharts(container){
+  container.querySelectorAll('svg[data-wide="1"]').forEach(svg => {
+    const wrap = svg.closest('.line-chart-scroll');
+    if (wrap) wrap.scrollLeft = wrap.scrollWidth;
+  });
+  container.querySelectorAll('.chart-dot').forEach(dot => {
+    dot.onclick = () => {
+      const svg = dot.closest('svg');
+      const idx = dot.dataset.dot;
+      const alreadyOpen = dot.classList.contains('chart-dot-active');
+      svg.querySelectorAll('.chart-tt').forEach(tt => { tt.style.display = 'none'; });
+      svg.querySelectorAll('.chart-dot').forEach(d => d.classList.remove('chart-dot-active'));
+      if (!alreadyOpen){
+        const tt = svg.querySelector(`.chart-tt[data-tt="${idx}"]`);
+        if (tt) tt.style.display = 'block';
+        dot.classList.add('chart-dot-active');
+      }
+    };
+  });
 }
 
 function buildBarChart(points, color, showValues, height){
@@ -1363,6 +1510,7 @@ function fmtDurationCompact(sec){
 // 30/90-Tage-Buttons, damit auf dem Screen nur EIN Zeitraum-Konzept existiert.
 function statsPeriodToDays(period){
   if (period === 'month') return 30;
+  if (period === 'quarter') return 90;
   if (period === 'year') return 365;
   return null; // 'total'
 }
@@ -1886,7 +2034,7 @@ function renderExerciseProgress(name){
   const isTime = hist.length ? hist[0].isTime : (planExForName?.type === 'time');
   const period = exerciseProgressPeriod;
   const agg = (key) => aggregateHistoryPoints(hist.map(h => ({ date: h.date, value: h[key] })), period)
-    .map(p => ({ label: p.label || shortDate(p.date), value: p.value }));
+    .map(p => ({ label: p.label || shortDate(p.date), value: p.value, date: p.date }));
 
   // chartsMap enthält bewusst Bau-Funktionen statt fertigem HTML: chartAccordionHTML() liest
   // isOpen live aus exerciseProgressChartOpen aus, daher müssen die Akkordeons bei jedem
@@ -1994,6 +2142,7 @@ function renderExerciseProgress(name){
     if (!el) return;
     el.innerHTML = statsListHTML();
     wireStatsReorder();
+    wireLineCharts(el);
   }
   function wireStatsReorder(){
     wireProgressStatsReorder('#exerciseStatsList', {
@@ -2007,6 +2156,7 @@ function renderExerciseProgress(name){
     });
   }
   wireStatsReorder();
+  wireLineCharts(app);
 
   document.getElementById('progressStatsEditBtn').onclick = () => {
     openProgressStatsEditPrompt(statType, order, labels, name, refreshStatsList);

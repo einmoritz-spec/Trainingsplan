@@ -125,6 +125,10 @@ function goStatsChart(metric, push){
   if (push !== false) pushView('statsChart', { metric });
   renderStatsChart(metric);
 }
+function goBodyWeightChart(push){
+  if (push !== false) pushView('bodyWeightChart');
+  renderBodyWeightChart();
+}
 function goWorkoutsOverview(push){
   if (push !== false) pushView('workoutsOverview');
   renderWorkoutsOverview();
@@ -229,6 +233,7 @@ function renderViewByState(state){
     case 'freeSelect': renderFreeSelect(); break;
     case 'modeEdit': renderModeEdit(state.params.mode, state.params.startTab); break;
     case 'statsChart': renderStatsChart(state.params.metric); break;
+    case 'bodyWeightChart': renderBodyWeightChart(); break;
     case 'workoutsOverview': renderWorkoutsOverview(); break;
     case 'monthOverview': renderMonthOverview(); break;
     case 'monthReport': renderMonthReport(state.params.year, state.params.month); break;

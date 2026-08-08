@@ -912,7 +912,10 @@ function renderSettings(){
 
     <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
       <span class="mg-name">Körpergewicht</span>
-      <input type="text" inputmode="decimal" class="settings-row-input" id="bodyWeightInput" enterkeyhint="done" placeholder="kg" value="${formatGermanNumber(plan.bodyWeight)}">
+      <div class="settings-row-btns">
+        <button class="progress-stat-editbtn" id="btnBodyWeightHistory" type="button" aria-label="Verlauf" style="margin:0; width:36px; height:36px;"><img src="${ICON_HISTORY}" alt=""></button>
+        <input type="text" inputmode="decimal" class="settings-row-input" id="bodyWeightInput" enterkeyhint="done" placeholder="kg" value="${formatGermanNumber(plan.bodyWeight)}">
+      </div>
     </div>
 
     <div class="muscle-group" style="margin-top:10px;">
@@ -1137,6 +1140,9 @@ function renderSettings(){
   }
 
 
+  const bodyWeightHistoryBtnEl = document.getElementById('btnBodyWeightHistory');
+  if (bodyWeightHistoryBtnEl) bodyWeightHistoryBtnEl.onclick = () => goBodyWeightChart();
+
   const bodyWeightInputEl = document.getElementById('bodyWeightInput');
   if (bodyWeightInputEl){
     bodyWeightInputEl.onkeydown = (ev) => {
@@ -1147,7 +1153,11 @@ function renderSettings(){
     };
     bodyWeightInputEl.onchange = async (e) => {
       const v = e.target.value === '' ? null : parseGermanNumber(e.target.value);
-      plan.bodyWeight = (v === null || isNaN(v)) ? null : v;
+      // Ein geleertes Feld setzt nur den aktuellen Stand zurück (wie bisher) — der bereits
+      // erfasste Verlauf (plan.bodyWeightLog) bleibt dabei unangetastet, da ein Leeren des
+      // Feldes kein "ich hatte nie ein Gewicht" bedeutet, sondern nur "aktuell unbekannt".
+      if (v === null || isNaN(v)) plan.bodyWeight = null;
+      else logBodyWeight(v);
       await saveJSON('plan', plan);
     };
   }
