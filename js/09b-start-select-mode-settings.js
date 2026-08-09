@@ -8,7 +8,15 @@
    hinzufügen/Import"-Dialog, sowie der Assistent zum nachträglichen
    Erfassen vergangener Einheiten.
 --------------------------------------------------- */
-function openModeSettingsPrompt(mode){
+// reuseHistoryEntry: true, wenn dieses Popup direkt aus einem Unter-Popup heraus wieder
+// geöffnet wird, das KEINEN eigenen History-Eintrag gepusht, sondern nur den obersten
+// Zurück-Handler ersetzt hatte (Rahmenfarbe-Swatches, HSV-Farbwähler — siehe
+// openModeSettingsColorPickerPrompt() unten und openAccentColorPickerPrompt() in
+// 10-plan-settings.js). Der History-Eintrag von vorhin existiert dann noch; ein weiterer
+// pushState() würde History-Tiefe und overlayCloseStack auseinanderlaufen lassen — Folge
+// war ein toter Zurück-Pfeil und, weil der aktuelle Eintrag ein '__overlay__'-Marker blieb,
+// ein Sprung auf die Startseite beim Aktualisieren der Seite.
+function openModeSettingsPrompt(mode, reuseHistoryEntry){
   const existing = document.getElementById('modeSettingsOverlay');
   if (existing) existing.remove();
 
@@ -18,7 +26,8 @@ function openModeSettingsPrompt(mode){
   overlay.className = 'add-exercise-overlay centered-overlay';
   overlay.id = 'modeSettingsOverlay';
   document.body.appendChild(overlay);
-  pushOverlayState(remove);
+  if (reuseHistoryEntry && overlayCloseStack.length) overlayCloseStack[overlayCloseStack.length - 1] = remove;
+  else pushOverlayState(remove);
 
   function remove(){ const el = document.getElementById('modeSettingsOverlay'); if (el) el.remove(); }
   const close = () => { popOverlayStateIfOpen(); remove(); };

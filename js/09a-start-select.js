@@ -512,7 +512,9 @@ function wireModeLongPress(){
 // mit SOFORTIGEM Anwenden+Schließen bei Tap auf einen Swatch (kein extra Speichern-Schritt) —
 // wie ausdrücklich gewünscht, da hier (anders als beim großen Akzentfarben-Dialog) kein
 // Vorschau-Bedürfnis besteht.
-function openMuscleGroupColorPicker(group){
+// reuseHistoryEntry: siehe openModeSettingsPrompt() (09b) — wird aus dem HSV-Farbwähler
+// heraus gesetzt, der keinen eigenen History-Eintrag pusht, sondern den vorhandenen mitnutzt.
+function openMuscleGroupColorPicker(group, reuseHistoryEntry){
   const existing = document.getElementById('muscleGroupColorOverlay');
   if (existing) existing.remove();
 
@@ -542,7 +544,8 @@ function openMuscleGroupColorPicker(group){
     </div>
   `;
   document.body.appendChild(overlay);
-  pushOverlayState(close);
+  if (reuseHistoryEntry && overlayCloseStack.length) overlayCloseStack[overlayCloseStack.length - 1] = close;
+  else pushOverlayState(close);
   overlay.onclick = (ev) => { if (ev.target === overlay) close(); };
 
   function close(){

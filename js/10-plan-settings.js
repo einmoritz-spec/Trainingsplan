@@ -424,11 +424,16 @@ function openAccentColorPickerPrompt(tileMode, muscleGroup, onGlobalSave, bgMode
   // Bei einer Kachel-Rahmenfarbe liegt bereits ein History-Eintrag vom Kategorie-Popup vor
   // (das dahinter im DOM stehen bleibt) — hier wird dessen Zurück-Handler einfach ersetzt statt
   // einen weiteren Eintrag zu pushen, sonst geriete der Zurück-Stack aus dem Gleichgewicht.
+  // cancelFromBack statt cancel: der globale popstate-Handler ruft die registrierte Funktion
+  // ohne Argumente auf — cancel() muss aber wissen, ob der History-Eintrag bereits von der
+  // Zurück-Taste verbraucht wurde (dann darf es weder selbst zurücknavigieren noch den
+  // Eintrag wiederverwenden). Siehe Kommentar an cancel().
+  const cancelFromBack = () => cancel(true);
   if (isTile || isMuscleGroup){
-    if (overlayCloseStack.length) overlayCloseStack[overlayCloseStack.length - 1] = cancel;
-    else overlayCloseStack.push(cancel);
+    if (overlayCloseStack.length) overlayCloseStack[overlayCloseStack.length - 1] = cancelFromBack;
+    else overlayCloseStack.push(cancelFromBack);
   }
-  else pushOverlayState(cancel);
+  else pushOverlayState(cancelFromBack);
 
   const field = document.getElementById('accentPaletteField');
   const cursor = document.getElementById('accentPaletteCursor');
@@ -526,8 +531,19 @@ function openAccentColorPickerPrompt(tileMode, muscleGroup, onGlobalSave, bgMode
     const el = document.getElementById('accentColorOverlay');
     if (el) el.remove();
   }
-  function cancel(){
-    popOverlayStateIfOpen();
+  // BUGFIX: Bei einer Kachel-Rahmenfarbe/Muskelgruppenfarbe pusht dieser Picker oben KEINEN
+  // eigenen History-Eintrag (er ersetzt nur den obersten Zurück-Handler) — dann darf er beim
+  // Schließen auch keinen verbrauchen. Das frühere, bedingungslose popOverlayStateIfOpen()
+  // löste ein history.back() aus, während im selben Durchlauf das darunterliegende
+  // Kategorie-Popup per pushOverlayState() sofort wieder einen Eintrag pushte. Das back()
+  // wird aber erst asynchron verarbeitet und traf dann auf den frisch gepushten Eintrag:
+  // overlayCloseStack und History-Tiefe liefen auseinander, overlaySelfClosingCount blieb
+  // stehen und schluckte den nächsten echten Zurück-Tap (toter Pfeil im Kachel-Menü), und
+  // der aktuelle History-Eintrag blieb ein '__overlay__'-Marker — weshalb ein Aktualisieren
+  // der Seite über renderViewByState() auf der Startseite landete ("App startet neu").
+  // fromBack === true: Aufruf kommt vom popstate-Handler, der Eintrag ist bereits weg.
+  function cancel(fromBack){
+    if (!fromBack && !isTile && !isMuscleGroup) popOverlayStateIfOpen();
     removeOverlay();
     if (isBg){
       // war vorher kein eigener Hintergrund gesetzt, Override wieder entfernen statt eine
@@ -538,8 +554,10 @@ function openAccentColorPickerPrompt(tileMode, muscleGroup, onGlobalSave, bgMode
       document.documentElement.style.setProperty('--accent', previousAccent.hex); // Vorschau zurücksetzen
       document.documentElement.style.setProperty('--accent-contrast', contrastTextColor(previousAccent.hex));
     }
-    if (isTile) openModeSettingsPrompt(tileMode); // zurück zum Kategorie-Popup, unverändert
-    if (isMuscleGroup) openMuscleGroupColorPicker(muscleGroup); // zurück zum Swatch-Grid-Popup, unverändert
+    // Vorhandenen History-Eintrag wiederverwenden statt einen zweiten zu pushen — außer der
+    // Eintrag wurde gerade von der Zurück-Taste verbraucht (fromBack), dann wird neu gepusht.
+    if (isTile) openModeSettingsPrompt(tileMode, !fromBack); // zurück zum Kategorie-Popup
+    if (isMuscleGroup) openMuscleGroupColorPicker(muscleGroup, !fromBack); // zurück zum Swatch-Grid-Popup
   }
   document.getElementById('accentPickerCancel').onclick = cancel;
   document.getElementById('accentPickerSave').onclick = async () => {
@@ -560,7 +578,10 @@ function openAccentColorPickerPrompt(tileMode, muscleGroup, onGlobalSave, bgMode
       plan.modeSettings[tileMode].tileColorId = 'custom';
       plan.modeSettings[tileMode].tileColorHex = hsvToHex(h, s, v);
       await saveJSON('plan', plan);
-      popOverlayStateIfOpen();
+      // Kein popOverlayStateIfOpen(): dieser Picker hat für eine Kachelfarbe nie einen eigenen
+      // History-Eintrag gepusht (siehe cancel() oben). Der noch offene Eintrag des
+      // Kategorie-Popups wird stattdessen unten von openModeSettingsPrompt(..., true)
+      // wiederverwendet.
       removeOverlay();
       // Das Kategorie-Popup dahinter wurde nie entfernt (nur überdeckt) — jetzt mit aufräumen,
       // sonst bliebe es unsichtbar im DOM hängen; danach frisch (mit der neuen Farbe) wieder
@@ -569,7 +590,7 @@ function openAccentColorPickerPrompt(tileMode, muscleGroup, onGlobalSave, bgMode
       const modeOverlay = document.getElementById('modeSettingsOverlay');
       if (modeOverlay) modeOverlay.remove();
       renderStartSelect();
-      openModeSettingsPrompt(tileMode);
+      openModeSettingsPrompt(tileMode, true);
       return;
     }
     if (isBg){
