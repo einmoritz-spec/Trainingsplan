@@ -176,8 +176,10 @@ function renderSessionSummary(session){
     replaceView('home');
     renderHome();
   };
-  document.getElementById('btnSummaryPdf').onclick = () => {
+  document.getElementById('btnSummaryPdf').onclick = async () => {
     const dateStub = (session.date || '').slice(0,10);
+    await ensureJsPdfLoaded();
+    await preloadPdfImageDataUrls(session.entries.map(e => e.exerciseId));
     let blob = null;
     try{ blob = buildFullSummaryPdfBlob(session, { sessionNumber, streak, highlights: exerciseHighlights }); }catch(err){ blob = null; }
     if (blob){
@@ -377,7 +379,10 @@ function buildFullSummaryPdfBlob(session, opts){
     }
 
     if (planEx && planEx.imageData){
-      try{ doc.addImage(planEx.imageData, 'JPEG', marginX, y, imgSize, imgSize); }catch(err){ /* Bild überspringen, falls ungültig */ }
+      const imgSrc = resolvePdfImageSrc(planEx.imageData);
+      if (imgSrc){
+        try{ doc.addImage(imgSrc, pdfImageFormatFor(imgSrc), marginX, y, imgSize, imgSize); }catch(err){ /* Bild überspringen, falls ungültig */ }
+      }
     }
 
     let ty = y + 4;
@@ -607,6 +612,8 @@ async function shareSession(session, opts){
   // Immer die vollständige Zusammenfassung (alle Übungen in Reihenfolge, mit kompakten
   // Erfolgs-Markierungen) — sowohl fürs native Teilen als auch als Download-Fallback,
   // entspricht genau dem, was auch auf dem Bildschirm zu sehen ist.
+  await ensureJsPdfLoaded();
+  await preloadPdfImageDataUrls(session.entries.map(e => e.exerciseId));
   let fullBlob = null;
   try{ fullBlob = buildFullSummaryPdfBlob(session, { ...opts, highlights }); }catch(err){ fullBlob = null; }
   if (fullBlob){

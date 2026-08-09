@@ -82,7 +82,8 @@ function renderProgressList(){
   document.getElementById('cardTimeStats').onclick = () => goStatsChart('time');
   document.getElementById('cardWeightStats').onclick = () => goStatsChart('weight');
   document.getElementById('cardMuscleBalance').onclick = () => goMuscleBalance();
-  document.getElementById('btnProgressExportPdf').onclick = () => {
+  document.getElementById('btnProgressExportPdf').onclick = async () => {
+    await ensureJsPdfLoaded();
     let blob = null;
     try{ blob = buildProgressPdfBlob(); }catch(err){ blob = null; }
     if (blob){

@@ -593,6 +593,19 @@ function checkPerformanceSuggestion(exerciseId, si, weight, reps, planEx){
     const s = Array.isArray(history[i]) ? history[i][si] : null;
     if (!s || s.weight !== weight || s.reps !== reps) return null;
   }
+  // RPE-bewusste Bremse (nur wirksam, wenn RPE-Erfassung aktiv ist, siehe rpeEnabled() in
+  // 04-utils.js): war der zuletzt geloggte Satz an dieser Position bereits sehr hart
+  // (RPE >= RPE_HIGH_THRESHOLD, praktisch Muskelversagen/kurz davor), ist "gleiches Gewicht,
+  // gleiche Wdh." kein Zeichen von Stagnation, sondern schlicht die aktuelle Belastungsgrenze —
+  // eine Steigerung würde hier eher zu Formverlust/Verletzungsrisiko führen als zu echtem
+  // Fortschritt. Der Vorschlag wird in diesem Fall unterdrückt, ganz ohne dass die sonstige
+  // Wiederholungs-Logik oben angefasst werden muss. Fehlt der RPE-Wert (z. B. weil die
+  // Einstellung erst kürzlich aktiviert wurde oder für ältere Sätze), bleibt das Verhalten
+  // unverändert wie vorher — die Bremse greift nur bei einem tatsächlich eingetragenen, hohen Wert.
+  if (rpeEnabled()){
+    const lastSet = Array.isArray(history[0]) ? history[0][si] : null;
+    if (lastSet && typeof lastSet.rpe === 'number' && lastSet.rpe >= RPE_HIGH_THRESHOLD) return null;
+  }
   return computeProgressionSuggestion(weight, reps, assisted ? -1 : 1, planEx);
 }
 

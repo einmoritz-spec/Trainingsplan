@@ -55,6 +55,7 @@ function scrollWheelRangeFor(input){
   }
   else if (/reps|sets/i.test(field)){ min = attrMin ?? 1; max = 100; step = 1; }
   else if (/seconds/i.test(field)){ min = attrMin ?? 1; max = 600; step = 1; }
+  else if (/rpe/i.test(field)){ min = RPE_MIN; max = RPE_MAX; step = RPE_STEP; }
 
   return { min, max, step };
 }

@@ -18,8 +18,55 @@ function showFatalError(err){
   `;
 }
 
-window.addEventListener('error', (e) => { showFatalError(e.error || e.message); });
-window.addEventListener('unhandledrejection', (e) => { showFatalError(e.reason); });
+/* ---------------------------------------------------
+   Laufzeit-Fehler NACH dem Boot
+   ---------------------------------------------------
+   Vorher (Bug): window.onerror/onunhandledrejection riefen IMMER showFatalError() auf,
+   die app.innerHTML komplett überschreibt. Das galt für die komplette Laufzeit der App,
+   nicht nur für den Start — ein einzelner Fehler beim Chart-Rendern, im Pausen-Timer oder
+   in einer abgelehnten saveJSON()-Promise hat dadurch mitten in einem laufenden Training
+   den kompletten Bildschirm weggerissen (inkl. Mini-Player-Zustand), obwohl die App
+   selbst meist noch funktionsfähig gewesen wäre.
+
+   Jetzt: bootDone unterscheidet zwei Phasen.
+     - VOR init(): ein Fehler bedeutet, dass die App gar nicht erst benutzbar ist —
+       da bleibt der bisherige Vollbild-Fehlerbildschirm die richtige Reaktion, denn es
+       gibt ohnehin keinen sinnvollen UI-Zustand, den man erhalten könnte.
+     - NACH init(): app.innerHTML bleibt unangetastet. Der Fehler landet in der Konsole
+       (fürs Debugging/QS) und der Nutzer bekommt einen kleinen, wegtippbaren Hinweis
+       statt eines abgerissenen Trainings.
+--------------------------------------------------- */
+let bootDone = false;
+
+function showRuntimeErrorToast(err){
+  console.error('Laufzeitfehler (App läuft weiter):', err);
+  let toast = document.getElementById('runtimeErrorToast');
+  if (toast){ return; } // schon sichtbar — nicht mit jedem weiteren Fehler neu aufbauen
+  toast = document.createElement('div');
+  toast.id = 'runtimeErrorToast';
+  toast.className = 'update-toast runtime-error-toast';
+  toast.innerHTML = `
+    <span class="update-toast-text">Kleiner Fehler ist aufgetreten — die App läuft weiter.</span>
+    <button class="update-toast-btn" id="runtimeErrorToastClose" type="button" aria-label="Schließen">✕</button>
+  `;
+  document.body.appendChild(toast);
+  const close = () => { toast.remove(); };
+  document.getElementById('runtimeErrorToastClose').onclick = close;
+  // Nach kurzer Zeit automatisch ausblenden, damit sich Hinweise bei mehreren
+  // unabhängigen Fehlern nicht stapeln und der Nutzer nicht aktiv wegtippen muss.
+  setTimeout(close, 6000);
+}
+
+function handleGlobalError(err){
+  if (!bootDone){
+    showFatalError(err);
+  } else {
+    showRuntimeErrorToast(err);
+  }
+}
+
+window.addEventListener('error', (e) => { handleGlobalError(e.error || e.message); });
+window.addEventListener('unhandledrejection', (e) => { handleGlobalError(e.reason); });
 
 // Sobald die Seite wieder sichtbar wird (Tab in den Vordergrund geholt, Bildschirm
 // entsperrt), den Pausen-Timer sofort neu auswerten statt auf den nächsten regulären
@@ -34,7 +81,7 @@ wireViewportAwareOverlays();
 try{
   // Das Import-Banner erst NACH init() einblenden: sein Button ruft goSettings() auf, was
   // ohne geladenen plan/sessions-State ins Leere liefe.
-  init().then(showPostHardUpdateBanner).catch(showFatalError);
+  init().then(() => { bootDone = true; showPostHardUpdateBanner(); }).catch(showFatalError);
 }catch(err){
   showFatalError(err);
 }

@@ -120,6 +120,11 @@ function renderActive(){
     </div>
   `;
 
+  // RPE-Spalte nur bei Kraft-Übungen (nicht bei Zeit/Kardio) und nur, wenn in den
+  // Einstellungen aktiviert (siehe rpeEnabled(), 04-utils.js) — Standard ist AUS, dann
+  // sieht die Sätze-Tabelle exakt wie vorher aus.
+  const rpeShown = !!(entry && entry.type !== 'time' && rpeEnabled());
+
   const setsHeaderHTML = entry ? (entry.type === 'time' ? `
     <div class="sets-header sets-header-time">
       <span class="sets-header-cell"></span>
@@ -128,11 +133,12 @@ function renderActive(){
       <span class="sets-header-cell"></span>
     </div>
   ` : `
-    <div class="sets-header">
+    <div class="sets-header ${rpeShown ? 'has-rpe' : ''}">
       <span class="sets-header-cell"></span>
       <span class="sets-header-cell">KG</span>
       <span class="sets-header-cell">WDH</span>
       <button class="sets-header-cell sets-header-cell-toggle" id="btnToggleSetMetric" type="button">${activeSetMetricMode === 'vol' ? 'VOL' : activeSetMetricMode === '10rm' ? '10RM' : '1RM'}</button>
+      ${rpeShown ? '<span class="sets-header-cell">RPE</span>' : ''}
       <span class="sets-header-cell"></span>
       <span class="sets-header-cell"></span>
     </div>
@@ -185,11 +191,12 @@ function renderActive(){
       ` : ''}
     </div>` : ''}
   ` : `
-    <div class="set-row ${set.done ? 'set-done' : ''} ${isSuggestSet ? 'perf-suggest-active' : ''}" data-set="${si}">
+    <div class="set-row ${rpeShown ? 'has-rpe' : ''} ${set.done ? 'set-done' : ''} ${isSuggestSet ? 'perf-suggest-active' : ''}" data-set="${si}">
       <span class="set-idx">${isSuggestSet ? `<svg class="perf-suggest-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20V4"></path><path d="M5 11l7-7 7 7"></path></svg>` : (set.warmup ? 'WU' : si+1)}</span>
       <input type="number" inputmode="decimal" enterkeyhint="done" placeholder="${currentPlanEx && currentPlanEx.bodyweightExercise ? '+kg' : 'kg'}" step="0.5" value="${isSuggestSet ? perfSuggestion.weight : (currentPlanEx && currentPlanEx.noWeight ? '' : (set.weight ?? ''))}" ${isSuggestSet ? 'id="perfSuggestWeight"' : 'data-field="weight"'} class="${currentPlanEx && currentPlanEx.bodyweightExercise && !isSuggestSet ? 'weight-input-optional' : ''}" ${currentPlanEx && currentPlanEx.noWeight && !isSuggestSet ? 'disabled' : ''}>
       <input type="number" inputmode="numeric" enterkeyhint="done" placeholder="Wdh" value="${isSuggestSet ? perfSuggestion.reps : (set.reps ?? '')}" ${isSuggestSet ? 'id="perfSuggestReps"' : 'data-field="reps"'}>
       <span class="set-vol">${isSuggestSet ? '' : ((currentPlanEx && currentPlanEx.noWeight) ? '–' : (setMetricValue(set.reps, set.weight, currentPlanEx, activeSetMetricMode) ?? '–'))}</span>
+      ${rpeShown ? (isSuggestSet ? '<span></span>' : `<input type="number" inputmode="decimal" enterkeyhint="done" placeholder="RPE" step="${RPE_STEP}" min="${RPE_MIN}" max="${RPE_MAX}" value="${fmtRpe(set.rpe)}" data-field="rpe" class="rpe-input" aria-label="RPE (Anstrengung) Satz ${si+1}">`) : ''}
       ${isSuggestSet ? `
       <button class="perf-suggest-row-confirm" id="perfSuggestConfirm" type="button" aria-label="Vorschlag übernehmen">✓</button>
       <button class="perf-suggest-row-reject" id="perfSuggestReject" type="button" aria-label="Vorschlag ablehnen">✕</button>

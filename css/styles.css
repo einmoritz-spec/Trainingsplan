@@ -228,6 +228,17 @@ html[data-theme="light"] #btnSummaryShare{ color:#000; border-color:#000; }
   border-radius:8px; padding:7px 13px; font-size:12.5px; font-weight:700;
 }
 .update-toast-btn:active{ opacity:0.8; }
+/* Laufzeit-Fehler-Hinweis nach dem Boot (siehe 14-app-init.js, showRuntimeErrorToast()):
+   bewusst NICHT in Akzentfarbe wie .update-toast, damit er nicht wie eine Handlungsaufforderung
+   wirkt, sondern wie ein dezenter, unaufdringlicher Status. Unten statt oben, damit er sich
+   nicht mit dem Update-Banner überschneidet. */
+.runtime-error-toast{
+  top:auto; bottom:0;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  background: var(--surface2, #2a2b30); color: var(--text, #f5f4f1);
+  border-top:1px solid var(--border);
+}
+.runtime-error-toast .update-toast-btn{ background:transparent; color:inherit; border:1px solid var(--border); }
 .history-month-label{
   font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color: var(--muted);
   margin:16px 0 8px; padding:0 14px;
@@ -819,6 +830,10 @@ html[data-theme="light"] .bodyweight-warning-icon{ filter: none; }
   align-items:center; gap:6px; margin-bottom:8px;
 }
 .set-row.set-row-time{ grid-template-columns: 22px 1fr 32px 26px; }
+/* RPE-Spalte (siehe rpeEnabled(), 11b-active-session-render.js) — nur eingeblendet, wenn in
+   den Einstellungen aktiviert. Schmale Extra-Spalte zwischen VOL und den Aktions-Buttons. */
+.set-row.has-rpe, .sets-header.has-rpe{ grid-template-columns: 22px 1fr 1fr 44px 42px 32px 26px; }
+.set-row input.rpe-input{ font-size:13px; padding:10px 2px; }
 .sets-header{
   display:grid; grid-template-columns: 22px 1fr 1fr 44px 32px 26px;
   align-items:center; gap:6px; margin-bottom:8px;

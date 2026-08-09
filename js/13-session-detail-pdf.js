@@ -155,10 +155,12 @@ function renderSessionDetail(id){
     chevron.textContent = isOpen ? '▸' : '▾';
     btn.setAttribute('aria-expanded', String(!isOpen));
   };
-  document.getElementById('btnPdf').onclick = () => {
+  document.getElementById('btnPdf').onclick = async () => {
     const dateStub = (s.date || '').slice(0,10);
     const sessionNumber = sessions.findIndex(x => x.id === s.id) + 1;
     const streak = computeWeekStreak();
+    await ensureJsPdfLoaded();
+    await preloadPdfImageDataUrls(s.entries.map(e => e.exerciseId));
     let blob = null;
     try{ blob = buildFullSummaryPdfBlob(s, { sessionNumber, streak, highlights: exerciseHighlights, includeNotes: true }); }catch(err){ blob = null; }
     if (blob){

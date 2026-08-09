@@ -71,6 +71,208 @@ function logBodyWeight(weight, dateISO){
 }
 
 /* ---------------------------------------------------
+   Übungsbilder für den PDF-Export: WebP-Datei → Base64-Daten-URI
+   ---------------------------------------------------
+   Seit der Umstellung von app-data.js auf externe WebP-Dateien (siehe assets/exercises/,
+   Task "Bilder als eigene Dateien statt Base64") ist planEx.imageData für die
+   Standard-Übungsbibliothek KEIN Data-URI mehr, sondern ein relativer Pfad
+  (z. B. "assets/exercises/e1.webp") — funktioniert unverändert direkt als <img src="...">,
+   ABER jsPDF.addImage() (siehe buildFullSummaryPdfBlob(), 12-session-summary.js) kann nur
+   mit Binärdaten/Base64 umgehen, nicht mit einer URL. Individuelle, vom Nutzer selbst
+   hochgeladene Übungsbilder (siehe downscaleImageFile(), 10-plan-settings.js) bleiben davon
+   unberührt weiterhin waschechte Data-URIs und brauchen hier gar nichts.
+
+   preloadPdfImageDataUrls() holt VOR dem eigentlichen PDF-Aufbau alle betroffenen
+   Bild-Dateien einmalig per fetch() (läuft dank Service-Worker-Cache auch offline) und
+   wandelt sie in Base64 um; das Ergebnis wird pro Pfad gecacht, ein PDF-Export braucht
+   also nur beim allerersten Mal pro Bild einen echten Netzwerk-/Cache-Zugriff.
+   resolvePdfImageSrc()/pdfImageFormatFor() lesen synchron aus diesem Cache — die
+   eigentliche PDF-Aufbaulogik in 12-session-summary.js bleibt dadurch unverändert synchron,
+   nur die Aufrufer holen VORHER per await den Cache befüllt.
+--------------------------------------------------- */
+const pdfImageDataUrlCache = new Map();
+async function preloadPdfImageDataUrls(exerciseIds){
+  const targets = Array.from(new Set(exerciseIds || []))
+    .map(id => plan.exercises.find(x => x.id === id))
+    .filter(ex => ex && typeof ex.imageData === 'string' && ex.imageData.length &&
+      !ex.imageData.startsWith('data:') && !pdfImageDataUrlCache.has(ex.imageData));
+  await Promise.all(targets.map(async (ex) => {
+    try{
+      const res = await fetch(ex.imageData);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      pdfImageDataUrlCache.set(ex.imageData, dataUrl);
+    }catch(err){ /* Bild bleibt im PDF einfach weg, siehe resolvePdfImageSrc() */ }
+  }));
+}
+// Liefert den fürs PDF nutzbaren Bild-String: Data-URI bleibt Data-URI (eigene Bilder),
+// ein Pfad wird gegen den oben befüllten Cache aufgelöst — ohne Treffer (Bild noch nicht
+// geladen/Fehler) liefert die Funktion null, der Aufrufer überspringt das Bild dann wie
+// bisher bei jedem ungültigen imageData.
+function resolvePdfImageSrc(src){
+  if (!src) return null;
+  if (src.startsWith('data:')) return src;
+  return pdfImageDataUrlCache.get(src) || null;
+}
+// jsPDF braucht das Bildformat explizit (kein verlässliches Auto-Erkennen bei allen
+// Formaten) — aus dem Mime-Typ des Data-URI-Präfixes abgeleitet, damit sowohl die alten
+// JPEG-Bilder (individuelle Uploads) als auch die neuen WebP-Standardbilder funktionieren.
+function pdfImageFormatFor(dataUrl){
+  const m = /^data:image\/(\w+);/.exec(dataUrl || '');
+  const type = m ? m[1].toUpperCase() : 'JPEG';
+  return type === 'JPG' ? 'JPEG' : type;
+}
+
+/* ---------------------------------------------------
+   RPE (Rate of Perceived Exertion) — optionale Erfassung pro Satz
+   ---------------------------------------------------
+   Standardmäßig AUS (siehe rpeEnabled()): eine zusätzliche Eingabe pro Satz ist ein Mehraufwand,
+   den nicht jeder will. plan.rpeEnabled wird nur über den Schalter in den Einstellungen gesetzt
+   (renderSettings(), 10-plan-settings.js). Ist er aus, tauchen weder die RPE-Eingabefelder in
+   der aktiven Einheit auf (siehe 11b-active-session-render.js), noch fließt RPE in die
+   Performancemodus-Vorschläge ein (siehe checkPerformanceSuggestion(), 11a-active-session.js) —
+   das Verhalten ist dann exakt wie vorher.
+--------------------------------------------------- */
+function rpeEnabled(){
+  return !!(plan && plan.rpeEnabled === true);
+}
+// Vernünftiger RPE-Wertebereich für Krafttraining (6 = noch 4+ Wdh. Reserve, 10 = Muskelversagen).
+// 0.5er-Schritte, da das die gängige Auflösung in Trainings-Apps ist.
+const RPE_MIN = 6;
+const RPE_MAX = 10;
+const RPE_STEP = 0.5;
+// Ab diesem Wert gilt ein Satz als "hart" — wird von checkPerformanceSuggestion() genutzt, um
+// bei bereits hoher Anstrengung KEINE weitere Steigerung vorzuschlagen (siehe dort).
+const RPE_HIGH_THRESHOLD = 9;
+function fmtRpe(rpe){
+  if (rpe === null || rpe === undefined || isNaN(rpe)) return '';
+  return Number.isInteger(rpe) ? String(rpe) : rpe.toFixed(1);
+}
+
+/* ---------------------------------------------------
+   jsPDF: Lazy-Load statt statischem <script>-Tag
+   ---------------------------------------------------
+   Vorher: js/vendor/jspdf.umd.min.js wurde über ein <script defer> in index.html bei JEDEM
+   App-Start geparst (mehrere hundert KB), obwohl es nur beim PDF-Export gebraucht wird —
+   ein Feature, das die meisten Sessions nie benutzen. Das kostet reine Boot-Zeit.
+
+   Jetzt: die Datei bleibt Teil der APP_SHELL in sw.js (Offline-Export funktioniert also
+   weiterhin ohne Netz), wird aber erst beim ERSTEN tatsächlichen Export-Klick per
+   dynamischem <script>-Tag nachgeladen. Der Browser bedient das dank Service-Worker-Cache
+   praktisch instant aus dem Cache Storage, nur der Parse-/Ausführungs-Zeitpunkt verschiebt
+   sich vom Boot auf den Bedarfsfall.
+
+   Alle Aufrufer (buildFullSummaryPdfBlob() etc. in 12-session-summary.js) prüfen ohnehin
+   bereits defensiv auf window.jspdf/window.jspdf.jsPDF — ensureJsPdfLoaded() muss davor also
+   nur EINMAL awaited werden, der Rest der bestehenden Logik bleibt unverändert.
+--------------------------------------------------- */
+let jsPdfLoadPromise = null;
+function ensureJsPdfLoaded(){
+  if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(true);
+  if (jsPdfLoadPromise) return jsPdfLoadPromise;
+  jsPdfLoadPromise = new Promise((resolve) => {
+    const existing = document.querySelector('script[data-lazy="jspdf"]');
+    if (existing){
+      existing.addEventListener('load', () => resolve(!!(window.jspdf && window.jspdf.jsPDF)));
+      existing.addEventListener('error', () => resolve(false));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'js/vendor/jspdf.umd.min.js';
+    script.dataset.lazy = 'jspdf';
+    script.onload = () => resolve(!!(window.jspdf && window.jspdf.jsPDF));
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+  return jsPdfLoadPromise;
+}
+
+/* ---------------------------------------------------
+   Validierung importierter Backup-Dateien
+   ---------------------------------------------------
+   Vorher (Bug): der Import in renderSettings() (10-plan-settings.js) prüfte nur, ob
+   data.plan existiert und data.plan.exercises ein Array ist — alles andere (sessions,
+   lastPerformance, einzelne Übungs-/Session-Einträge) wurde ungeprüft übernommen. Eine
+   fremde, unvollständige oder manuell verbastelte JSON-Datei landete dadurch direkt in
+   IndexedDB, und der nächste App-Start konnte in showFatalError() enden (siehe
+   14-app-init.js), weil z. B. renderStatsChart() oder computeMuscleGroupSetCounts() von
+   Feldern ausgehen, die schlicht fehlten.
+
+   validateFullExportPayload() prüft die Grobstruktur STRENG (bei Fehlern hier wird der
+   komplette Import abgelehnt, da sonst nichts Sinnvolles mit den Daten anfangen lässt),
+   filtert aber auf Ebene einzelner Einträge NUR die kaputten heraus (statt den ganzen
+   Import zu verwerfen) — im gleichen Sinn wie die bestehende Storage-Kaskade in
+   01-storage.js, die bei einem einzelnen fehlerhaften Key ebenfalls nicht die komplette
+   restliche Migration abbricht.
+--------------------------------------------------- */
+function validateFullExportPayload(data){
+  const errors = [];
+  if (!data || typeof data !== 'object'){
+    return { valid: false, errors: ['Die Datei enthält kein gültiges JSON-Objekt.'] };
+  }
+  if (!data.plan || typeof data.plan !== 'object'){
+    errors.push('Es fehlt ein "plan"-Objekt.');
+  } else if (!Array.isArray(data.plan.exercises)){
+    errors.push('"plan.exercises" ist kein Array.');
+  }
+  if (errors.length) return { valid: false, errors };
+
+  // Einzelne Übungen ohne id/name sind für die App unbrauchbar (id ist der Fremdschlüssel
+  // aus jedem geloggten Satz) — diese werden stillschweigend aussortiert statt den kompletten
+  // Import zu verwerfen, ein einzelner Ausreißer in einer sonst gültigen Datei soll nicht das
+  // ganze Backup unbrauchbar machen.
+  const cleanedExercises = data.plan.exercises.filter(ex =>
+    ex && typeof ex === 'object' && typeof ex.id === 'string' && ex.id.length &&
+    typeof ex.name === 'string' && ex.name.length
+  );
+  const droppedExercises = data.plan.exercises.length - cleanedExercises.length;
+
+  let cleanedSessions = [];
+  let droppedSessions = 0;
+  if (data.sessions !== undefined){
+    if (!Array.isArray(data.sessions)){
+      errors.push('"sessions" ist vorhanden, aber kein Array.');
+    } else {
+      cleanedSessions = data.sessions.filter(s =>
+        s && typeof s === 'object' && typeof s.id === 'string' && s.id.length &&
+        typeof s.date === 'string' && !isNaN(new Date(s.date).getTime()) &&
+        Array.isArray(s.entries)
+      );
+      droppedSessions = data.sessions.length - cleanedSessions.length;
+    }
+  }
+  if (errors.length) return { valid: false, errors };
+
+  let cleanedLastPerformance = {};
+  if (data.lastPerformance !== undefined){
+    if (typeof data.lastPerformance !== 'object' || data.lastPerformance === null || Array.isArray(data.lastPerformance)){
+      errors.push('"lastPerformance" ist vorhanden, aber kein Objekt.');
+    } else {
+      cleanedLastPerformance = data.lastPerformance;
+    }
+  }
+  if (errors.length) return { valid: false, errors };
+
+  return {
+    valid: true,
+    errors: [],
+    droppedExercises,
+    droppedSessions,
+    cleaned: {
+      plan: { ...data.plan, exercises: cleanedExercises },
+      sessions: cleanedSessions,
+      lastPerformance: cleanedLastPerformance
+    }
+  };
+}
+
+/* ---------------------------------------------------
    Hard-Update ("Aktualisieren"-Banner)
    ---------------------------------------------------
    Zweck: ein neues Deploy übernehmen, OHNE dass der Nutzer in den Chrome-

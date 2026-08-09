@@ -27,10 +27,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Poppins:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Roboto:wght@400;500;700&family=Lato:wght@400;700&family=Open+Sans:wght@400;600;700&family=Nunito:wght@400;600;700&family=Raleway:wght@400;600;700&family=Work+Sans:wght@400;600;700&family=DM+Sans:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=Manrope:wght@400;600;700&family=Rubik:wght@400;600;700&family=Karla:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Merriweather:wght@400;700&family=Lora:wght@400;600;700&family=Oswald:wght@400;600;700&family=Anton&family=Archivo+Black&family=Comfortaa:wght@400;600;700&family=Quicksand:wght@400;600;700&family=Caveat:wght@400;600;700&family=Dancing+Script:wght@400;600;700&family=Pacifico&family=Fira+Code:wght@400;500;600&family=Roboto+Mono:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Special+Elite&display=swap" rel="stylesheet">
-<!-- Lokal statt von cdnjs geladen (js/vendor/, Version 2.5.1 unverändert): der SW cachte
-     Cross-Origin-Antworten bisher gar nicht (siehe sw.js), der PDF-Export war dadurch offline
-     tot. Als lokale Same-Origin-Datei läuft sie über den ganz normalen App-Shell-Precache. -->
-<script src="js/vendor/jspdf.umd.min.js" defer></script>
+<!-- jsPDF wird NICHT mehr hier statisch geladen (Version 2.5.1, lokal unter js/vendor/,
+     unverändert) — das kostete Parse-/Boot-Zeit bei JEDEM Start, obwohl PDF-Export ein
+     selten genutztes Feature ist. Die Datei bleibt Teil des App-Shell-Precache in sw.js
+     (Offline-Export funktioniert also weiterhin), wird aber erst beim ersten Export-Klick
+     per ensureJsPdfLoaded() (04-utils.js) dynamisch nachgeladen. -->
 
 <!-- Ausgelagertes CSS (ehemals <style>-Block, Zeilen 20–2004 der Originaldatei) -->
 <link rel="stylesheet" href="css/styles.css">

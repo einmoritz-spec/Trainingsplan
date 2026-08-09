@@ -751,6 +751,11 @@ function renderSettings(){
   const perfModeOn = !!plan.performanceMode;
   const perfThreshold = Number.isInteger(plan.performanceThreshold) && plan.performanceThreshold >= 2 ? plan.performanceThreshold : 3;
   const perfPercentage = currentPerfPercentage();
+  // RPE-Erfassung (siehe rpeEnabled() in 04-utils.js): Standardeinstellung ist AUS, da die
+  // Eingabe pro Satz einen zusätzlichen Schritt bedeutet, den nicht jeder möchte. Wer sie
+  // einschaltet, bekommt zusätzlich RPE-Felder in der aktiven Einheit UND eine RPE-bewusste
+  // Performancemodus-Logik (siehe checkPerformanceSuggestion(), 11a-active-session.js).
+  const rpeOn = rpeEnabled();
   const themeLabel = currentThemeMode() === 'light' ? 'Hell' : 'Dunkel';
   const darstellungBadge = `${themeLabel} · ${currentAccentColor().name}`;
   const numberModeLabels = { system: 'Normale Tastatur', wheel: 'Scroll-Rad', keypad: 'Ziffernblock', combo: 'Rad + Block' };
@@ -960,6 +965,16 @@ function renderSettings(){
           </div>
         </div>
       </div>
+    </div>
+
+    <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
+      <span class="mg-name">RPE-Erfassung</span>
+      <button class="toggle-switch ${rpeOn ? 'on' : ''}" id="rpeToggle" type="button" role="switch" aria-checked="${rpeOn}" aria-label="RPE-Erfassung pro Satz">
+        <span class="toggle-knob"></span>
+      </button>
+    </div>
+    <div class="history-empty" style="margin:8px 0 0; padding:8px 4px; text-align:left; background:none; border:none; display:${rpeOn ? 'none' : 'block'};">
+      <span style="font-size:11px; color:var(--muted);">Optionale Anstrengungs-Einschätzung (RPE, 6–10) pro Satz. Standardmäßig aus. Fließt in den Performancemodus mit ein: bei hoher RPE wird eine Steigerung seltener vorgeschlagen.</span>
     </div>
 
     <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
@@ -1190,6 +1205,13 @@ function renderSettings(){
     renderSettings();
   };
 
+  const rpeToggleEl = document.getElementById('rpeToggle');
+  if (rpeToggleEl) rpeToggleEl.onclick = async () => {
+    plan.rpeEnabled = !rpeEnabled();
+    await saveJSON('plan', plan);
+    renderSettings();
+  };
+
   const perfThresholdInputEl = document.getElementById('perfThresholdInput');
   if (perfThresholdInputEl){
     perfThresholdInputEl.onkeydown = (ev) => {
@@ -1258,14 +1280,24 @@ function renderSettings(){
     reader.onload = async () => {
       try{
         const data = JSON.parse(reader.result);
-        if (!data.plan || !Array.isArray(data.plan.exercises)){
-          alert('Diese Datei sieht nicht wie ein gültiger Export dieser App aus.');
+        const check = validateFullExportPayload(data);
+        if (!check.valid){
+          alert('Diese Datei sieht nicht wie ein gültiger Export dieser App aus:\n\n' + check.errors.join('\n'));
           return;
         }
-        if (!confirm('Import überschreibt deine aktuellen Übungen, Einheiten und den gespeicherten Fortschritt auf diesem Gerät. Fortfahren?')) return;
-        plan = data.plan;
-        sessions = Array.isArray(data.sessions) ? data.sessions : [];
-        lastPerformance = data.lastPerformance && typeof data.lastPerformance === 'object' ? data.lastPerformance : {};
+        let warnMsg = 'Import überschreibt deine aktuellen Übungen, Einheiten und den gespeicherten Fortschritt auf diesem Gerät.';
+        if (check.droppedExercises > 0 || check.droppedSessions > 0){
+          warnMsg += '\n\nHinweis: ' +
+            (check.droppedExercises > 0 ? `${check.droppedExercises} Übung(en) ` : '') +
+            (check.droppedExercises > 0 && check.droppedSessions > 0 ? 'und ' : '') +
+            (check.droppedSessions > 0 ? `${check.droppedSessions} Trainingseinheit(en) ` : '') +
+            'in der Datei waren unvollständig und werden übersprungen.';
+        }
+        warnMsg += '\n\nFortfahren?';
+        if (!confirm(warnMsg)) return;
+        plan = check.cleaned.plan;
+        sessions = check.cleaned.sessions;
+        lastPerformance = check.cleaned.lastPerformance;
         await saveJSON('plan', plan);
         await saveAllSessionsBulk(sessions);
         await saveJSON('lastPerformance', lastPerformance);

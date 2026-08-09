@@ -30,6 +30,14 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v9: Übungsbilder liegen nicht mehr als Base64 inline in js/data/app-data.js, sondern als
+ * eigene WebP-Dateien unter assets/exercises/ (js/vendor/jspdf.umd.min.js bleibt ebenfalls
+ * im Precache, wird in index.html aber nur noch bei Bedarf per <script> nachgeladen statt bei
+ * jedem Start geparst, siehe ensureJsPdfLoaded() in 04-utils.js) — app-data.js schrumpft
+ * dadurch von ~690 KB auf ~130 KB, was den allerersten Parse/Boot spürbar beschleunigt. Die
+ * neuen Bild-Dateien werden unten in der Precache-Liste geführt, damit sie wie bisher auch
+ * offline verfügbar sind (zusätzlich ohnehin cache-first dank .webp in
+ * CACHE_FIRST_EXTENSIONS).
  * v8: Versionsbump (Wochen-Bucket-Fix Monatsbericht/-übersicht: 05-calendar.js).
  * v7: Versionsbump (Zurück-Stack-Fix beim Farbwähler: 09a/09b/10).
  * v6: Versionsbump für das "Aktualisieren"-Banner (index.html, 04-utils.js). Dieser
@@ -42,7 +50,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v8';
+const CACHE_NAME = 'trainingsplan-cache-v9';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
@@ -76,7 +84,49 @@ const APP_SHELL = [
   './assets/icons/apple-touch-icon.png',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
-  './assets/icons/icon-512-maskable.png'
+  './assets/icons/icon-512-maskable.png',
+  './assets/exercises/e1.webp',
+  './assets/exercises/e2.webp',
+  './assets/exercises/e3.webp',
+  './assets/exercises/e4.webp',
+  './assets/exercises/e5.webp',
+  './assets/exercises/e6.webp',
+  './assets/exercises/e7.webp',
+  './assets/exercises/e8.webp',
+  './assets/exercises/e9.webp',
+  './assets/exercises/e10.webp',
+  './assets/exercises/e11.webp',
+  './assets/exercises/e12.webp',
+  './assets/exercises/e13.webp',
+  './assets/exercises/e14.webp',
+  './assets/exercises/e15.webp',
+  './assets/exercises/e16.webp',
+  './assets/exercises/e17.webp',
+  './assets/exercises/e18.webp',
+  './assets/exercises/e19.webp',
+  './assets/exercises/e20.webp',
+  './assets/exercises/e21.webp',
+  './assets/exercises/e26.webp',
+  './assets/exercises/e28.webp',
+  './assets/exercises/e30.webp',
+  './assets/exercises/e35.webp',
+  './assets/exercises/e38.webp',
+  './assets/exercises/e41.webp',
+  './assets/exercises/e45.webp',
+  './assets/exercises/e47.webp',
+  './assets/exercises/e52.webp',
+  './assets/exercises/e53.webp',
+  './assets/exercises/e54.webp',
+  './assets/exercises/e60.webp',
+  './assets/exercises/e61.webp',
+  './assets/exercises/e62.webp',
+  './assets/exercises/e66.webp',
+  './assets/exercises/e69.webp',
+  './assets/exercises/e71.webp',
+  './assets/exercises/e72.webp',
+  './assets/exercises/e73.webp',
+  './assets/exercises/e76.webp',
+  './assets/exercises/e77.webp',
 ];
 
 // Google Fonts: eigene Domains für das CSS (googleapis.com, liefert je nach
