@@ -30,13 +30,17 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v6: Versionsbump für das "Aktualisieren"-Banner (index.html, 04-utils.js). Dieser
+ * Wert MUSS bei jedem Deploy hochgezählt werden — der Browser erkennt einen neuen
+ * Service Worker ausschliesslich an einer byteweisen Änderung von sw.js, und ohne
+ * neuen Worker erscheint das Update-Banner in der App nie.
  * v5: 08-stats-progress.js, 09-start-select.js und 11-active-session.js waren
  * an der Größengrenze für vollständige Datei-Downloads und wurden je in drei
  * Teildateien gesplittet (08a/08b/08c, 09a/09b/09c, 11a/11b/11c) — inhaltlich
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v5';
+const CACHE_NAME = 'trainingsplan-cache-v6';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [

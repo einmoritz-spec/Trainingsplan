@@ -49,18 +49,29 @@
 </div>
 
 <!--
-  NEU: Hinweis-Leiste, sobald ein bereits im Hintergrund installierter neuer Service Worker
-  die Kontrolle übernommen hat (siehe Registrierungs-Skript unten). skipWaiting()/
-  clients.claim() in sw.js sorgen dafür, dass das sehr schnell nach einem Deploy passiert —
-  der bereits im Tab laufende JS/CSS-Code ist dann aber trotzdem noch der ALTE Stand, nur ein
-  echtes Neuladen holt die neuen Dateien. Ohne diesen Hinweis könnten alter JS-Code und neuer,
-  vom SW ausgelieferter CSS/HTML-Stand unbemerkt nebeneinander laufen. Bewusst kein
-  automatischer Reload: würde z. B. mitten in einem laufenden Training den Bildschirm
-  wegreißen, siehe 11a-active-session.js.
+  Hinweis-Leiste, sobald ein neuer Service Worker im Hintergrund installiert wurde.
+  "Aktualisieren" startet runHardUpdate() (04-utils.js): Backup-Download, Service Worker
+  abmelden, Cache Storage leeren, App-Shell am HTTP-Cache vorbei neu ziehen, neu laden.
+  Ein reines location.reload() genügt hier NICHT — der Browser-HTTP-Cache (GitHub Pages
+  liefert max-age-Header) würde JS/CSS sonst weiterhin aus dem alten Stand bedienen.
+  Bewusst kein automatischer Ablauf: würde sonst mitten in einem laufenden Training den
+  Bildschirm wegreißen, siehe 11a-active-session.js.
 -->
 <div class="update-toast" id="updateToast" style="display:none">
   <span class="update-toast-text">Neue Version verfügbar.</span>
-  <button class="update-toast-btn" id="updateToastBtn" type="button">Neu laden</button>
+  <button class="update-toast-btn" id="updateToastBtn" type="button">Aktualisieren</button>
+</div>
+
+<!--
+  Zweites Banner, das NACH einem Hard-Update einmalig erscheint (siehe
+  showPostHardUpdateBanner(), 04-utils.js). Führt in einem Tap zum Import der Datei, die
+  beim Update automatisch heruntergeladen wurde. Teilt sich bewusst die .update-toast-
+  Klassen mit dem Banner darüber — kein eigener CSS-Block nötig.
+-->
+<div class="update-toast" id="restoreToast" style="display:none">
+  <span class="update-toast-text">Update fertig · Backup wurde gesichert.</span>
+  <button class="update-toast-btn" id="restoreToastBtn" type="button">Importieren</button>
+  <button class="update-toast-btn" id="restoreToastClose" type="button" aria-label="Schließen">✕</button>
 </div>
 
 <!--
@@ -94,35 +105,48 @@
 <script src="js/14-app-init.js"></script>
 
 <!--
-  NEU (nicht im Original enthalten): Service-Worker-Registrierung.
-  Die App verlinkte bisher nur ein Manifest, hatte aber keinen Service Worker,
-  war also installierbar, aber nicht offlinefähig. sw.js ergänzt das.
-  Registrierung erfolgt mit relativem Pfad ("sw.js", nicht "/sw.js"),
-  damit es auch unter einem GitHub-Pages-Projektpfad (z. B. /reponame/) funktioniert.
+  Service-Worker-Registrierung mit relativem Pfad ("sw.js", nicht "/sw.js"), damit es auch
+  unter einem GitHub-Pages-Projektpfad (z. B. /reponame/) funktioniert.
 
-  Zusätzlich: Update-Erkennung über den "updatefound"-Event der Registrierung. Wichtig ist
-  die hadControllerBefore-Prüfung — ohne sie würde auch der ganz normale ERSTBESUCH (bei dem
-  ja ebenfalls ein Service Worker neu installiert wird) fälschlich als "Update verfügbar"
-  gemeldet, obwohl es beim ersten Laden nichts Neues zu holen gibt.
+  Update-Erkennung: hängt an "updatefound" PLUS einer Prüfung auf registration.waiting
+  (ein bereits installierter, wartender Worker feuert "updatefound" nicht mehr — ohne diese
+  Prüfung bliebe das Banner nach einem Tab-Wechsel unsichtbar). Zusätzlich alle 30 Minuten
+  und bei jedem Zurückholen in den Vordergrund ein registration.update().
+
+  WICHTIG: Der Browser erkennt ein Update nur, wenn sich sw.js selbst BYTEWEISE ändert.
+  Deshalb muss CACHE_NAME in sw.js bei jedem Deploy hochgezählt werden — sonst erscheint
+  das Banner nie, egal wie viel sich an js/ oder css/ geändert hat.
+
+  hadControllerBefore verhindert, dass der ganz normale Erstbesuch (bei dem ebenfalls ein
+  Worker neu installiert wird) fälschlich als "Update verfügbar" gemeldet wird.
 -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     const hadControllerBefore = !!navigator.serviceWorker.controller;
 
+    function showUpdateToast() {
+      const toast = document.getElementById('updateToast');
+      const btn = document.getElementById('updateToastBtn');
+      if (!toast || !btn || toast.style.display === 'flex') return;
+      toast.style.display = 'flex';
+      btn.onclick = () => runHardUpdate();
+    }
+
     navigator.serviceWorker.register('sw.js').then((registration) => {
+      if (registration.waiting && hadControllerBefore) showUpdateToast();
+
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (!newWorker) return;
         newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && hadControllerBefore) {
-            const toast = document.getElementById('updateToast');
-            const btn = document.getElementById('updateToastBtn');
-            if (!toast || !btn) return;
-            toast.style.display = 'flex';
-            btn.onclick = () => location.reload();
-          }
+          if (newWorker.state === 'installed' && hadControllerBefore) showUpdateToast();
         });
+      });
+
+      setInterval(() => registration.update().catch(() => {}), 30 * 60 * 1000);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) registration.update().catch(() => {});
       });
     }).catch((err) => {
       console.error('Service Worker Registrierung fehlgeschlagen:', err);
