@@ -70,3 +70,119 @@ function logBodyWeight(weight, dateISO){
   plan.bodyWeightLog.sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
+/* ---------------------------------------------------
+   Hard-Update ("Aktualisieren"-Banner)
+   ---------------------------------------------------
+   Zweck: ein neues Deploy übernehmen, OHNE dass der Nutzer in den Chrome-
+   Einstellungen manuell "Website-Daten löschen" muss (was nebenbei auch
+   IndexedDB = alle Trainingsdaten mitlöschen würde).
+
+   Ablauf von runHardUpdate():
+     1. Backup: kompletter Datenexport wird automatisch als JSON heruntergeladen,
+        BEVOR irgendetwas angefasst wird. Reine Sicherheitsnetz-Maßnahme.
+     2. Service Worker abmelden (alle Registrierungen dieser Origin).
+     3. Cache Storage komplett leeren (App-Shell- UND Font-Cache).
+     4. HTTP-Cache des Browsers umgehen: jede App-Shell-Datei einmal mit
+        {cache:'reload'} nachladen. Das ist der entscheidende Schritt — ein
+        location.reload() allein würde JS/CSS je nach Cache-Control-Header von
+        GitHub Pages (max-age) weiterhin aus dem Browser-Cache bedienen, obwohl
+        der Service Worker längst weg ist.
+     5. Neu laden. Beim Neustart registriert index.html den SW frisch, der zieht
+        die App-Shell erneut vom Netz.
+
+   Bewusst NICHT gelöscht: IndexedDB/localStorage (Trainingsdaten). Ein Reset
+   wäre für ein Code-Update funktionslos; wer trotzdem auf den exportierten
+   Stand zurück will, nutzt den Import-Button im Banner nach dem Neustart, der
+   die Daten ohnehin komplett überschreibt.
+--------------------------------------------------- */
+
+// Marker überlebt den Reload bewusst in localStorage: Cache Storage ist zu diesem
+// Zeitpunkt gelöscht, und die IndexedDB-Kaskade aus 01-storage.js ist asynchron und
+// beim frühen Banner-Check noch nicht zwingend bereit.
+const HARD_UPDATE_MARKER = 'eisenprotokoll:hardUpdatePending';
+
+// Vollständiger Datenexport als Download. Inhaltlich identisch zum "Exportieren"-Button
+// in den Einstellungen (siehe renderSettings(), 10-plan-settings.js), hier aber ohne
+// UI-Abhängigkeit, damit runHardUpdate() ihn direkt aufrufen kann.
+function exportAllDataToFile(filePrefix){
+  const nowISO = new Date().toISOString();
+  const payload = { version: 1, exportedAt: nowISO, plan, sessions, lastPerformance };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filePrefix || 'trainingsplan-export'}-${nowISO.slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return nowISO;
+}
+
+// Liste der eigenen App-Shell-Dateien, direkt aus dem DOM abgeleitet statt als zweite,
+// pflegebedürftige Kopie der APP_SHELL-Liste aus sw.js. Cross-Origin-Ressourcen (Google
+// Fonts) bleiben außen vor — die ändern sich nicht und ein {cache:'reload'} darauf würde
+// bei fehlgeschlagenem CORS nur unnötig Fehler produzieren.
+function appShellUrlsFromDocument(){
+  const urls = ['./', 'index.html', 'manifest.json'];
+  document.querySelectorAll('script[src]').forEach(el => {
+    const src = el.getAttribute('src');
+    if (src && !/^https?:/i.test(src)) urls.push(src);
+  });
+  document.querySelectorAll('link[rel="stylesheet"]').forEach(el => {
+    const href = el.getAttribute('href');
+    if (href && !/^https?:/i.test(href)) urls.push(href);
+  });
+  return Array.from(new Set(urls));
+}
+
+async function runHardUpdate(){
+  const btn = document.getElementById('updateToastBtn');
+  if (btn){ btn.disabled = true; btn.textContent = 'Lädt…'; }
+  try{
+    try{ exportAllDataToFile('trainingsplan-backup-vor-update'); }catch(e){ /* Download blockiert: Update trotzdem durchziehen, Daten bleiben ja unangetastet */ }
+    try{ localStorage.setItem(HARD_UPDATE_MARKER, '1'); }catch(e){ /* Banner nach dem Neustart entfällt dann, Update selbst läuft normal */ }
+
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister().catch(() => {})));
+    }
+    if (window.caches && caches.keys){
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k).catch(() => {})));
+    }
+    await Promise.all(appShellUrlsFromDocument().map(u =>
+      fetch(u, { cache: 'reload' }).catch(() => {})
+    ));
+  }catch(e){
+    // Auch bei einem Fehler in einem der Schritte neu laden: schlimmstenfalls landet der
+    // Nutzer auf dem alten Stand und kann es erneut versuchen, statt auf einem toten Banner
+    // sitzen zu bleiben.
+  }
+  location.reload();
+}
+
+// Nach dem Neustart: kurzes Banner mit direktem Weg zum Import der eben gesicherten Datei.
+// Wird einmalig gezeigt (Marker wird sofort entfernt) und nutzt dieselbe Import-Logik wie die
+// Einstellungen — der Button springt dorthin und öffnet direkt den Dateiwähler, analog zur
+// Backup-Erinnerung auf der Startseite (siehe renderHome(), 07-home.js).
+function showPostHardUpdateBanner(){
+  let pending = null;
+  try{ pending = localStorage.getItem(HARD_UPDATE_MARKER); }catch(e){ return; }
+  if (pending !== '1') return;
+  try{ localStorage.removeItem(HARD_UPDATE_MARKER); }catch(e){ /* egal, Banner erscheint dann einmal zu viel */ }
+
+  const toast = document.getElementById('restoreToast');
+  const importBtn = document.getElementById('restoreToastBtn');
+  const closeBtn = document.getElementById('restoreToastClose');
+  if (!toast || !importBtn || !closeBtn) return;
+
+  toast.style.display = 'flex';
+  importBtn.onclick = () => {
+    toast.style.display = 'none';
+    goSettings();
+    const file = document.getElementById('importFile');
+    if (file) file.click();
+  };
+  closeBtn.onclick = () => { toast.style.display = 'none'; };
+}

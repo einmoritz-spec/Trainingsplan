@@ -31,23 +31,10 @@ document.addEventListener('visibilitychange', () => {
 
 wireAlternativeNumberInputs();
 wireViewportAwareOverlays();
-
-// Manifest-Shortcut "Training starten" (siehe manifest.json → shortcuts) landet über
-// start_url "./?shortcut=start" hier. Nach dem normalen init() (das bei einer bereits
-// aktiven Session ohnehin direkt zu "active" springt) zusätzlich zur Auswahlseite
-// navigieren — aber nur, wenn init() nicht schon selbst eine aktive Session gerendert hat,
-// sonst würde eine laufende Session durch den Shortcut überschrieben. Der Query-Parameter
-// wird danach per replaceState aus der URL entfernt, damit ein simples Neuladen der Seite
-// nicht erneut auf die Auswahlseite springt statt auf der zuletzt offenen Seite zu bleiben.
-function handleStartShortcut(){
-  const params = new URLSearchParams(location.search);
-  if (params.get('shortcut') !== 'start') return;
-  history.replaceState(history.state, '', location.pathname);
-  if (!active) goStartSelect(true);
-}
-
 try{
-  init().then(handleStartShortcut).catch(showFatalError);
+  // Das Import-Banner erst NACH init() einblenden: sein Button ruft goSettings() auf, was
+  // ohne geladenen plan/sessions-State ins Leere liefe.
+  init().then(showPostHardUpdateBanner).catch(showFatalError);
 }catch(err){
   showFatalError(err);
 }
