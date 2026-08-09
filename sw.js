@@ -30,6 +30,7 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v7: Versionsbump (Zurück-Stack-Fix beim Farbwähler: 09a/09b/10).
  * v6: Versionsbump für das "Aktualisieren"-Banner (index.html, 04-utils.js). Dieser
  * Wert MUSS bei jedem Deploy hochgezählt werden — der Browser erkennt einen neuen
  * Service Worker ausschliesslich an einer byteweisen Änderung von sw.js, und ohne
@@ -40,7 +41,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v6';
+const CACHE_NAME = 'trainingsplan-cache-v7';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
