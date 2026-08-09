@@ -151,9 +151,21 @@ function monthOverviewBlockHTML(year, month){
 
   let subtitle = `${monthCount} Workout${monthCount === 1 ? '' : 's'}`;
   if (monthCount > 0){
-    const weeksInMonth = daysInMonth / 7;
-    const perWeek = Math.max(1, Math.round(monthCount / weeksInMonth));
-    subtitle += ` · ${perWeek} pro Woche`;
+    // BUGFIX: "X pro Woche" wurde bisher über den GESAMTEN Monat gemittelt (Tage im Monat / 7),
+    // auch über Wochen, die zum Zeitpunkt der Anzeige noch gar nicht stattgefunden haben. Im
+    // laufenden Monat drückte das den Wert künstlich: 5 Einheiten, davon 4 in der ersten
+    // (bereits abgeschlossenen) Woche, ergaben trotzdem nur "1 pro Woche", weil durch alle
+    // 4–5 Wochen des kompletten Monats geteilt wurde. Jetzt wird nur über WOCHEN gemittelt, die
+    // bereits begonnen haben (siehe monthAssignedWeeks/elapsedWeeks unten) — bei einem
+    // vollständig vergangenen Monat sind das ohnehin alle zugeordneten Wochen, am Verhalten dort
+    // ändert sich nichts.
+    const now = new Date();
+    const elapsedWeeks = monthAssignedWeeks(year, month).filter(w => w.start <= now);
+    if (elapsedWeeks.length){
+      const elapsedSum = elapsedWeeks.reduce((sum, w) => sum + sessionsInWeekCount(w), 0);
+      const perWeek = Math.max(1, Math.round(elapsedSum / elapsedWeeks.length));
+      subtitle += ` · ${perWeek} pro Woche`;
+    }
   }
 
   // Warm-up-Sätze (set.warmup=true, siehe Trainingstools-Popup) und Deload-Einheiten
@@ -426,23 +438,72 @@ function renderMonthOverview(){
    Steigerungen des Monats (höchster Prozentsatz ggü. der jeweils vorherigen Einheit
    derselben Übung, gemessen an Gewicht Max bzw. Haltezeit Max bei Zeit-Übungen).
 --------------------------------------------------- */
-// 4 Wochen-"Buckets" nach Kalendertag (1–7 / 8–14 / 15–21 / 22–Monatsende) für einen Monat —
-// gezählt wird pro Bucket die Anzahl EINHEITEN (Sessions), damit z. B. 3 Einheiten am selben
-// Tag auch als 3 gezählt werden statt fälschlich als 1 Trainingstag. Wiederverwendet vom
-// Monatsbericht (computeMonthReportData) UND vom "Einheiten pro Woche"-Widget im Fortschritt-
-// Screen, wenn dort die Periode "Monat" gewählt ist.
-function monthWeeklyTrainingPoints(year, month){
-  const monthSessions = sessions.filter(s => {
+// Montag 00:00 der Kalenderwoche, die "date" enthält.
+function mondayWeekStart(date){
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dow = (d.getDay() + 6) % 7; // 0 = Montag ... 6 = Sonntag
+  d.setDate(d.getDate() - dow);
+  return d;
+}
+
+// BUGFIX: Die Wochen eines Monats wurden bisher naiv nach Kalendertag in 4 feste Buckets
+// (1–7 / 8–14 / 15–21 / 22–Monatsende) eingeteilt. Das ignoriert komplett, an welchem
+// Wochentag der Monat beginnt: beginnt er z. B. an einem Samstag, liegen die ersten beiden
+// Tage eigentlich noch in der letzten ECHTEN Kalenderwoche des Vormonats, wurden aber trotzdem
+// als eigenes "W1" gezählt — während die tatsächlich erste volle Woche des Monats fälschlich
+// mit den Vormonatstagen vermischt in "W1" auftauchte, statt für sich zu stehen.
+//
+// Jetzt werden echte Montag-Sonntag-Kalenderwochen verwendet und jede Woche wird MEHRHEITLICH
+// zugeordnet: liegen 4 oder mehr ihrer 7 Tage in (year, month), zählt die komplette Woche für
+// diesen Monat — auch die Tage, die eigentlich noch in den Nachbarmonat hineinreichen. Eine
+// Woche wie "Fr. 31. – So. 6." zählt damit komplett als W1 des FOLGEMONATS (6 von 7 Tagen
+// liegen dort), nicht mehr als Rest-Woche des laufenden Monats. Ergibt je nach Wochentag des
+// Monatsbeginns 4 oder 5 zugeordnete Wochen statt starr 4.
+function monthAssignedWeeks(year, month){
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const weeks = [];
+  let weekStart = mondayWeekStart(firstDay);
+  while (weekStart <= lastDay){
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    let daysInThisMonth = 0;
+    for (let i = 0; i < 7; i++){
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + i);
+      if (d.getFullYear() === year && d.getMonth() === month) daysInThisMonth++;
+    }
+    if (daysInThisMonth >= 4){
+      weeks.push({ start: weekStart, end: weekEnd });
+    }
+    weekStart = new Date(weekStart);
+    weekStart.setDate(weekStart.getDate() + 7);
+  }
+  return weeks;
+}
+
+// Anzahl Einheiten (Sessions), deren Datum in die Montag-Sonntag-Spanne der übergebenen Woche
+// fällt — unabhängig davon, in welchem Kalendermonat der einzelne Tag liegt (siehe
+// monthAssignedWeeks oben: eine Woche kann bewusst über den Monatswechsel hinausragen).
+function sessionsInWeekCount(week){
+  const weekEndOfDay = new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate(), 23, 59, 59, 999);
+  return sessions.filter(s => {
     const sd = new Date(s.date);
-    return sd.getFullYear() === year && sd.getMonth() === month;
-  });
-  const weekBuckets = [0, 0, 0, 0];
-  monthSessions.forEach(s => {
-    const day = new Date(s.date).getDate();
-    const bucket = Math.min(3, Math.floor((day - 1) / 7));
-    weekBuckets[bucket]++;
-  });
-  return weekBuckets.map((v, i) => ({ value: v, label: `W${i + 1}` }));
+    return sd >= week.start && sd <= weekEndOfDay;
+  }).length;
+}
+
+// Wochen-"Buckets" für einen Monat, jetzt anhand echter Kalenderwochen (siehe
+// monthAssignedWeeks) statt starrer Tag-1–7/8–14/…-Einteilung. Gezählt wird pro Bucket die
+// Anzahl EINHEITEN (Sessions), damit z. B. 3 Einheiten am selben Tag auch als 3 gezählt werden
+// statt fälschlich als 1 Trainingstag. Wiederverwendet vom Monatsbericht
+// (computeMonthReportData) UND vom "Einheiten pro Woche"-Widget im Fortschritt-Screen, wenn
+// dort die Periode "Monat" gewählt ist.
+function monthWeeklyTrainingPoints(year, month){
+  return monthAssignedWeeks(year, month).map((w, i) => ({
+    value: sessionsInWeekCount(w),
+    label: `W${i + 1}`
+  }));
 }
 
 function computeMonthReportData(year, month){
