@@ -150,6 +150,12 @@ const RPE_STEP = 0.5;
 // Ab diesem Wert gilt ein Satz als "hart" — wird von checkPerformanceSuggestion() genutzt, um
 // bei bereits hoher Anstrengung KEINE weitere Steigerung vorzuschlagen (siehe dort).
 const RPE_HIGH_THRESHOLD = 9;
+// Neutralwert (Mitte des RPE_MIN–RPE_MAX-Bereichs): wird verwendet, um Übungen OHNE
+// eingetragenen RPE-Wert bei der Priorisierung im Performancemodus-Kontingent (siehe
+// computePerfSuggestionQuota(), 11a-active-session.js) weder zu bevorzugen noch zu
+// benachteiligen — sie landen weder vorne (wie ein niedriger RPE-Wert) noch hinten (wie ein
+// hoher), sondern schlicht in der Mitte der nach RPE sortierten Rangfolge.
+const RPE_NEUTRAL = (RPE_MIN + RPE_MAX) / 2;
 function fmtRpe(rpe){
   if (rpe === null || rpe === undefined || isNaN(rpe)) return '';
   return Number.isInteger(rpe) ? String(rpe) : rpe.toFixed(1);

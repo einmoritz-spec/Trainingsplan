@@ -399,6 +399,15 @@ let perfSuggestion = null;
 // wird einmal pro aktiver Einheit berechnet und für deren Dauer zwischengespeichert
 // (sessionKey = active.startedAt, damit ein Wechsel auf eine andere Einheit sie neu bildet).
 let perfSuggestionQuota = null;
+// Liefert den zuletzt geloggten RPE-Wert einer Übung an einer bestimmten Satz-Position, oder
+// null, wenn keiner eingetragen wurde (z. B. RPE-Erfassung war zu dem Zeitpunkt noch aus,
+// oder das Feld wurde übersprungen). Nutzt dieselbe Historie wie checkPerformanceSuggestion().
+function lastLoggedRpeFor(exerciseId, si){
+  const history = lastPerformance[exerciseId];
+  const lastSet = Array.isArray(history) && Array.isArray(history[0]) ? history[0][si] : null;
+  return (lastSet && typeof lastSet.rpe === 'number') ? lastSet.rpe : null;
+}
+
 function computePerfSuggestionQuota(){
   const sessionKey = active && active.startedAt;
   if (perfSuggestionQuota && perfSuggestionQuota.sessionKey === sessionKey) return perfSuggestionQuota.allowedIds;
@@ -421,7 +430,25 @@ function computePerfSuggestionQuota(){
     });
     cap = Math.max(1, Math.round(active.entries.length * (currentPerfPercentage() / 100)));
     const lastShown = plan.perfSuggestionLastShown || {};
-    eligible.sort((a, b) => (lastShown[a] || '').localeCompare(lastShown[b] || ''));
+    // Sortierung des Kontingents: bei aktiver RPE-Erfassung (siehe rpeEnabled(), 04-utils.js)
+    // rücken Übungen mit NIEDRIGEM zuletzt geloggtem RPE (= gefühlt noch leicht, hat Luft nach
+    // oben) an die vorderste Stelle der Warteschlange — sie bekommen das begrenzte Kontingent
+    // also bevorzugt zugeteilt. Übungen OHNE eingetragenen RPE-Wert werden bewusst neutral
+    // behandelt (RPE_NEUTRAL, die Mitte des Wertebereichs): sie werden dadurch weder
+    // bevorzugt noch benachteiligt, sondern bleiben normal im Rennen ums Kontingent — nur wer
+    // tatsächlich einen niedrigen RPE-Wert eingetragen hat, springt nach vorn. Innerhalb
+    // gleicher RPE-Priorität (inkl. "alle neutral", wenn RPE aus ist oder für keine der
+    // Übungen ein Wert vorliegt) entscheidet weiterhin die bisherige Fairness-Rotation nach
+    // zuletzt gezeigtem Vorschlag (älteste/nie gezeigte zuerst).
+    const rpeSortEnabled = rpeEnabled();
+    eligible.sort((a, b) => {
+      if (rpeSortEnabled){
+        const rpeA = lastLoggedRpeFor(a, 0) ?? RPE_NEUTRAL;
+        const rpeB = lastLoggedRpeFor(b, 0) ?? RPE_NEUTRAL;
+        if (rpeA !== rpeB) return rpeA - rpeB;
+      }
+      return (lastShown[a] || '').localeCompare(lastShown[b] || '');
+    });
     eligible.slice(0, cap).forEach(id => allowedIds.add(id));
   }
   perfSuggestionQuota = { sessionKey, allowedIds, eligibleSorted: eligible, nextPromoteIndex: cap };
