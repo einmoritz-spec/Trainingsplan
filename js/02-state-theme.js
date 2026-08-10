@@ -382,6 +382,27 @@ function applyTheme(){
     root.removeProperty('--border');
   }
   applyFontFamily();
+  syncStatusBarColor(bgColor);
+}
+
+// Android/Chrome färben die Status- und Navigationsleiste (die "Balken oben und unten", siehe
+// Screenshot-Feedback) über die <meta name="theme-color">-Tags in index.html — die standen dort
+// bisher FEST auf #121316/#f5f4f1 und reagierten nur auf die OS-Einstellung
+// (prefers-color-scheme), nicht auf das tatsächlich in der App gewählte Theme. Wählt man z. B.
+// eine eigene Hintergrundfarbe, oder schaltet Light/Dark manuell um (unabhängig vom
+// OS-Farbschema), blieben die Balken dadurch immer im ursprünglichen dunklen Grauton hängen,
+// während die App selbst (html,body{ background: var(--bg) }) längst die richtige Farbe zeigt.
+//
+// Fix: beide Meta-Tags bekommen hier IMMER denselben, tatsächlich aktiven --bg-Wert gesetzt —
+// unabhängig davon, welches der beiden der Browser gerade per media-query "auswählen" würde.
+// Da beide auf denselben Wert zeigen, spielt die Auswahl keine Rolle mehr, die Balken matchen
+// die App-Hintergrundfarbe immer exakt, auch bei individueller Wahl oder manuellem Umschalten.
+function syncStatusBarColor(resolvedBgColor){
+  const hex = (resolvedBgColor && resolvedBgColor.hex) || (currentThemeMode() === 'light' ? '#f5f4f1' : '#121316');
+  const dark = document.getElementById('metaThemeColorDark');
+  const light = document.getElementById('metaThemeColorLight');
+  if (dark) dark.setAttribute('content', hex);
+  if (light) light.setAttribute('content', hex);
 }
 
 async function init(){
