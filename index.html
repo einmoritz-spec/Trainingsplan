@@ -8,8 +8,13 @@
 <!-- PWA-Manifest (echte Datei statt Data-URI) -->
 <link rel="manifest" href="manifest.json">
 
-<meta name="theme-color" content="#121316" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#f5f4f1" media="(prefers-color-scheme: light)">
+<!-- Statischer Erst-Wert für den Moment vor dem ersten JS-Paint (bestmögliche Annäherung
+     anhand der OS-Einstellung). Sobald applyTheme() läuft (02-state-theme.js), wird BEIDE
+     Tags unten per JS auf die tatsächlich in der App aktive Hintergrundfarbe gesetzt — das
+     deckt sowohl eine eigene Hintergrundfarbe als auch einen manuellen Light/Dark-Wechsel ab,
+     der vom OS-Farbschema abweicht (siehe applyTheme() für die Begründung). -->
+<meta name="theme-color" id="metaThemeColorDark" content="#121316" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" id="metaThemeColorLight" content="#f5f4f1" media="(prefers-color-scheme: light)">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
