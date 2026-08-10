@@ -27,6 +27,19 @@ html[data-theme="light"]{
 
 *{ box-sizing: border-box; }
 html,body{ margin:0; padding:0; background: var(--bg); }
+/* Die untere Android-System-/Gesten-Leiste färbt sich bei Chrome (Tab wie auch installierte
+   PWA) NICHT primär aus dem theme-color-Meta-Tag ein, sondern Chrome samplet dafür in der
+   Praxis die tatsächlich gerenderte Hintergrundfarbe ganz unten im Dokument. min-height:100vh
+   allein reicht dafür auf Android nicht zuverlässig — 100vh entspricht der potenziell GRÖSSTEN
+   Viewport-Höhe (als wäre jegliche System-UI ausgeblendet) und kann dadurch, je nach Gerät/
+   Gesten-Navigation, knapp VOR dem wirklich sichtbaren unteren Rand enden. Der Bereich
+   darunter bleibt dann von unserem eigenen Hintergrund ungemalt, und Chrome zeigt dort seine
+   eigene Default-/System-Farbe (das war vermutlich der blaue Streifen im Nutzer-Screenshot).
+   100dvh (dynamic viewport height) misst die WIRKLICH sichtbare Höhe inklusive System-UI-
+   Zustand und schließt diese Lücke — als reine Ergänzungszeile nach 100vh, damit ältere
+   Browser ohne dvh-Unterstützung weiterhin den vh-Wert verwenden (Standard-CSS-Fallback:
+   eine nicht verstandene Zeile wird von älteren Engines schlicht ignoriert). */
+html{ min-height: 100vh; min-height: 100dvh; }
 /* Design → Schriftart: sobald eine eigene Schriftart gewählt ist (siehe applyFontFamily()),
    setzt JS die Klasse "font-override" auf <html> — diese Regel erzwingt die gewählte Schrift
    dann WIRKLICH überall, auch dort, wo einzelne Elemente sonst fest JetBrains Mono (Zahlen)
@@ -42,6 +55,7 @@ body{
   color: var(--text);
   font-family: var(--font-app, 'Inter', system-ui, sans-serif);
   min-height: 100vh;
+  min-height: 100dvh;
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
   -webkit-tap-highlight-color: transparent;
