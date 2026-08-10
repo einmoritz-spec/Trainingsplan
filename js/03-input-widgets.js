@@ -55,7 +55,13 @@ function scrollWheelRangeFor(input){
   }
   else if (/reps|sets/i.test(field)){ min = attrMin ?? 1; max = 100; step = 1; }
   else if (/seconds/i.test(field)){ min = attrMin ?? 1; max = 600; step = 1; }
-  else if (/rpe/i.test(field)){ min = RPE_MIN; max = RPE_MAX; step = RPE_STEP; }
+  else if (/rpe/i.test(field)){
+    // Festgelegte Auswahl 6-10 in ganzen Schritten fürs Rad (kein 0,5er-Feintuning wie
+    // sonst per RPE_STEP für Tastatur/Validierung) — RPE wird für dieses Feld ohnehin nie
+    // per Tastatur eingegeben (siehe isRpeField()/wireAlternativeNumberInputs()), das Rad
+    // ist die einzige Eingabemethode und soll darum bewusst grob/schnell wählbar bleiben.
+    min = RPE_MIN; max = RPE_MAX; step = 1;
+  }
 
   return { min, max, step };
 }
@@ -534,11 +540,21 @@ function isSystemKeyboardOnlyField(input){
   return !!input && (input.id === 'bodyWeightInput' || input.id === 'bodyWeightPromptInput' || input.id === 'customRestSeconds');
 }
 
+// RPE-Felder (aktives Training, .rpe-input/data-field="rpe") bekommen IMMER das Scroll-Rad,
+// unabhängig vom global gewählten numberInputMode() (auch bei 'system' oder 'keypad') — RPE
+// ist eine grobe 6-10-Einschätzung, dafür ist das Rad schneller/passender als Tippen. Kommt
+// aktuell nur im aktiven Training vor (nicht in den per isSystemKeyboardOnlyField() bewusst
+// ausgenommenen Nachtrag-/Bearbeiten-Popups), daher unproblematisch mit deren History-Logik.
+function isRpeField(input){
+  return !!input && (input.dataset.field === 'rpe' || input.classList.contains('rpe-input'));
+}
+
 function wireAlternativeNumberInputs(){
   document.addEventListener('focusin', (ev) => {
     const input = ev.target;
     if (!input || input.tagName !== 'INPUT' || input.type !== 'number') return;
     if (input.closest('#scrollWheelOverlay') || input.closest('#keypadOverlay')) return;
+    if (isRpeField(input)){ openScrollWheelForInput(input); return; }
     if (isSystemKeyboardOnlyField(input)) return;
     const mode = numberInputMode();
     if (mode === 'wheel' || mode === 'combo') openScrollWheelForInput(input);
@@ -550,6 +566,11 @@ function wireAlternativeNumberInputs(){
   document.addEventListener('touchstart', (ev) => {
     const input = ev.target;
     if (!input || input.tagName !== 'INPUT' || input.type !== 'number') return;
+    if (isRpeField(input)){
+      input.setAttribute('readonly', 'readonly');
+      setTimeout(() => input.removeAttribute('readonly'), 400);
+      return;
+    }
     if (numberInputMode() === 'system' || isSystemKeyboardOnlyField(input)) return;
     input.setAttribute('readonly', 'readonly');
     setTimeout(() => input.removeAttribute('readonly'), 400);
