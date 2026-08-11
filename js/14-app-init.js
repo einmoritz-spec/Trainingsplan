@@ -74,14 +74,52 @@ window.addEventListener('unhandledrejection', (e) => { handleGlobalError(e.reaso
 // werden kann und die UI (Zeit-Anzeige, Ring) sonst kurzzeitig einen veralteten Stand zeigt.
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && restState) tickRest();
+  // Trainings-Benachrichtigung (siehe showActiveTrainingNotification() in 11a): stellt sicher,
+  // dass eine Übung, die sich unmittelbar vor dem Sperren geändert hat, auch wirklich noch vor
+  // dem Wechsel in den Hintergrund in der Benachrichtigung ankommt.
+  if (typeof syncActiveTrainingNotification === 'function') syncActiveTrainingNotification(true);
 });
+
+// Tap auf die Trainings-Benachrichtigung: der Service Worker holt das bestehende Fenster in den
+// Vordergrund und schickt diese Nachricht (siehe notificationclick in sw.js). Wir wechseln dann
+// selbst in die Trainingsansicht — ein reines focus() würde nur den zuletzt offenen Bildschirm
+// zeigen, nicht zwingend das laufende Training.
+if ('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'open-active-training' && active){
+      pushView('active');
+      renderActive();
+    }
+  });
+}
+
+// Kaltstart über die Benachrichtigung (kein Fenster war mehr offen, siehe openWindow() in
+// sw.js): Der Parameter ?resume=training signalisiert, direkt zur wiederhergestellten
+// Trainingsansicht zu springen statt auf der Startseite zu landen. Läuft NACH init(), da die
+// Session erst dort aus dem Speicher wiederhergestellt wird.
+function handleResumeTrainingParam(){
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.get('resume') !== 'training' || !active) return;
+    pushView('active');
+    renderActive();
+  } catch (e){ /* Parameter ist reiner Komfort — Fehler darf den Start nicht blockieren */ }
+}
 
 wireAlternativeNumberInputs();
 wireViewportAwareOverlays();
 try{
   // Das Import-Banner erst NACH init() einblenden: sein Button ruft goSettings() auf, was
   // ohne geladenen plan/sessions-State ins Leere liefe.
-  init().then(() => { bootDone = true; showPostHardUpdateBanner(); }).catch(showFatalError);
+  init().then(() => {
+    bootDone = true;
+    showPostHardUpdateBanner();
+    handleResumeTrainingParam();
+    // Falls beim Start noch eine Session aus dem Speicher wiederhergestellt wurde (App wurde
+    // z. B. vom System beendet), die Benachrichtigung wieder aufbauen bzw. eine verwaiste von
+    // einem bereits beendeten Training entfernen.
+    if (typeof syncActiveTrainingNotification === 'function') syncActiveTrainingNotification(true);
+  }).catch(showFatalError);
 }catch(err){
   showFatalError(err);
 }

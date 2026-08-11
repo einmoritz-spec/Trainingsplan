@@ -1328,6 +1328,7 @@ function renderSettings(){
       clearInterval(restInterval);
       restState = null;
       active = null;
+      clearActiveTrainingNotification(); // App-Reset ruft persistActiveSession() nicht auf
       plan = JSON.parse(JSON.stringify(DEFAULT_PLAN));
       sessions = [];
       lastPerformance = {};

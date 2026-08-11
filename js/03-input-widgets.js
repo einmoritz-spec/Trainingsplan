@@ -203,6 +203,11 @@ function openScrollWheelForInput(input){
   // durchrutscht. Der Bremsfaktor steigt linear von 1× (bei 50kg) auf 2,6× (bei 150kg) und
   // bleibt außerhalb dieses Bereichs (z. B. bei Wdh/Sätzen/Sekunden) bei 1× unverändert.
   const isWeightField = /weight|kg|bodyWeight/i.test(input.dataset.field || input.id || '');
+  // RPE soll sich hart an 6 und 10 anfühlen (Nutzer-Feedback: der übliche Gummizug — leichtes
+  // Nachgeben über den Rand hinaus vor dem Zurückfedern, siehe onPointerMove/runMomentum unten —
+  // wirkt bei einer festen 6-10-Skala unpassend "wabbelig"). Nur für RPE deaktiviert, alle
+  // anderen Felder (Gewicht, Wdh, Sekunden) behalten den Gummizug.
+  const disableOverscroll = isRpeField(input);
   const brakeStartValue = 50;
   function brakeFactorAt(offset){
     if (!isWeightField) return 1;
@@ -226,7 +231,9 @@ function openScrollWheelForInput(input){
       const friction = Math.max(0.5, 1 - (1 - baseFriction) * brake);
       velocity *= friction;
       offsetY += velocity;
-      offsetY = Math.max(minOffset - itemHeight, Math.min(maxOffset + itemHeight, offsetY));
+      offsetY = disableOverscroll
+        ? Math.max(minOffset, Math.min(maxOffset, offsetY)) // hart am Rand stoppen, siehe disableOverscroll
+        : Math.max(minOffset - itemHeight, Math.min(maxOffset + itemHeight, offsetY));
       applyOffset();
       if (Math.abs(velocity) > 0.4){
         momentumRAF = requestAnimationFrame(step2);
@@ -258,9 +265,16 @@ function openScrollWheelForInput(input){
     const dampedDy = dy / brake;
     velocity = dampedDy / dt * 16; // auf "Pixel pro Frame" (≈16ms) normalisiert
     offsetY += dampedDy;
-    // Leichter Gummizug-Widerstand über die Ränder hinaus, klar begrenzt statt endlosem Scroll.
-    if (offsetY > maxOffset) offsetY = maxOffset + (offsetY - maxOffset) * 0.35;
-    if (offsetY < minOffset) offsetY = minOffset + (offsetY - minOffset) * 0.35;
+    if (disableOverscroll){
+      // Hartes Ende statt Gummizug: sobald der Rand erreicht ist, geht es nicht weiter — kein
+      // Nachgeben, kein Zurückfedern nötig, weil es nie über den Rand hinausgeht.
+      offsetY = Math.max(minOffset, Math.min(maxOffset, offsetY));
+    } else if (offsetY > maxOffset){
+      // Leichter Gummizug-Widerstand über die Ränder hinaus, klar begrenzt statt endlosem Scroll.
+      offsetY = maxOffset + (offsetY - maxOffset) * 0.35;
+    } else if (offsetY < minOffset){
+      offsetY = minOffset + (offsetY - minOffset) * 0.35;
+    }
     applyOffset();
     lastY = y; lastT = now;
     ev.preventDefault();
@@ -966,5 +980,12 @@ function openExerciseNotePrompt(planEx, exerciseName){
 
 function persistActiveSession(){
   saveJSON('activeSession', active || null).catch(() => {});
+  // Zentraler Aufhänger für die Trainings-Benachrichtigung: persistActiveSession() wird bereits
+  // bei JEDER relevanten Zustandsänderung aufgerufen (Satz abgehakt, Übungswechsel, Pause,
+  // Trainingsende/-abbruch mit active=null), daher genügt dieser eine Einhängepunkt statt an
+  // jeder Stelle einzeln nachzuziehen. typeof-Prüfung, weil diese Datei (03) VOR der Definition
+  // in 11a-active-session.js geladen wird — zur Laufzeit ist die Funktion da, aber so ist es
+  // auch bei künftigen Umsortierungen der <script>-Reihenfolge unkritisch.
+  if (typeof syncActiveTrainingNotification === 'function') syncActiveTrainingNotification(true);
 }
 

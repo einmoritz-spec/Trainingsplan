@@ -29,6 +29,10 @@ function renderSessionDetail(id){
     const planEx = plan.exercises.find(x => x.id === e.exerciseId);
     return planEx && planEx.cardioMachine;
   });
+  // Eigene Spalte nur einblenden, wenn in dieser Einheit überhaupt RPE erfasst wurde (gleiches
+  // Muster wie sessionHasCardio oben) — sonst stünde in jeder Zeile nur "—" und die Tabelle
+  // würde unnötig breiter, obwohl der Nutzer RPE für dieses Training gar nicht genutzt hat.
+  const sessionHasRpe = s.entries.some(e => e.sets.some(set => typeof set.rpe === 'number'));
   const rows = s.entries.map(e => {
     const planEx = plan.exercises.find(x => x.id === e.exerciseId);
     return e.sets.map((set, i) => `
@@ -38,6 +42,7 @@ function renderSessionDetail(id){
       <td>${e.type === 'time' ? fmtSec(set.seconds) : (set.reps ?? '—')}</td>
       <td>${e.type === 'time' ? '—' : (set.weight ?? '—')}</td>
       ${sessionHasCardio ? `<td>${cardioSetSummary(planEx, set) || '—'}</td>` : ''}
+      ${sessionHasRpe ? `<td>${typeof set.rpe === 'number' ? fmtRpe(set.rpe) : '—'}</td>` : ''}
     </tr>
   `).join('');
   }).join('');
@@ -97,7 +102,7 @@ function renderSessionDetail(id){
       <div class="muscle-group-body" id="fullTableWrap" style="display:none; padding:2px 16px 14px;">
         <div class="detail-table-wrap">
         <table class="detail-table">
-          <thead><tr><th>Übung</th><th>Satz</th><th>Wdh/Zeit</th><th>kg</th>${sessionHasCardio ? '<th>Kardio</th>' : ''}</tr></thead>
+          <thead><tr><th>Übung</th><th>Satz</th><th>Wdh/Zeit</th><th>kg</th>${sessionHasCardio ? '<th>Kardio</th>' : ''}${sessionHasRpe ? '<th>RPE</th>' : ''}</tr></thead>
           <tbody>${rows}</tbody>
         </table>
         </div>

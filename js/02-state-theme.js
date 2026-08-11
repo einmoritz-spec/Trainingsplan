@@ -404,8 +404,14 @@ function applyTheme(){
 //   b) Statt nur content= zu überschreiben, wird der Knoten hier ENTFERNT und frisch neu
 //      eingefügt. Das erzwingt bei Chrome eine echte Neuauswertung, weil ein neues Element im
 //      <head> landet statt nur ein Attribut eines bereits verarbeiteten Elements zu wechseln.
-// Zusätzlich wird color-scheme mitgezogen — das setzt KEINE Farbe (das macht allein
-// theme-color), teilt dem System aber mit, ob es hell oder dunkel rechnen soll.
+// BEIDE Gegenmaßnahmen konnten den eingefrorenen Wert in der installierten PWA nicht auflösen
+// (siehe Projekt-Notizen). Das zusätzlich gesetzte color-scheme (Meta-Tag in index.html + CSS-
+// Property + der JS-Sync unten) ist dagegen NACHWEISLICH das, was die untere Geste-
+// Navigationsleiste überhaupt mit den App-Themes mitfärbt: nach einem versuchsweisen Ausbau
+// färbte sie sich nicht mehr mit. Der Ausbau erfolgte, weil color-scheme oben einen dünnen
+// ~3px-Trennstrich zwischen System-Statusleiste und App-Inhalt verursacht — dieser Strich wird
+// bewusst in Kauf genommen, damit die untere Leiste mitfärbt. Bitte nicht erneut entfernen,
+// ohne beide Effekte gegeneinander zu prüfen.
 function syncStatusBarColor(resolvedBgColor){
   const hex = (resolvedBgColor && resolvedBgColor.hex) || (currentThemeMode() === 'light' ? '#f5f4f1' : '#121316');
   const old = document.getElementById('metaThemeColor');
@@ -481,6 +487,33 @@ async function init(){
       }
     });
     plan._assistedFlagMigration = true;
+    planChanged = true;
+  }
+  // Gewichts-Raster (ex.weightStep/ex.weightBase, siehe weightStepFor()/roundToWeightGrid()):
+  // Die allgemeine Nachtrags-Schleife weiter oben ergänzt bei BESTEHENDEN Übungen nur
+  // muscleGroup/mainMuscle — neu eingeführte Felder wie weightStep/weightBase landeten dadurch
+  // ausschließlich bei Nutzern, die die Übung nach der Einführung erstmals bekamen. Bei allen
+  // anderen blieb weightStep undefiniert, weshalb weightStepFor() auf den Standard 5 zurückfiel
+  // und z. B. die Beinpresse (Raster 5-13-21-29..., weightStep 8 / weightBase 5) fälschlich
+  // 5kg-Schritte vorschlug (Bug-Report: 53kg → 58kg statt 61kg). Diese Migration trägt beide
+  // Felder für ALLE Übungen aus DEFAULT_PLAN nach, die sie dort definiert haben — bewusst ohne
+  // vorhandene abweichende Werte zu überschreiben (!= null-Prüfung), damit eine vom Nutzer
+  // selbst angepasste Übung nicht zurückgesetzt wird.
+  if (!plan._weightStepMigration){
+    DEFAULT_PLAN.exercises.forEach(defEx => {
+      if (defEx.weightStep == null && defEx.weightBase == null) return;
+      const ex = plan.exercises.find(e => e.id === defEx.id);
+      if (!ex) return;
+      if (defEx.weightStep != null && ex.weightStep == null){
+        ex.weightStep = defEx.weightStep;
+        planChanged = true;
+      }
+      if (defEx.weightBase != null && ex.weightBase == null){
+        ex.weightBase = defEx.weightBase;
+        planChanged = true;
+      }
+    });
+    plan._weightStepMigration = true;
     planChanged = true;
   }
   if (!plan._catFixCoreLowerBody){

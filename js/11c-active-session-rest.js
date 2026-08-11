@@ -353,6 +353,7 @@ async function endSession(){
     const discarded = active;
     active = null;
     await saveJSON('activeSession', null);
+    clearActiveTrainingNotification(); // umgeht persistActiveSession(), daher hier explizit aufräumen
     replaceView('home');
     renderHome();
     showUndoToast('Training verworfen.', () => {
@@ -382,6 +383,7 @@ async function endSession(){
   await saveJSON('lastPerformance', lastPerformance);
   active = null;
   await saveJSON('activeSession', null);
+  clearActiveTrainingNotification(); // umgeht persistActiveSession(), daher hier explizit aufräumen
   // "home" ersetzt den bisherigen History-Eintrag (das aktive Training soll beim Zurück-
   // Navigieren nicht wieder auftauchen), die Zusammenfassung bekommt danach aber ihren
   // EIGENEN History-Eintrag (pushView statt replaceView) — sonst hätte "Zurück" von einer

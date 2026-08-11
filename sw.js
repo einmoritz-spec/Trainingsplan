@@ -66,7 +66,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v15';
+const CACHE_NAME = 'trainingsplan-cache-v23';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
@@ -266,4 +266,35 @@ self.addEventListener('fetch', (event) => {
         });
       })
   );
+});
+
+/* ---------------------------------------------------
+   Sperrbildschirm-/Statusleisten-Benachrichtigung bei laufendem Training
+--------------------------------------------------- */
+// Die Benachrichtigung selbst wird von der Seite aus erzeugt/aktualisiert
+// (showActiveTrainingNotification() in js/11a-active-session.js) — sie MUSS über
+// registration.showNotification() laufen, da der Konstruktor "new Notification()" auf Android
+// nicht erlaubt ist. Hier steckt nur die Reaktion auf einen Tap darauf.
+//
+// Verhalten: Läuft die App noch irgendwo (Tab/PWA-Fenster, evtl. nur im Hintergrund), wird
+// dieses Fenster in den Vordergrund geholt statt ein zweites zu öffnen — sonst gäbe es zwei
+// Instanzen und die laufende Trainings-Session (nur im Speicher der einen Seite) wäre in der
+// neuen nicht sichtbar. Erst wenn gar kein Fenster mehr existiert, wird eines geöffnet; der
+// Query-Parameter ?resume=training signalisiert der frisch startenden App, direkt zur aktiven
+// Trainingsseite zu springen (siehe Auswertung in js/14-app-init.js).
+self.addEventListener('notificationclick', (event) => {
+  if (event.notification.tag !== 'training-active') return;
+  event.notification.close();
+  event.waitUntil((async () => {
+    const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of allClients){
+      if ('focus' in client){
+        // Der Seite mitteilen, dass sie zur Trainingsansicht wechseln soll — ein reines
+        // focus() würde nur den letzten Bildschirm zeigen, nicht zwingend das Training.
+        client.postMessage({ type: 'open-active-training' });
+        return client.focus();
+      }
+    }
+    if (self.clients.openWindow) return self.clients.openWindow('./?resume=training');
+  })());
 });

@@ -88,6 +88,10 @@ function startSession(exerciseList, importedSession, mode, variant){
   renderActive();
   timerHandle = setInterval(updateTimerDisplay, 1000);
   persistActiveSession();
+  // Berechtigung erst hier anfragen (siehe ensureTrainingNotificationPermission()) und danach
+  // sofort die erste Benachrichtigung setzen. Absichtlich NICHT awaited, damit sich der
+  // Trainingsstart nicht hinter einem Berechtigungsdialog verzögert.
+  ensureTrainingNotificationPermission().then(ok => { if (ok) syncActiveTrainingNotification(true); });
 }
 
 // Startet ein neues Training mit denselben Übungen wie eine vergangene Einheit.
@@ -123,6 +127,101 @@ function updateTimerDisplay(){
       miniTimeEl.textContent = fmtDuration(sec);
     }
   }
+}
+
+/* ---------------------------------------------------
+   Sperrbildschirm-/Statusleisten-Benachrichtigung bei laufendem Training
+--------------------------------------------------- */
+// Zeigt, solange ein Training läuft, eine Benachrichtigung mit der aktuellen Übung an; ein Tap
+// darauf holt die App in die Trainingsansicht (Gegenstück: notificationclick in sw.js).
+//
+// BEWUSST OHNE Zeitangabe (Nutzer-Feedback): Die Trainingszeit kann auf dem Sperrbildschirm
+// nicht sekündlich mitticken — Android friert die Seite dort ein, und die Web-Notifications-API
+// kennt kein Chronometer-Feld wie native Android-Benachrichtigungen. Ein eingeblendeter Wert
+// wäre daher immer nur der Stand vom letzten Moment, in dem die Seite laufen durfte, und würde
+// nach längerem gesperrtem Bildschirm wie eine kaputte, stehengebliebene Uhr wirken. Ohne
+// Zeitangabe entsteht dieser Eindruck gar nicht erst.
+const TRAINING_NOTIFICATION_TAG = 'training-active';
+// Merkt sich Titel+Text der zuletzt GEZEIGTEN Benachrichtigung — ohne Zeitangabe (siehe unten)
+// ändert sich der Inhalt nur noch bei Übungswechsel oder Pause/Fortsetzen, nicht mehr bei jedem
+// abgehakten Satz. showActiveTrainingNotification() wird trotzdem bei jeder Zustandsänderung
+// aufgerufen (über persistActiveSession()), schreibt die Benachrichtigung aber nur neu, wenn
+// sich der sichtbare Inhalt tatsächlich geändert hat.
+let lastShownTrainingNotification = null;
+
+function notificationsUsable(){
+  return typeof Notification !== 'undefined'
+    && Notification.permission === 'granted'
+    && 'serviceWorker' in navigator;
+}
+
+// Fragt die Berechtigung an — bewusst NICHT beim App-Start, sondern erst beim ersten
+// Trainingsstart: dort ist der Zusammenhang für den Nutzer offensichtlich, ein Prompt direkt
+// beim Öffnen der App wirkt dagegen willkürlich und wird meist abgelehnt. Ein einmal
+// abgelehnter Zustand ('denied') wird respektiert und nicht erneut angefragt.
+async function ensureTrainingNotificationPermission(){
+  if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  try {
+    return (await Notification.requestPermission()) === 'granted';
+  } catch (e){
+    return false;
+  }
+}
+
+function currentTrainingExerciseName(){
+  if (!active || !Array.isArray(active.entries)) return null;
+  const entry = active.entries[active.currentIndex];
+  return entry ? entry.name : null;
+}
+
+// KEINE Zeitangabe in der Benachrichtigung (bewusste Entscheidung, siehe Nutzer-Feedback):
+// ein Wert wie "Stand: 12:34" wirkt nach dem Sperren des Bildschirms schnell wie eine
+// eingefrorene, kaputte Stoppuhr, weil die Seite dort nicht weiterlaufen darf (siehe
+// Erklärung oben) — ohne Zeitangabe entsteht dieser falsche Eindruck gar nicht erst. Zeigt
+// stattdessen nur die aktuelle Übung, aktualisiert sich also nur bei echtem Übungswechsel.
+async function showActiveTrainingNotification(force){
+  if (!active || !notificationsUsable()) return;
+  const title = active.pausedAt ? 'Training pausiert' : 'Training läuft';
+  const exName = currentTrainingExerciseName();
+  const body = exName || 'Zum Training zurückkehren';
+  const signature = title + '|' + body;
+  if (!force && signature === lastShownTrainingNotification) return;
+  lastShownTrainingNotification = signature;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(title, {
+      body,
+      tag: TRAINING_NOTIFICATION_TAG, // gleicher Tag = ERSETZT die vorhandene statt eine zweite anzulegen
+      renotify: false,                // kein erneutes Vibrieren/Ton bei jedem Update
+      silent: true,
+      requireInteraction: true,       // wird auf Android ignoriert, hilft aber am Desktop gegen Auto-Ausblenden
+      icon: 'assets/icons/icon-192.png',
+      badge: 'assets/icons/icon-192.png',
+      data: { startedAt: active.startedAt }
+    });
+  } catch (e){
+    // Benachrichtigungen sind ein reines Extra — schlägt es fehl (kein SW, Gerät verweigert),
+    // läuft das Training vollkommen unbeeinträchtigt weiter.
+  }
+}
+
+async function clearActiveTrainingNotification(){
+  lastShownTrainingNotification = null; // nächstes Training mit gleicher erster Übung soll wieder anzeigen, nicht als "unverändert" übersprungen werden
+  if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const list = await reg.getNotifications({ tag: TRAINING_NOTIFICATION_TAG });
+    list.forEach(n => n.close());
+  } catch (e){ /* siehe oben: reines Extra */ }
+}
+
+// Zentraler Aufhänger: nach jeder relevanten Zustandsänderung aufrufen. Bei !active wird
+// aufgeräumt, damit nach Trainingsende/-abbruch keine verwaiste Benachrichtigung hängen bleibt.
+function syncActiveTrainingNotification(force){
+  if (active) showActiveTrainingNotification(force);
+  else clearActiveTrainingNotification();
 }
 
 // Pausiert bzw. setzt die normal weiterlaufende Trainingszeit fort — nur relevant, solange
@@ -570,8 +669,19 @@ function computeProgressionSuggestion(weight, reps, direction, planEx){
     if (newReps > reps) return { weight, reps: newReps };
   }
   const step = weightStepFor(planEx);
-  const newWeight = direction === -1 ? Math.max(0, weight - step) : weight + step;
-  if (direction === -1 && newWeight === weight) return null; // Unterstützungsgewicht ist schon bei 0, keine weitere Steigerung möglich
+  // Auf das NÄCHSTE tatsächlich einstellbare Rastergewicht schnappen statt blind step zu
+  // addieren: Bei Geräten mit eigenem Raster (z. B. Beinpresse 5-13-21-29..., weightBase 5 /
+  // weightStep 8) landete "weight + step" auf einem Wert, der am Gerät gar nicht einstellbar
+  // ist, sobald das aktuelle Gewicht nicht exakt auf dem Raster lag. Jetzt wird immer der
+  // nächste Rasterwert STRIKT ober- bzw. unterhalb des aktuellen Gewichts gewählt — bei
+  // rasterkonformen Werten ist das genau ein Schritt (53 → 61), bei abweichenden Werten der
+  // nächste erreichbare Wert nach oben bzw. unten.
+  const base = weightBaseFor(planEx);
+  const n = (weight - base) / step;
+  const newWeight = direction === -1
+    ? Math.max(Math.min(0, base), base + (Math.ceil(n) - 1) * step)
+    : base + (Math.floor(n) + 1) * step;
+  if (direction === -1 && newWeight >= weight) return null; // Unterstützungsgewicht ist schon am Minimum, keine weitere Steigerung möglich
   return { weight: newWeight, reps: Math.max(6, reps - 2) };
 }
 

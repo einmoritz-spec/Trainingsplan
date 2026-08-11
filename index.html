@@ -8,13 +8,32 @@
 <!-- PWA-Manifest (echte Datei statt Data-URI) -->
 <link rel="manifest" href="manifest.json">
 
-<!-- Statischer Erst-Wert für den Moment vor dem ersten JS-Paint (bestmögliche Annäherung
-     anhand der OS-Einstellung). Sobald applyTheme() läuft (02-state-theme.js), wird BEIDE
-     Tags unten per JS auf die tatsächlich in der App aktive Hintergrundfarbe gesetzt — das
-     deckt sowohl eine eigene Hintergrundfarbe als auch einen manuellen Light/Dark-Wechsel ab,
-     der vom OS-Farbschema abweicht (siehe applyTheme() für die Begründung). -->
-<meta name="theme-color" id="metaThemeColorDark" content="#121316" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" id="metaThemeColorLight" content="#f5f4f1" media="(prefers-color-scheme: light)">
+<!-- Statischer Erst-Wert für den Moment vor dem ersten JS-Paint (bestmögliche Annäherung).
+     Sobald applyTheme() läuft (02-state-theme.js), setzt syncStatusBarColor() diesen Wert auf
+     die tatsächlich in der App aktive Hintergrundfarbe — das deckt sowohl eine eigene
+     Hintergrundfarbe als auch einen manuellen Light/Dark-Wechsel ab, der vom OS-Farbschema
+     abweicht.
+     BEWUSST NUR EIN Tag OHNE media-Attribut (früher zwei, gefiltert per
+     media="(prefers-color-scheme: dark/light)"): Chrome wertet nachträgliche Änderungen am
+     content-Attribut eines MEDIA-GEFILTERTEN theme-color-Tags unzuverlässig neu aus. In der
+     installierten PWA blieb die untere Android-Geste-Navigationsleiste dadurch auf dem Wert
+     hängen, der beim Start aktiv war (im Fehlerbericht: #0F131C "Blaugrau" aus der eigenen
+     Hintergrundfarben-Palette — also nicht ein Systemfallback, sondern ein veralteter Wert von
+     uns, was zeigt dass Chrome das Tag prinzipiell liest). Ein einzelnes ungefiltertes Tag ist
+     der von Chrome gut unterstützte Fall für dynamische Änderungen; da wir den Wert ohnehin
+     immer selbst aus dem aktiven Theme setzen, brauchen wir die media-Unterscheidung nicht. -->
+<meta name="theme-color" id="metaThemeColor" content="#121316">
+<!-- color-scheme teilt dem Browser mit, ob die Seite hell oder dunkel ist (es setzt KEINE
+     konkrete Farbe — das macht allein theme-color oben). Wichtig für die untere Android-Geste-
+     Navigationsleiste in der INSTALLIERTEN PWA: ohne dieses Signal färbt sie sich nicht mit den
+     App-Themes mit.
+     HISTORIE (bitte nicht erneut entfernen, ohne die Nebenwirkung zu prüfen): war kurzzeitig
+     wieder ausgebaut, weil es einen hellen ~3px-Trennstrich zwischen System-Statusleiste und
+     App-Inhalt OBEN verursachte. Nach dem Ausbau färbte sich die untere Leiste aber nicht mehr
+     mit — d. h. dieses Tag ist tatsächlich das, was die untere Leiste einfärbt. Damit ist es ein
+     bewusster Tausch: mitgefärbte untere Leiste (gewollt) gegen einen dünnen Strich oben
+     (kosmetisch). Der Strich wird in Kauf genommen. -->
+<meta name="color-scheme" content="dark light">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
