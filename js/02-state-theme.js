@@ -386,23 +386,40 @@ function applyTheme(){
 }
 
 // Android/Chrome färben die Status- und Navigationsleiste (die "Balken oben und unten", siehe
-// Screenshot-Feedback) über die <meta name="theme-color">-Tags in index.html — die standen dort
-// bisher FEST auf #121316/#f5f4f1 und reagierten nur auf die OS-Einstellung
-// (prefers-color-scheme), nicht auf das tatsächlich in der App gewählte Theme. Wählt man z. B.
-// eine eigene Hintergrundfarbe, oder schaltet Light/Dark manuell um (unabhängig vom
-// OS-Farbschema), blieben die Balken dadurch immer im ursprünglichen dunklen Grauton hängen,
-// während die App selbst (html,body{ background: var(--bg) }) längst die richtige Farbe zeigt.
+// Screenshot-Feedback) über das <meta name="theme-color">-Tag in index.html — das stand dort
+// ursprünglich FEST auf #121316/#f5f4f1 und reagierte nur auf die OS-Einstellung
+// (prefers-color-scheme), nicht auf das tatsächlich in der App gewählte Theme.
 //
-// Fix: beide Meta-Tags bekommen hier IMMER denselben, tatsächlich aktiven --bg-Wert gesetzt —
-// unabhängig davon, welches der beiden der Browser gerade per media-query "auswählen" würde.
-// Da beide auf denselben Wert zeigen, spielt die Auswahl keine Rolle mehr, die Balken matchen
-// die App-Hintergrundfarbe immer exakt, auch bei individueller Wahl oder manuellem Umschalten.
+// Fix Stufe 1: das Tag bekommt hier immer den tatsächlich aktiven --bg-Wert gesetzt.
+//
+// Fix Stufe 2 (Nachbesserung nach Bug-Report "untere Leiste bleibt in der installierten App
+// immer dunkelblau"): In der installierten PWA blieb die untere Geste-Navigationsleiste auf dem
+// Wert hängen, der beim App-Start aktiv war — im Bericht #0F131C ("Blaugrau" aus der eigenen
+// Hintergrundfarben-Palette). Dass dort ein Wert von UNS klebte und nicht ein Systemfallback,
+// zeigt: Chrome liest das Tag prinzipiell, wertet aber nachträgliche Änderungen nicht neu aus.
+// Zwei Gegenmaßnahmen:
+//   a) index.html hat jetzt nur noch EIN theme-color-Tag OHNE media-Attribut (vorher zwei,
+//      gefiltert nach prefers-color-scheme) — media-gefilterte Tags wertet Chrome bei
+//      dynamischen Änderungen besonders unzuverlässig neu aus.
+//   b) Statt nur content= zu überschreiben, wird der Knoten hier ENTFERNT und frisch neu
+//      eingefügt. Das erzwingt bei Chrome eine echte Neuauswertung, weil ein neues Element im
+//      <head> landet statt nur ein Attribut eines bereits verarbeiteten Elements zu wechseln.
+// Zusätzlich wird color-scheme mitgezogen — das setzt KEINE Farbe (das macht allein
+// theme-color), teilt dem System aber mit, ob es hell oder dunkel rechnen soll.
 function syncStatusBarColor(resolvedBgColor){
   const hex = (resolvedBgColor && resolvedBgColor.hex) || (currentThemeMode() === 'light' ? '#f5f4f1' : '#121316');
-  const dark = document.getElementById('metaThemeColorDark');
-  const light = document.getElementById('metaThemeColorLight');
-  if (dark) dark.setAttribute('content', hex);
-  if (light) light.setAttribute('content', hex);
+  const old = document.getElementById('metaThemeColor');
+  // Nur neu aufbauen, wenn sich die Farbe wirklich geändert hat — sonst würde jeder
+  // applyTheme()-Aufruf (läuft auch bei unveränderten Themes) unnötig im <head> herumräumen.
+  if (!old || old.getAttribute('content') !== hex){
+    if (old) old.remove();
+    const meta = document.createElement('meta');
+    meta.setAttribute('name', 'theme-color');
+    meta.setAttribute('id', 'metaThemeColor');
+    meta.setAttribute('content', hex);
+    document.head.appendChild(meta);
+  }
+  document.documentElement.style.colorScheme = currentThemeMode() === 'light' ? 'light' : 'dark';
 }
 
 async function init(){

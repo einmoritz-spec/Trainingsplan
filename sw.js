@@ -30,6 +30,22 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v11: Icon-Dateien bereinigt (icon-192.png, icon-512.png, icon-512-maskable.png) — die
+ * gestrichelten Führungslinien, die versehentlich mit ins finale PNG exportiert wurden (sichtbar
+ * z. B. in icon-512-maskable.png), sind entfernt. icon-512-maskable.png ist jetzt außerdem
+ * echt randlos (voller Bleed bis zum Rand, keine abgerundeten Ecken mehr eingebacken — das ist
+ * für "purpose: maskable" Pflicht, siehe manifest.json), icon-192.png/icon-512.png haben jetzt
+ * echte Transparenz an den abgerundeten Ecken statt der vorherigen festen weißen Füllung.
+ * Da sich die Bilddaten unter gleichem Dateinamen geändert haben, MUSS CACHE_NAME hier
+ * hochgezählt werden — sonst bliebe der Service Worker für immer bei den alten, fehlerhaften
+ * Icon-Bytes (Cache-Storage vergleicht keine Inhalte, nur ob der Precache-Schritt bereits lief).
+ * v10: install() cacht die App-Shell jetzt fehlertolerant (Promise.allSettled statt
+ * cache.addAll()) — vorher hätte eine einzelne fehlende/falsch benannte Datei (z. B. beim
+ * Hochladen vergessen) die KOMPLETTE Installation des neuen Service Workers zum Scheitern
+ * gebracht: kein Update-Banner, keine Fehlermeldung, der Nutzer sieht einfach weiterhin den
+ * alten (oder im schlimmsten Fall gar keinen funktionierenden) Stand. Jetzt wird jede Datei
+ * einzeln geholt; eine einzelne fehlgeschlagene Datei verhindert nicht mehr, dass der Rest
+ * der App-Shell gecacht wird und das Update ankommt.
  * v9: Übungsbilder liegen nicht mehr als Base64 inline in js/data/app-data.js, sondern als
  * eigene WebP-Dateien unter assets/exercises/ (js/vendor/jspdf.umd.min.js bleibt ebenfalls
  * im Precache, wird in index.html aber nur noch bei Bedarf per <script> nachgeladen statt bei
@@ -50,7 +66,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v9';
+const CACHE_NAME = 'trainingsplan-cache-v15';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
@@ -153,11 +169,22 @@ function isCacheableResponse(res){
   return !!res && res.status === 200 && (res.type === 'basic' || res.type === 'cors');
 }
 
-// Installation: App-Shell vorab cachen
+// Installation: App-Shell vorab cachen.
+// BEWUSST NICHT cache.addAll() (atomar: EIN 404 wirft die komplette Installation weg, der
+// neue Service Worker landet dann als "redundant" — kein Update-Banner, keine Fehlermeldung,
+// einfach stille Nichtinstallation). Stattdessen wird jede Datei einzeln geholt; eine
+// einzelne fehlende/fehlerhafte Datei (z. B. ein vergessenes Bild beim Hochladen) verhindert
+// nicht mehr, dass der Rest der App-Shell gecacht wird und das Update trotzdem ankommt.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
+      .then((cache) => Promise.allSettled(
+        APP_SHELL.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn('Precache fehlgeschlagen, wird übersprungen:', url, err);
+          })
+        )
+      ))
       .then(() => self.skipWaiting())
   );
 });

@@ -999,6 +999,15 @@ function renderSettings(){
     <input type="file" id="importFile" accept="application/json" style="display:none;">
 
     <button class="btn btn-danger settings-reset-btn" id="btnReset" style="margin-top:10px;">App zurücksetzen</button>
+
+    <!-- Diagnose-Stempel: zeigt, welche Code-Version wirklich läuft. Bei einer PWA mit
+         Cache-First-Service-Worker (sw.js) ist sonst nicht erkennbar, ob ein neues Build
+         schon aktiv ist oder noch die alte Fassung aus dem Cache bedient wird — genau das
+         hat bei der Fehlersuche zur unteren Navigationsleiste Zeit gekostet. BUILD_STAMP
+         wird bei jeder Änderung mit erhöht, zusammen mit CACHE_NAME in sw.js. -->
+    <div style="margin-top:18px; text-align:center; color:var(--muted); font-size:11px;">
+      Build ${BUILD_STAMP}
+    </div>
   `;
 
   document.getElementById('btnBack').onclick = () => history.back();

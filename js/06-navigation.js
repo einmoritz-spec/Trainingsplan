@@ -125,6 +125,19 @@ function goStatsChart(metric, push){
   if (push !== false) pushView('statsChart', { metric });
   renderStatsChart(metric);
 }
+// Fehlte bisher komplett: renderBodyWeightChart() (08a-stats-progress-charts.js) war schon
+// lange fertig implementiert, aber ohne diese Navigations-Wrapper-Funktion nie erreichbar —
+// der Verlauf-Button neben "Körpergewicht" in den Einstellungen (10-plan-settings.js) rief
+// goBodyWeightChart() auf, das nirgendwo definiert war. Der globale Error-Handler
+// (14-app-init.js) fing den dadurch entstehenden ReferenceError ab und zeigte nur die kleine
+// "Kleiner Fehler"-Meldung, ohne dass etwas passierte. Gleiches Muster wie goStatsChart() etc.
+// oben: pushView merkt sich den View-Namen im History-State, renderViewByState() (unten in
+// dieser Datei) braucht dafür den passenden case-Zweig, sonst würde Android-/Browser-Zurück
+// auf diese Seite nicht funktionieren.
+function goBodyWeightChart(push){
+  if (push !== false) pushView('bodyWeightChart');
+  renderBodyWeightChart();
+}
 function goWorkoutsOverview(push){
   if (push !== false) pushView('workoutsOverview');
   renderWorkoutsOverview();
@@ -229,6 +242,7 @@ function renderViewByState(state){
     case 'freeSelect': renderFreeSelect(); break;
     case 'modeEdit': renderModeEdit(state.params.mode, state.params.startTab); break;
     case 'statsChart': renderStatsChart(state.params.metric); break;
+    case 'bodyWeightChart': renderBodyWeightChart(); break;
     case 'workoutsOverview': renderWorkoutsOverview(); break;
     case 'monthOverview': renderMonthOverview(); break;
     case 'monthReport': renderMonthReport(state.params.year, state.params.month); break;

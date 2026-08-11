@@ -1,6 +1,12 @@
 /* ---------------------------------------------------
    Utils
 --------------------------------------------------- */
+// Diagnose-Stempel: wird unten in den Einstellungen angezeigt (renderSettings()) und macht
+// sichtbar, welche Code-Version wirklich läuft. Bei einer PWA bedient der Service Worker
+// (sw.js, Cache-First) nach einem Update oft noch mehrere Starts lang die ALTE Fassung —
+// ohne diesen Stempel ist "der Fix wirkt nicht" nicht von "der Fix ist nie angekommen" zu
+// unterscheiden. Bei jeder Änderung zusammen mit CACHE_NAME in sw.js erhöhen.
+const BUILD_STAMP = '15';
 // Berechnet das tatsächlich bewegte Gewicht für einen Satz unter Berücksichtigung
 // von unterstützten Übungen (z. B. Klimmzugmaschine: Körpergewicht - eingestelltes Gewicht)
 // und reinen Eigenkörpergewicht-Übungen (z. B. Liegestütze: Körpergewicht + evtl. Zusatzgewicht).
