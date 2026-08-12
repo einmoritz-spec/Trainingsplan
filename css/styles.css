@@ -2116,7 +2116,7 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
    - .section-label/.btn-primary/.btn-ghost zu .ft-section-label/
      .ft-btn-primary/.ft-btn-ghost umbenannt (Namenskollision mit oben
      bereits anders gestylten Klassen gleichen Namens)
-   - eigene Design-Einstellungen-Optik (.mode-toggle/.swatch*/.custom-hex-
+   - eigene Design-Einstellungen-Optik (.mode-toggle, .swatch und Varianten, .custom-hex-
      row) entfernt, da die zugehörige Funktionalität komplett entfallen ist
      ========================================================================= */
 
@@ -2142,6 +2142,11 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
 }
 .kcal-value{font-family:'Fraunces',serif; font-weight:700; font-size:3.1rem; line-height:1; letter-spacing:-0.01em;}
 .kcal-label{color:var(--muted); font-size:0.8rem; margin-top:4px; letter-spacing:0.04em; text-transform:uppercase;}
+/* Button-Wrapper um kcal-value/-label (siehe ftStatsBtn in renderFoodTracker()), führt zu den
+   Statistiken (renderFoodStats()) — bewusst ohne jede eigene Optik, damit die kcal-Anzeige
+   unverändert aussieht wie zuvor, nur jetzt eben antippbar. */
+.kcal-summary-btn{ background:none; border:none; padding:0; width:100%; color:inherit; font-family:inherit; cursor:pointer; }
+.kcal-summary-btn:active{ opacity:0.75; }
 .macro-row{display:flex; justify-content:center; gap:22px; margin-top:18px;}
 .macro{text-align:center;}
 .macro-dot{width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:5px;}
@@ -2178,16 +2183,31 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
   font-weight:600; font-size:0.82rem; padding:10px 0 2px; cursor:pointer;
 }
 
-/* ---- Overlay-Grundlagen ---- */
+/* ---- Overlay-Grundlagen ----
+   overlay-backdrop ist jetzt zugleich der Flex-Wrapper, der Sheet/Modal enthält (vorher
+   eigenständige Geschwister-Elemente, Sheet/Modal jeweils selbst position:fixed) — exakt
+   dasselbe Muster wie .add-exercise-overlay/.add-exercise-modal im Rest der App. Grund für
+   die Umstellung: die Höhe des Wrappers wird bei geöffneter virtueller Tastatur per JS auf
+   window.visualViewport.height gesetzt (siehe ftApplyOverlayViewport() in 15-food-tracker.js,
+   gleiche Technik wie wireViewportAwareOverlays() für die übrigen Popups der App) — Sheet/
+   Modal richten sich als Flex-Kinder automatisch daran aus (align-items:flex-end fürs Sheet,
+   :center fürs Modal), statt dass jedes selbst seine bottom/max-height gegen die Tastatur
+   nachrechnen muss. Die vorherige Eigenlösung (Sheet selbst position:fixed, bottom per JS bei
+   jedem visualViewport-Resize neu gesetzt) federte bei der Tastatur-Einblendanimation auf
+   Android sichtbar nach (mehrere Zwischen-Resize-Events während der Animation, jedes Mal ein
+   neuer bottom-Sprung) — die jetzige Höhe/Top-Technik ist dieselbe, die im Rest der App bereits
+   ohne dieses Nachfedern läuft. */
 .overlay-backdrop{
-  position:fixed; inset:0; background:rgba(20,17,10,0.4); z-index:40;
+  position:fixed; left:0; right:0; top:0; height:100%; background:rgba(20,17,10,0.4); z-index:40;
   opacity:0; pointer-events:none; transition:opacity .18s;
+  display:flex; align-items:flex-end; justify-content:center;
 }
 .overlay-backdrop.open{opacity:1; pointer-events:auto;}
+.overlay-backdrop-centered{ align-items:center; padding:24px; }
 .sheet{
-  position:fixed; left:0; right:0; bottom:0; z-index:41; background:var(--surface);
+  width:100%; z-index:41; background:var(--surface);
   border-radius:22px 22px 0 0; max-height:88vh; display:flex; flex-direction:column;
-  transform:translateY(100%); transition:transform .22s ease, bottom .18s ease, max-height .18s ease; box-shadow:0 -8px 30px rgba(0,0,0,0.18);
+  transform:translateY(100%); transition:transform .22s ease; box-shadow:0 -8px 30px rgba(0,0,0,0.18);
 }
 .sheet.open{transform:translateY(0);}
 .sheet-handle{width:36px; height:4px; background:var(--border); border-radius:2px; margin:10px auto 4px;}
@@ -2201,12 +2221,12 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
 
 /* Modal (zentriert, für Kalender/Mengen) */
 .modal{
-  position:fixed; left:50%; top:50%; transform:translate(-50%,-50%) scale(0.96); z-index:41;
+  transform:scale(0.96); z-index:41;
   background:var(--surface); border-radius:var(--radius); width:calc(100% - 40px); max-width:400px;
   max-height:86vh; overflow-y:auto; opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;
   box-shadow:0 12px 40px rgba(0,0,0,0.22);
 }
-.modal.open{opacity:1; pointer-events:auto; transform:translate(-50%,-50%) scale(1);}
+.modal.open{opacity:1; pointer-events:auto; transform:scale(1);}
 .modal-head{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border);}
 .modal-title{font-family:'Fraunces',serif; font-weight:600; font-size:1.05rem;}
 .modal-body{padding:16px;}

@@ -532,6 +532,14 @@ function openKeypadForInput(input){
 // Report: Meldung erscheint nach Bestätigen der eigenen Pausenzeit). Die normale System-
 // Tastatur braucht kein zusätzliches Overlay und umgeht das Problem komplett.
 function isSystemKeyboardOnlyField(input){
+  // Alle Zahlenfelder des Essenstracker-Features (Menge in Gramm/Stück, eigenes Lebensmittel
+  // anlegen) sind komplett ausgenommen — die stammen aus einer eigenständig entwickelten
+  // App-Sektion mit eigenem Overlay-System (#ftOverlays, siehe 15-food-tracker.js) und sind
+  // nicht auf Scroll-Rad/Ziffernblock ausgelegt; unabhängig vom global gewählten
+  // numberInputMode() bekommen sie immer die normale System-Tastatur.
+  if (!!input && input.closest && input.closest('#ftOverlays')){
+    return true;
+  }
   if (!!input && input.closest && input.closest('#sessionEntryEditorOverlay')){
     // Die kg/Wdh/Sekunden-Felder im "Übung bearbeiten"-Popup (abgeschlossene Einheit,
     // siehe openSessionEntryEditor) laufen NICHT über Scroll-Rad/Ziffernblock — dieses

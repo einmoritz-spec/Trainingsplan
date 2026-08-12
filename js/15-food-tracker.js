@@ -68,28 +68,52 @@ let ftCustomFoods = [];
 let ftSavedMeals = [];
 let ftRecent = { breakfast: [], lunch: [], dinner: [] };
 let ftOffCache = {}; // Barcode/Online-Treffer-Code -> normalisiertes Food-Objekt
+// Zuletzt verwendete Menge je Lebensmittel (food.id -> {unitMode, amountG, pieceCount}) —
+// beim erneuten Hinzufügen desselben Lebensmittels wird das als Vorbelegung im Mengen-Modal
+// genutzt statt immer starr 100 g bzw. 1 Stück zu zeigen (siehe ftOpenQuantityModal()).
+let ftLastAmounts = {};
+// Wie oft ein Lebensmittel bereits hinzugefügt wurde (food.id -> Anzahl) — steuert die
+// Such-Reihenfolge (siehe ftRankFoods()): häufig getrackte Lebensmittel erscheinen dort ganz
+// oben, auch wenn ein anderer Treffer textlich besser zum Suchbegriff passen würde.
+let ftFoodUsageCount = {};
 let foodTrackerLoaded = false;
 
 async function ftSave(key, val){ await saveJSON('food:' + key, val); }
 
 async function initFoodTracker(){
   if (foodTrackerLoaded) return;
-  const [days, favorites, custom, meals, recent, offCache] = await Promise.all([
+  const [days, favorites, custom, meals, recent, offCache, lastAmounts, usageCount] = await Promise.all([
     loadJSON('food:days', {}),
     loadJSON('food:favorites', []),
     loadJSON('food:customFoods', []),
     loadJSON('food:savedMeals', []),
     loadJSON('food:recent', { breakfast: [], lunch: [], dinner: [] }),
     loadJSON('food:offCache', {}),
+    loadJSON('food:lastAmounts', {}),
+    loadJSON('food:usageCount', {}),
   ]);
   ftDays = days; ftFavorites = favorites; ftCustomFoods = custom;
-  ftSavedMeals = meals; ftRecent = recent; ftOffCache = offCache;
+  ftSavedMeals = meals; ftRecent = recent; ftOffCache = offCache; ftLastAmounts = lastAmounts;
+  ftFoodUsageCount = usageCount;
   foodTrackerLoaded = true;
+}
+
+// Zählt einen Treffer für die Such-Reihenfolge (ftRankFoods()) hoch — aufgerufen, sobald ein
+// Lebensmittel TATSÄCHLICH einer Mahlzeit hinzugefügt wird (ftAddEntryToMeal()/
+// ftApplySavedMeal()), nicht schon beim bloßen Antippen in der Ergebnisliste (Mengen-Modal
+// öffnen ohne zu speichern zählt bewusst nicht als "oft genutzt").
+function ftBumpUsageCount(foodId){
+  ftFoodUsageCount[foodId] = (ftFoodUsageCount[foodId] || 0) + 1;
+  ftSave('usageCount', ftFoodUsageCount);
 }
 
 function goFoodTracker(push){
   if (push !== false) pushView('foodTracker');
   initFoodTracker().then(renderFoodTracker);
+}
+function goFoodStats(push){
+  if (push !== false) pushView('foodStats');
+  initFoodTracker().then(renderFoodStats);
 }
 
 /* ============ Helpers: Datum ============ */
@@ -139,11 +163,16 @@ function ftFoodMatchScore(food, q){
 }
 function ftEscapeRegex(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
 
+// Sortiert Suchtreffer nach Relevanz — Lebensmittel, die schon mindestens einmal getrackt
+// wurden (ftFoodUsageCount), kommen dabei IMMER vor noch nie genutzten, sortiert nach
+// Häufigkeit; erst danach entscheidet der reine Textmatch-Score. Ein oft getrackter
+// "Veganer Crispy Chicken Burger" landet bei der Suche nach "Burger" so ganz oben, auch wenn
+// ein anderer Treffer textlich näher am Suchbegriff läge.
 function ftRankFoods(list, q){
   return list
-    .map(f=>({f, s:ftFoodMatchScore(f,q)}))
+    .map(f=>({f, s:ftFoodMatchScore(f,q), used:ftFoodUsageCount[f.id]||0}))
     .filter(x=>x.s>0)
-    .sort((a,b)=> b.s-a.s || a.f.name.length-b.f.name.length)
+    .sort((a,b)=> (b.used>0)-(a.used>0) || b.used-a.used || b.s-a.s || a.f.name.length-b.f.name.length)
     .map(x=>x.f);
 }
 
@@ -188,6 +217,10 @@ function ftRound1(n){ return Math.round(n*10)/10; }
 
 async function ftOffSearch(query){
   // Primär: Search-a-licious. Fallback: legacy search.pl.
+  // Ergebnisse werden (wie beim Barcode-Scan, siehe ftOffByBarcode()) in ftOffCache
+  // zwischengespeichert — sonst findet ftGetFoodById() sie beim späteren Antippen (Menge
+  // hinzufügen, Favorit setzen) nicht wieder und die App bricht lautlos ab (Bugfix: Klick auf
+  // ein Online-Suchergebnis oder dessen Stern tat bisher gar nichts).
   try{
     const url = `https://search.openfoodfacts.org/search?q=${encodeURIComponent(query)}&langs=de&page_size=15&fields=code,product_name,brands,nutriments`;
     const res = await fetch(url, {headers:FT_OFF_HEADERS});
@@ -201,7 +234,11 @@ async function ftOffSearch(query){
         const f = ftNormalizeOFF(p, code);
         if(f) out.push(f);
       }
-      if(out.length) return out;
+      if(out.length){
+        out.forEach(f => { ftOffCache[f.id] = f; });
+        ftSave('offCache', ftOffCache);
+        return out;
+      }
     }
   }catch(e){ /* weiter zu Fallback */ }
   try{
@@ -214,6 +251,10 @@ async function ftOffSearch(query){
       if(!code) continue;
       const f = ftNormalizeOFF(p, code);
       if(f) out.push(f);
+    }
+    if(out.length){
+      out.forEach(f => { ftOffCache[f.id] = f; });
+      ftSave('offCache', ftOffCache);
     }
     return out;
   }catch(e){ return []; }
@@ -250,8 +291,10 @@ function renderFoodTracker(){
       <button class="date-arrow settings-btn" id="settingsBtn" title="Einstellungen">${ftIconGear()}</button>
     </div>
     <div class="summary-card">
-      <div class="kcal-value">${totals.kcal}</div>
-      <div class="kcal-label">kcal heute</div>
+      <button class="kcal-summary-btn" id="ftStatsBtn" type="button" aria-label="Statistiken">
+        <div class="kcal-value">${totals.kcal}</div>
+        <div class="kcal-label">kcal heute</div>
+      </button>
       <div class="macro-row">
         <div class="macro"><div><span class="macro-dot" style="background:var(--protein)"></span><span class="macro-val">${totals.p} g</span></div><div class="macro-label">Protein</div></div>
         <div class="macro"><div><span class="macro-dot" style="background:var(--carbs)"></span><span class="macro-val">${totals.c} g</span></div><div class="macro-label">Kohlenhydrate</div></div>
@@ -261,6 +304,7 @@ function renderFoodTracker(){
     ${FT_MEAL_KEYS.map(ftMealHTML).join('')}
   `;
   document.getElementById('ftBackBtn').onclick = () => history.back();
+  document.getElementById('ftStatsBtn').onclick = () => goFoodStats();
   document.getElementById('dArrowBack').onclick = ()=>{ ftCurrentDate = ftAddDays(ftCurrentDate,-1); renderFoodTracker(); };
   document.getElementById('dArrowFwd').onclick = ()=>{ ftCurrentDate = ftAddDays(ftCurrentDate,1); renderFoodTracker(); };
   document.getElementById('dLabel').onclick = ftOpenCalendar;
@@ -357,6 +401,14 @@ function ftIconCheck(){
    siehe Erläuterung am Dateikopf. */
 const ftOverlays = document.getElementById('ftOverlays');
 let ftSavedScrollY = 0;
+// Generationszähler gegen einen Wettlauf, der auftritt, wenn ein neues Overlay sehr kurz nach
+// dem Schließen eines vorherigen geöffnet wird (z. B. ftHandleScannedCode(): schließt sofort
+// die Barcode-Eingabe und öffnet — bei einem bereits bekannten Barcode SOFORT, ohne auf eine
+// Online-Antwort zu warten — direkt die Mengen-Auswahl). ftRemoveOverlayDOM() räumt den DOM
+// erst zeitversetzt auf (200ms, damit die Schließen-Animation noch sichtbar ist) — ohne diesen
+// Zähler hätte dieser verzögerte Aufräum-Timer das inzwischen längst neu geöffnete Overlay
+// wieder gelöscht, kurz nachdem es erschien.
+let ftOverlayGeneration = 0;
 function ftLockBodyScroll(){
   ftSavedScrollY = window.scrollY;
   document.body.style.position = 'fixed';
@@ -373,17 +425,26 @@ function ftUnlockBodyScroll(){
 }
 function ftOpenOverlay(html, {type='sheet'}={}){
   const wasEmpty = !ftOverlays.querySelector('.sheet, .modal');
-  ftOverlays.innerHTML = `<div class="overlay-backdrop" id="ftOvBackdrop"></div>${html}`;
+  ftOverlayGeneration++;
+  const centeredClass = type === 'modal' ? ' overlay-backdrop-centered' : '';
+  ftOverlays.innerHTML = `<div class="overlay-backdrop${centeredClass}" id="ftOvBackdrop">${html}</div>`;
   if(wasEmpty){
     ftLockBodyScroll();
     if (!overlayCloseStack.includes(ftRemoveOverlayDOM)) pushOverlayState(ftRemoveOverlayDOM);
   }
+  ftApplyOverlayViewport();
   requestAnimationFrame(()=>{
-    document.getElementById('ftOvBackdrop').classList.add('open');
+    const bd = document.getElementById('ftOvBackdrop');
+    if (bd) bd.classList.add('open');
     const el = ftOverlays.querySelector('.sheet, .modal');
     if(el) el.classList.add('open');
   });
-  document.getElementById('ftOvBackdrop').onclick = ftCloseOverlay;
+  const bd = document.getElementById('ftOvBackdrop');
+  // Nur Klicks WIRKLICH auf den Hintergrund schließen, nicht auf den Sheet-/Modal-Inhalt
+  // selbst — der liegt jetzt (siehe CSS-Umbau oben) als Flex-Kind INNERHALB des Backdrops,
+  // ein simples "onclick aufs Backdrop-Element" würde also bei jedem Klick irgendwo im Sheet
+  // fälschlich mitschließen, da Klicks im DOM bis zum Backdrop hochblubbern.
+  if (bd) bd.onclick = (ev) => { if (ev.target === bd) ftCloseOverlay(); };
 }
 function ftRemoveOverlayDOM(){
   const el = ftOverlays.querySelector('.sheet, .modal');
@@ -391,7 +452,13 @@ function ftRemoveOverlayDOM(){
   if(el) el.classList.remove('open');
   if(bd) bd.classList.remove('open');
   ftUnlockBodyScroll();
-  setTimeout(()=>{ ftOverlays.innerHTML=''; }, 200);
+  const generationAtClose = ftOverlayGeneration;
+  setTimeout(()=>{
+    // Falls in der Zwischenzeit (siehe Kommentar bei ftOverlayGeneration oben) bereits ein
+    // neues Overlay geöffnet wurde, NICHT löschen — das würde dessen frischen Inhalt wieder
+    // entfernen, obwohl er gar nichts mit diesem Schließen-Vorgang zu tun hat.
+    if (ftOverlayGeneration === generationAtClose) ftOverlays.innerHTML='';
+  }, 200);
 }
 function ftCloseOverlay(){
   popOverlayStateIfOpen();
@@ -424,28 +491,29 @@ function ftToastWithUndo(msg, onUndo){
   };
 }
 
-/* ============ Sheet über der Tastatur halten ============
-   Das Sheet ist per bottom:0 an der Layout-Höhe verankert. Öffnet sich die
-   Tastatur, schrumpft nur der sichtbare Bereich (visualViewport) — ohne
-   Anpassung würde der untere Teil des Sheets hinter der Tastatur verschwinden.
-   Wir schieben das Sheet um genau die Tastaturhöhe nach oben und begrenzen
-   seine maximale Höhe auf den sichtbaren Bereich. */
-if(window.visualViewport){
-  const ftVv = window.visualViewport;
-  const ftAdjustSheetForKeyboard = ()=>{
-    const sheet = ftOverlays.querySelector('.sheet');
-    if(!sheet) return;
-    const keyboardHeight = Math.max(0, window.innerHeight - ftVv.height - ftVv.offsetTop);
-    if(keyboardHeight > 60){
-      sheet.style.bottom = keyboardHeight + 'px';
-      sheet.style.maxHeight = (ftVv.height * 0.92) + 'px';
-    } else {
-      sheet.style.bottom = '';
-      sheet.style.maxHeight = '';
-    }
-  };
-  ftVv.addEventListener('resize', ftAdjustSheetForKeyboard);
-  ftVv.addEventListener('scroll', ftAdjustSheetForKeyboard);
+/* ============ Backdrop über der Tastatur halten ============
+   Gleiche Technik wie wireViewportAwareOverlays() (03-input-widgets.js) für die übrigen
+   Popups der App: position:fixed bezieht sich auf die volle Fenstergröße INKLUSIVE des von
+   der Tastatur verdeckten Bereichs — window.visualViewport meldet dagegen live die
+   tatsächlich sichtbare Höhe. Höhe/Top des Backdrops (jetzt zugleich der Flex-Wrapper für
+   Sheet/Modal, siehe CSS) werden bei jeder Änderung (Tastatur auf/zu, Zoom, Rotation) neu
+   gesetzt; Sheet/Modal richten sich als Flex-Kinder automatisch daran aus.
+   Bewusst NICHT mehr die vorherige Eigenlösung (Sheet selbst position:fixed, bottom+max-
+   height bei jedem Resize neu berechnet): die feuerte während der Tastatur-Einblendanimation
+   auf Android mehrfach hintereinander mit leicht unterschiedlichen Zwischenwerten, wodurch
+   das Sheet sichtbar nachfederte/wackelte, statt nur einmal glatt hochzurutschen. Die Höhe/
+   Top-Technik hier ist exakt dieselbe, die für den Rest der App bereits ohne dieses Nachfedern
+   läuft. */
+function ftApplyOverlayViewport(){
+  const vv = window.visualViewport;
+  const bd = document.getElementById('ftOvBackdrop');
+  if (!vv || !bd) return;
+  bd.style.height = vv.height + 'px';
+  bd.style.top = vv.offsetTop + 'px';
+}
+if (window.visualViewport){
+  window.visualViewport.addEventListener('resize', ftApplyOverlayViewport);
+  window.visualViewport.addEventListener('scroll', ftApplyOverlayViewport);
 }
 
 /* ============ Kalender ============ */
@@ -678,7 +746,10 @@ async function ftHandleSearchInput(q){
   const loadingRow = document.getElementById('ftOffLoadingRow');
   if(!loadingRow) return;
   if(offResults.length){
-    loadingRow.outerHTML = offResults.map(ftResultRowHTML).join('');
+    // Gleiches Prinzip wie ftRankFoods() für die lokalen Treffer: schon getrackte Online-
+    // Ergebnisse zuerst, nach Häufigkeit sortiert.
+    const sorted = offResults.slice().sort((a,b) => (ftFoodUsageCount[b.id]||0) - (ftFoodUsageCount[a.id]||0));
+    loadingRow.outerHTML = sorted.map(ftResultRowHTML).join('');
   } else {
     loadingRow.outerHTML = `<div class="no-results">Keine Online-Treffer.</div>`;
   }
@@ -710,9 +781,17 @@ function ftOpenQuantityModal(food, editCtx){
   ftQtyContext = {food};
   const hasPiece = !!food.piece;
   const isEdit = !!editCtx;
-  const startMode = isEdit && editCtx.unitMode === 'piece' ? 'piece' : 'g';
-  const startG = isEdit && editCtx.unitMode === 'g' ? editCtx.amountG : 100;
-  const startPiece = isEdit && editCtx.unitMode === 'piece' ? editCtx.pieceCount : 1;
+  // Vorbelegung: beim Bearbeiten eines bestehenden Eintrags dessen Menge, sonst — falls
+  // dieses Lebensmittel schon einmal hinzugefügt wurde — die zuletzt dafür verwendete Menge
+  // (ftLastAmounts, siehe ftRememberAmount()) statt starr 100 g/1 Stück. "piece" nur
+  // übernehmen, wenn dieses Lebensmittel überhaupt eine Stück-Option hat.
+  const remembered = !isEdit ? ftLastAmounts[food.id] : null;
+  const rememberedMode = remembered && remembered.unitMode === 'piece' && hasPiece ? 'piece' : (remembered ? 'g' : null);
+  const startMode = isEdit ? (editCtx.unitMode === 'piece' ? 'piece' : 'g') : (rememberedMode || 'g');
+  const startG = isEdit ? (editCtx.unitMode === 'g' ? editCtx.amountG : 100)
+    : (rememberedMode === 'g' ? remembered.amountG : 100);
+  const startPiece = isEdit ? (editCtx.unitMode === 'piece' ? editCtx.pieceCount : 1)
+    : (rememberedMode === 'piece' ? remembered.pieceCount : 1);
   ftOpenOverlay(`
     <div class="modal" id="ftQtyModal">
       <div class="modal-head"><div class="modal-title">${ftEscapeHTML(food.name)}</div><button class="sheet-close" id="ftQtyClose">${ftIconX()}</button></div>
@@ -829,7 +908,16 @@ function ftUpdateEntryInMeal(meal, entryId, food, amountG, mode, pieceCount){
   entry.unitMode = mode;
   entry.pieceCount = pieceCount;
   ftSave('days', ftDays);
+  ftRememberAmount(food.id, mode, amountG, pieceCount);
   renderFoodTracker();
+}
+
+// Merkt sich die zuletzt für dieses Lebensmittel verwendete Menge (siehe Vorbelegung in
+// ftOpenQuantityModal()) — wird bei jedem Hinzufügen/Bearbeiten eines Eintrags aktualisiert,
+// die zuletzt eingegebene Menge zählt also, nicht die allererste.
+function ftRememberAmount(foodId, unitMode, amountG, pieceCount){
+  ftLastAmounts[foodId] = { unitMode, amountG: Math.round(amountG), pieceCount };
+  ftSave('lastAmounts', ftLastAmounts);
 }
 
 function ftAddEntryToMeal(food, amountG, mode, pieceCount){
@@ -849,6 +937,8 @@ function ftAddEntryToMeal(food, amountG, mode, pieceCount){
   day[ftAddSheetMeal].push(entry);
   ftSave('days', ftDays);
   ftUpdateRecent(ftAddSheetMeal, food.id);
+  ftRememberAmount(food.id, mode, amountG, pieceCount);
+  ftBumpUsageCount(food.id);
   renderFoodTracker();
 }
 function ftUpdateRecent(meal, foodId){
@@ -859,13 +949,19 @@ function ftUpdateRecent(meal, foodId){
   ftSave('recent', ftRecent);
 }
 
-/* ============ Eigenes Lebensmittel ============ */
-function ftOpenCustomFoodForm(){
+/* ============ Eigenes Lebensmittel ============
+   Optionaler Parameter prefillBarcode: wird gesetzt, wenn dieses Formular aus einem nicht in
+   der Online-Datenbank gefundenen Scan heraus geöffnet wurde (siehe ftHandleScannedCode()) —
+   der Barcode wird dann am gespeicherten Lebensmittel hinterlegt (food.barcode), damit
+   derselbe Code beim nächsten Scan sofort wiedererkannt wird, ohne die Werte erneut eingeben
+   zu müssen. */
+function ftOpenCustomFoodForm(prefillBarcode){
   ftOpenOverlay(`
     <div class="sheet" id="ftCustomSheet">
       <div class="sheet-handle"></div>
-      <div class="sheet-head"><div class="sheet-title">Eigenes Lebensmittel</div><button class="sheet-close" id="ftCustomClose">${ftIconX()}</button></div>
+      <div class="sheet-head"><div class="sheet-title">${prefillBarcode ? 'Produkt nicht gefunden' : 'Eigenes Lebensmittel'}</div><button class="sheet-close" id="ftCustomClose">${ftIconX()}</button></div>
       <div class="sheet-body">
+        ${prefillBarcode ? `<div class="no-results" style="text-align:left; padding:0 4px 14px;">Barcode ${ftEscapeHTML(prefillBarcode)} ist nicht in der Online-Datenbank hinterlegt. Trag die Werte einmalig ein — beim nächsten Scan dieses Codes erkennt die App das Produkt dann automatisch.</div>` : ''}
         <div class="field-label">Name</div>
         <input class="text-input" id="ftCfName" placeholder="z. B. Mamas Linsensuppe">
         <div class="field-label">kcal pro 100 g</div>
@@ -896,6 +992,7 @@ function ftOpenCustomFoodForm(){
       c: parseFloat(document.getElementById('ftCfC').value)||0,
       f: parseFloat(document.getElementById('ftCfF').value)||0,
       piece: (!isNaN(pieceG) && pieceG>0) ? {label:'1 '+name, g:pieceG} : null,
+      barcode: prefillBarcode || null,
     };
     ftCustomFoods.push(food);
     ftSave('customFoods', ftCustomFoods);
@@ -949,6 +1046,7 @@ function ftApplySavedMeal(mealId){
       ts: Date.now(),
     };
     ftGetDay(ftCurrentDate)[ftAddSheetMeal].push(entry);
+    ftBumpUsageCount(food.id);
     added++;
   }
   ftSave('days', ftDays);
@@ -1032,9 +1130,21 @@ function ftOpenManualBarcodeEntry(){
   };
 }
 async function ftHandleScannedCode(code){
+  // Zuerst gegen selbst angelegte Lebensmittel mit genau diesem Barcode prüfen (siehe
+  // ftOpenCustomFoodForm() — dort wird der Code hinterlegt, wenn er beim vorigen Scan nicht
+  // in der Online-Datenbank gefunden wurde) — spart bei bereits bekannten Codes den
+  // Online-Umweg und erkennt sie sofort wieder.
+  const known = ftCustomFoods.find(f => f.barcode === code);
+  if (known){ ftOpenQuantityModal(known); return; }
   ftToast('Suche Produkt …');
   const food = await ftOffByBarcode(code);
-  if(!food){ ftToast('Produkt nicht gefunden'); return; }
+  if(!food){
+    // Nicht gefunden: statt nur einer Fehlermeldung direkt das Formular für ein eigenes
+    // Lebensmittel öffnen, mit dem Barcode vorbelegt — einmal Werte eintragen, danach wird
+    // der Code beim nächsten Scan über den obigen Cache automatisch erkannt.
+    ftOpenCustomFoodForm(code);
+    return;
+  }
   ftOpenQuantityModal(food);
 }
 
@@ -1079,6 +1189,7 @@ function ftExportData(){
     exportedAt: new Date().toISOString(),
     version: 1,
     days: ftDays, favorites: ftFavorites, customFoods: ftCustomFoods, savedMeals: ftSavedMeals, recent: ftRecent,
+    lastAmounts: ftLastAmounts, usageCount: ftFoodUsageCount,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -1092,7 +1203,7 @@ function ftExportData(){
   ftToast('Export gestartet');
 }
 
-function ftImportData(file){
+async function ftImportData(file){
   const reader = new FileReader();
   reader.onload = ()=>{
     let parsed;
@@ -1108,14 +1219,366 @@ function ftImportData(file){
     ftCustomFoods = parsed.customFoods || [];
     ftSavedMeals = parsed.savedMeals || [];
     ftRecent = parsed.recent || {breakfast:[], lunch:[], dinner:[]};
+    ftLastAmounts = parsed.lastAmounts || {};
+    ftFoodUsageCount = parsed.usageCount || {};
     ftSave('days', ftDays);
     ftSave('favorites', ftFavorites);
     ftSave('customFoods', ftCustomFoods);
     ftSave('savedMeals', ftSavedMeals);
     ftSave('recent', ftRecent);
+    ftSave('lastAmounts', ftLastAmounts);
+    ftSave('usageCount', ftFoodUsageCount);
     ftCloseOverlay();
     renderFoodTracker();
     ftToast('Import erfolgreich');
   };
   reader.readAsText(file);
+}
+
+/* ---------------------------------------------------
+   Statistiken (renderFoodStats, über Tippen auf die kcal-Zahl erreichbar,
+   siehe ftStatsBtn in renderFoodTracker())
+   ---------------------------------------------------
+   Bewusst so weit wie möglich auf die bestehenden, bereits generischen
+   Chart-/Donut-Bauhelfer der Trainingsplan-Statistiken aufgesetzt statt sie
+   neu zu schreiben, damit sich der Screen optisch/funktional konsistent
+   "genauso wie in der Trainingsapp" anfühlt:
+   - buildBarChart()/chartAccordionHTML() (08a-stats-progress-charts.js)
+   - buildInteractiveDonut()/donutAngleRanges()/donutArcPath() (08b) für den
+     Makro-Donut mit Drilldown — eigene, food-spezifische Auswahl-/
+     Aufschlüsselungslogik (ftApplyMacroDonutSelection), aber exakt dieselben
+     CSS-Klassen (.donut-seg, .muscle-balance-legend-Familie, .pie-center-Familie) wie beim
+     Muskelgruppen-Donut, kein eigenes CSS nötig
+   - .month-report-card/.month-report-stat-grid (05-calendar.js/CSS) für die
+     Monatsübersicht, die unter "Monat" zusätzlich erscheint
+   - weekBucket()/monthShortLabel() (08a) für die Quartal-/Jahres-Bucketing
+--------------------------------------------------- */
+function ftPeriodToDays(period){
+  if (period === 'week') return 7;
+  if (period === 'month') return 30;
+  if (period === 'quarter') return 90;
+  return 365; // 'year'
+}
+const FT_PERIOD_LABELS = { week: 'Woche', month: 'Monat', quarter: 'Quartal', year: 'Jahr' };
+let ftStatsPeriod = 'week';
+let ftMacroDrilldown = null;
+let ftMacroOutsideClickHandler = null;
+
+// Tagessummen für ALLE Tage mit mindestens einem Eintrag, aufsteigend sortiert — Grundlage
+// für sowohl das Balkendiagramm als auch den Makro-Donut/die Monatsübersicht unten.
+function ftAllDayTotals(){
+  return Object.keys(ftDays).map(iso => {
+    const day = ftDays[iso];
+    let kcal=0,p=0,c=0,f=0;
+    FT_MEAL_KEYS.forEach(k => day[k].forEach(e => { kcal+=e.kcal; p+=e.p; c+=e.c; f+=e.f; }));
+    return { date: iso, kcal, p, c, f };
+  }).filter(d => d.kcal > 0)
+    .sort((a,b) => a.date.localeCompare(b.date));
+}
+function ftDayTotalsInPeriod(periodDays){
+  const cutoffIso = ftAddDays(ftTodayISO(), -(periodDays - 1));
+  return ftAllDayTotals().filter(d => d.date >= cutoffIso);
+}
+
+// Balkendiagramm-Punkte je nach Zeitraum: Woche/Monat zeigen JEDEN Tag einzeln (auch ohne
+// Eintrag als 0-Balken, damit Lücken im Tracking sichtbar bleiben, nicht nur die geloggten
+// Tage aneinandergereiht), Quartal/Jahr bündeln zu Kalenderwochen bzw. -monaten (sonst bei
+// 90/365 Tagen unlesbar dicht) — Punktwert dort jeweils Ø kcal PRO GELOGGTEM Tag im Bucket,
+// damit die Skala über alle vier Zeiträume hinweg vergleichbar bleibt ("wie viel kcal an
+// einem typischen Tag"), statt bei größeren Buckets plötzlich eine Summe zu zeigen.
+function ftBucketedKcalPoints(period){
+  if (period === 'week' || period === 'month'){
+    const n = ftPeriodToDays(period);
+    const all = ftAllDayTotals();
+    const todayIso = ftTodayISO();
+    const points = [];
+    for (let i = n - 1; i >= 0; i--){
+      const iso = ftAddDays(todayIso, -i);
+      const found = all.find(d => d.date === iso);
+      const d = ftParseISO(iso);
+      const label = period === 'week' ? d.toLocaleDateString('de-DE', { weekday:'short' }) : shortDate(iso);
+      points.push({ label, value: found ? Math.round(found.kcal) : 0, date: iso });
+    }
+    return points;
+  }
+  const periodDays = ftPeriodToDays(period);
+  const inRange = ftDayTotalsInPeriod(periodDays);
+  const buckets = new Map();
+  inRange.forEach(d => {
+    const dateObj = ftParseISO(d.date);
+    let key, label, sortKey;
+    if (period === 'quarter'){
+      const wb = weekBucket(dateObj);
+      key = wb.key; label = wb.label; sortKey = wb.sortKey;
+    } else {
+      key = dateObj.getFullYear() + '-' + dateObj.getMonth();
+      label = monthShortLabel(dateObj);
+      sortKey = dateObj.getFullYear()*100 + dateObj.getMonth();
+    }
+    if (!buckets.has(key)) buckets.set(key, { label, sortKey, sum: 0, count: 0 });
+    const b = buckets.get(key);
+    b.sum += d.kcal; b.count += 1;
+  });
+  return [...buckets.values()].sort((a,b) => a.sortKey - b.sortKey)
+    .map(b => ({ label: b.label, value: Math.round(b.sum / b.count) }));
+}
+
+// Aggregierte Kalorien je Makro (Protein ×4, Kohlenhydrate ×4, Fett ×9) über den Zeitraum —
+// Grundlage für den Donut. Als Verhältnis ist es egal, ob über Summen oder Durchschnitte
+// gerechnet wird, deshalb hier einfach über alle Tage im Zeitraum aufsummiert.
+function ftMacroKcalSegments(periodDays){
+  const days = ftDayTotalsInPeriod(periodDays);
+  let p=0,c=0,f=0;
+  days.forEach(d => { p+=d.p; c+=d.c; f+=d.f; });
+  return [
+    { key:'p', label:'Protein', grams: Math.round(p), value: Math.round(p*4), color: cssVar('--protein') },
+    { key:'c', label:'Kohlenhydrate', grams: Math.round(c), value: Math.round(c*4), color: cssVar('--carbs') },
+    { key:'f', label:'Fett', grams: Math.round(f), value: Math.round(f*9), color: cssVar('--fat') },
+  ];
+}
+// Welche Lebensmittel im Zeitraum am meisten zu einem Makro beigetragen haben (in Gramm) —
+// Grundlage für die Aufschlüsselung, wenn ein Donut-Segment angetippt wird.
+function ftFoodMacroBreakdown(macroKey, periodDays){
+  const cutoffIso = ftAddDays(ftTodayISO(), -(periodDays - 1));
+  const map = {};
+  Object.keys(ftDays).forEach(iso => {
+    if (iso < cutoffIso) return;
+    FT_MEAL_KEYS.forEach(k => ftDays[iso][k].forEach(e => {
+      const val = e[macroKey] || 0;
+      if (!val) return;
+      map[e.name] = (map[e.name] || 0) + val;
+    }));
+  });
+  return Object.entries(map).map(([name,val]) => ({ name, val }))
+    .sort((a,b) => b.val - a.val);
+}
+
+// Food-Pendant zu computeMonthReportData()/renderMonthReport() (05-calendar.js) — deutlich
+// schlanker, da hier keine Übungen/Sätze/Rekorde existieren: Tage protokolliert, Ø kcal/Makros
+// pro geloggtem Tag, höchster/niedrigster Tag, Delta zum Vormonat (Ø kcal).
+function ftComputeMonthStats(year, month){
+  const monthDays = ftAllDayTotals().filter(d => {
+    const dt = ftParseISO(d.date);
+    return dt.getFullYear() === year && dt.getMonth() === month;
+  });
+  const count = monthDays.length;
+  const avg = key => count ? Math.round(monthDays.reduce((a,d) => a + d[key], 0) / count) : 0;
+  const highest = count ? monthDays.reduce((a,d) => d.kcal > a.kcal ? d : a) : null;
+  const lowest = count ? monthDays.reduce((a,d) => d.kcal < a.kcal ? d : a) : null;
+
+  let prevYear = year, prevMonth = month - 1;
+  if (prevMonth < 0){ prevMonth = 11; prevYear -= 1; }
+  const prevMonthDays = ftAllDayTotals().filter(d => {
+    const dt = ftParseISO(d.date);
+    return dt.getFullYear() === prevYear && dt.getMonth() === prevMonth;
+  });
+  const prevAvgKcal = prevMonthDays.length ? Math.round(prevMonthDays.reduce((a,d) => a+d.kcal, 0) / prevMonthDays.length) : null;
+
+  return {
+    count, avgKcal: avg('kcal'), avgP: avg('p'), avgC: avg('c'), avgF: avg('f'),
+    highest, lowest, prevAvgKcal
+  };
+}
+
+function renderFoodStats(){
+  const periodDays = ftPeriodToDays(ftStatsPeriod);
+  const points = ftBucketedKcalPoints(ftStatsPeriod);
+  const loggedPoints = points.filter(p => p.value > 0);
+  const avgKcal = loggedPoints.length ? Math.round(loggedPoints.reduce((a,p) => a+p.value, 0) / loggedPoints.length) : 0;
+  const accent = cssVar('--accent');
+
+  const segments = ftMacroKcalSegments(periodDays);
+  const totalMacroKcal = segments.reduce((a,s) => a+s.value, 0);
+  const macroLegendHTML = segments.map(s => {
+    const pct = totalMacroKcal ? Math.round(s.value / totalMacroKcal * 100) : 0;
+    return `
+      <div class="muscle-balance-legend-row">
+        <button class="muscle-balance-swatch" data-macro="${s.key}" style="color:${s.color};" aria-label="${s.label}: ${pct}%">${pct}%</button>
+        <span class="muscle-balance-legend-label">${s.label}</span>
+        <div class="muscle-balance-legend-values">
+          <span class="muscle-balance-legend-value">${s.grams} g</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // buildBarChart()/buildInteractiveDonut() haben eigene, trainings-spezifisch formulierte
+  // Leer-Texte ("...Einheiten protokolliert"/"...geloggten Sätzen") — für den Essenstracker
+  // stattdessen eigene, passende Hinweise statt der (Trainings-)Bausteine, wenn im gewählten
+  // Zeitraum noch nichts eingetragen wurde.
+  const hasDataInPeriod = points.some(p => p.value > 0);
+  const chartHTML = hasDataInPeriod
+    ? buildBarChart(points, accent, true, 160)
+    : '<div class="chart-empty">Noch keine Einträge in diesem Zeitraum.</div>';
+  const donutSectionHTML = totalMacroKcal ? `
+    <div class="section-label" style="margin-top:22px;">Makro-Verteilung</div>
+    <div class="muscle-balance-charts-row">
+      <div class="muscle-balance-chart-col" style="margin:0 auto;">
+        <div class="muscle-balance-chart-wrap">${buildInteractiveDonut(segments, 190, 'food', totalMacroKcal.toLocaleString('de-DE'), 'kcal')}</div>
+      </div>
+    </div>
+    <div class="muscle-balance-breakdown" id="ftMacroBreakdown" style="display:none;">
+      <div class="muscle-balance-breakdown-header">
+        <span class="muscle-balance-breakdown-title" id="ftBreakdownTitle"></span>
+        <button class="muscle-balance-breakdown-close" id="ftBreakdownClose" aria-label="Aufschlüsselung schließen">✕</button>
+      </div>
+      <div class="muscle-balance-legend" id="ftBreakdownList"></div>
+    </div>
+    <div class="muscle-balance-legend" id="ftMainLegend" style="margin-top:16px;">${macroLegendHTML}</div>
+  ` : `
+    <div class="section-label" style="margin-top:22px;">Makro-Verteilung</div>
+    <div class="chart-empty">Noch keine Einträge in diesem Zeitraum.</div>
+  `;
+
+  const now = new Date();
+  const monthStats = ftStatsPeriod === 'month' ? ftComputeMonthStats(now.getFullYear(), now.getMonth()) : null;
+  const monthDeltaHTML = (monthStats && monthStats.prevAvgKcal !== null && monthStats.avgKcal !== monthStats.prevAvgKcal) ? (() => {
+    const delta = monthStats.avgKcal - monthStats.prevAvgKcal;
+    const sign = delta > 0 ? '+' : '−';
+    return `<span class="month-report-stat-delta ${delta > 0 ? 'up' : 'down'}">${sign}${Math.abs(delta).toLocaleString('de-DE')}</span>`;
+  })() : '';
+  const monthOverviewHTML = monthStats ? `
+    <div class="section-label" style="margin-top:18px;">${MONTH_NAMES_DE[now.getMonth()]}-Übersicht</div>
+    <div class="month-report-card">
+      <div class="month-report-stat-grid">
+        <div class="month-report-stat-cell">
+          <div class="month-report-stat-value">${monthStats.count}</div>
+          <div class="month-report-stat-label">Tage protokolliert</div>
+        </div>
+        <div class="month-report-stat-cell">
+          <div class="month-report-stat-value">${monthStats.avgKcal}${monthDeltaHTML}</div>
+          <div class="month-report-stat-label">Ø kcal / Tag</div>
+        </div>
+        <div class="month-report-stat-cell">
+          <div class="month-report-stat-value">${monthStats.avgP} / ${monthStats.avgC} / ${monthStats.avgF} g</div>
+          <div class="month-report-stat-label">Ø Protein / Kohlenhydrate / Fett</div>
+        </div>
+        <div class="month-report-stat-cell">
+          <div class="month-report-stat-value">${monthStats.highest ? monthStats.highest.kcal : '–'}</div>
+          <div class="month-report-stat-label">${monthStats.highest ? 'Höchster Tag · ' + shortDate(monthStats.highest.date) : 'Höchster Tag'}</div>
+        </div>
+      </div>
+    </div>
+  ` : '';
+
+  app.innerHTML = `
+    <div class="back-row" style="margin-top:0;">
+      <button class="back-btn-icon" id="ftStatsBackBtn" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button>
+    </div>
+    <div class="brand" style="margin-bottom:14px;"><h1 style="font-size:22px;">Statistiken</h1></div>
+    <div class="period-row">
+      ${Object.keys(FT_PERIOD_LABELS).map(p => `
+        <button class="period-btn ${ftStatsPeriod === p ? 'active' : ''}" data-ft-period="${p}">${FT_PERIOD_LABELS[p]}</button>
+      `).join('')}
+    </div>
+    <div class="progress-summary">
+      <span>Ø ${avgKcal} kcal/Tag</span>
+    </div>
+    ${chartHTML}
+    ${donutSectionHTML}
+    ${monthOverviewHTML}
+  `;
+
+  document.getElementById('ftStatsBackBtn').onclick = () => history.back();
+  app.querySelectorAll('[data-ft-period]').forEach(btn => {
+    btn.onclick = () => {
+      ftStatsPeriod = btn.dataset.ftPeriod;
+      ftMacroDrilldown = null;
+      renderFoodStats();
+    };
+  });
+  if (totalMacroKcal) ftWireMacroDonut(segments, periodDays);
+  wireLineCharts(app);
+}
+
+// Analog zu wireTimeDonutSection()/applyTimeDonutSelection() (08b-stats-muscle-balance.js),
+// aber bewusst ohne die dortige Sub-Segment-Aufsplittung des Donuts selbst (dort: Übungen
+// INNERHALB einer Muskelgruppe als eigene Arc-Abschnitte) — hier reicht die einfache Liste
+// darunter, da "welche Lebensmittel" keine geometrische Unterteilung des Rings braucht.
+// Ein-/Ausgrauen der übrigen Segmente, Center-Wert-Wechsel und die Legende darunter folgen
+// exakt demselben Muster.
+function ftWireMacroDonut(segments, periodDays){
+  const ranges = donutAngleRanges(segments);
+
+  function toggle(macroKey){
+    ftMacroDrilldown = (ftMacroDrilldown === macroKey) ? null : macroKey;
+    apply();
+  }
+
+  function apply(){
+    const svg = document.getElementById('donutSvg-food');
+    if (!svg) return;
+    const selected = ftMacroDrilldown;
+    const selectedRange = ranges.find(r => segments.find(s => s.label === r.label && s.key === selected));
+
+    svg.querySelectorAll('.donut-seg').forEach(path => {
+      const seg = segments.find(s => s.label === path.dataset.group);
+      const isSelected = seg && selected === seg.key;
+      path.classList.toggle('donut-seg-dim', !!selected && !isSelected);
+    });
+
+    const defaultCenter = document.getElementById('pieCenterDefault-food');
+    const selectedCenter = document.getElementById('pieCenterSelected-food');
+    if (defaultCenter) defaultCenter.classList.toggle('pie-center-hidden', !!selected);
+    if (selectedCenter) selectedCenter.classList.toggle('pie-center-hidden', !selected);
+    const mainLegend = document.getElementById('ftMainLegend');
+    if (mainLegend) mainLegend.classList.toggle('dimmed', !!selected);
+
+    const panel = document.getElementById('ftMacroBreakdown');
+    if (!selected){
+      if (panel) panel.classList.remove('open');
+      setTimeout(() => { if (!ftMacroDrilldown && panel) panel.style.display = 'none'; }, 250);
+      return;
+    }
+    const seg = segments.find(s => s.key === selected);
+    const breakdown = ftFoodMacroBreakdown(selected, periodDays);
+    const subTotal = breakdown.reduce((a,e) => a+e.val, 0);
+
+    const selValueEl = document.getElementById('pieCenterSelectedValue-food');
+    const selLabelEl = document.getElementById('pieCenterSelectedLabel-food');
+    if (selValueEl && selLabelEl && selectedRange){
+      const total = segments.reduce((a,s) => a+s.value, 0);
+      const pct = total ? Math.round(selectedRange.value / total * 100) : 0;
+      selValueEl.textContent = pct + '%';
+      selLabelEl.textContent = seg.label;
+    }
+
+    const rows = breakdown.map(e => {
+      const pct = subTotal ? Math.round(e.val / subTotal * 100) : 0;
+      return `
+        <div class="muscle-balance-legend-row">
+          <span class="muscle-balance-swatch-static" style="color:${seg.color};">${pct}%</span>
+          <span class="muscle-balance-legend-label">${ftEscapeHTML(e.name)}</span>
+          <span class="muscle-balance-legend-value">${Math.round(e.val)} g</span>
+        </div>
+      `;
+    }).join('');
+    document.getElementById('ftBreakdownTitle').textContent = `${seg.label} – nach Lebensmittel`;
+    document.getElementById('ftBreakdownList').innerHTML = rows || '<div class="history-empty">Keine Daten.</div>';
+    if (panel){
+      panel.style.display = 'block';
+      requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add('open')));
+    }
+  }
+
+  app.querySelectorAll('.donut-seg[data-metric="food"]').forEach(path => {
+    const seg = segments.find(s => s.label === path.dataset.group);
+    if (seg) path.onclick = () => toggle(seg.key);
+  });
+  app.querySelectorAll('[data-macro]').forEach(btn => {
+    btn.onclick = () => toggle(btn.dataset.macro);
+  });
+  const closeBtn = document.getElementById('ftBreakdownClose');
+  if (closeBtn) closeBtn.onclick = () => { ftMacroDrilldown = null; apply(); };
+
+  if (ftMacroOutsideClickHandler) document.removeEventListener('click', ftMacroOutsideClickHandler, true);
+  ftMacroOutsideClickHandler = (ev) => {
+    if (!ftMacroDrilldown) return;
+    if (ev.target.closest('#ftMacroBreakdown, .donut-seg, .muscle-balance-legend-row, [data-macro]')) return;
+    ftMacroDrilldown = null;
+    apply();
+  };
+  document.addEventListener('click', ftMacroOutsideClickHandler, true);
+
+  apply();
 }

@@ -30,6 +30,37 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v30: Essenstracker-Suche priorisiert jetzt bereits getrackte Lebensmittel (ftFoodUsageCount,
+ * food:usageCount, hochgezählt in ftAddEntryToMeal()/ftApplySavedMeal()) — sie erscheinen bei
+ * einer Suche immer vor noch nie getrackten Treffern, sortiert nach Häufigkeit, auch wenn ein
+ * anderer Treffer textlich besser zum Suchbegriff passen würde (ftRankFoods(), gilt auch für
+ * Online-Suchergebnisse). lastAmounts/usageCount jetzt zusätzlich Teil von Export/Import.
+ * v29: Essenstracker merkt sich jetzt pro Lebensmittel die zuletzt verwendete Menge
+ * (ftLastAmounts, food:lastAmounts) und schlägt sie beim nächsten Hinzufügen als Vorbelegung
+ * im Mengen-Modal vor, statt immer starr 100 g bzw. 1 Stück — funktioniert für Gramm- UND
+ * Stück-Mengen (z. B. "1 Scoop"), aktualisiert sich bei jedem erneuten Hinzufügen/Bearbeiten
+ * auf den zuletzt eingegebenen Wert.
+ * v28: Essenstracker — unbekannter Barcode öffnet jetzt direkt das Formular für ein eigenes
+ * Lebensmittel (mit Hinweistext + Barcode vorbelegt) statt nur "Produkt nicht gefunden" zu
+ * melden; beim nächsten Scan desselben Codes wird er automatisch erkannt (food.barcode-Feld,
+ * ftHandleScannedCode() prüft zuerst lokal). Dabei außerdem einen Wettlauf im Overlay-System
+ * gefixt: wird ein neues Overlay sehr kurz nach dem Schließen des vorherigen geöffnet (genau
+ * der Fall beim sofortigen Erkennen eines bekannten Barcodes), konnte der verzögerte Aufräum-
+ * Timer des alten Overlays das neue kurz danach wieder löschen — neuer Generationszähler
+ * (ftOverlayGeneration) verhindert das.
+ * v27: Essenstracker-Bugfixes — (1) CSS-Kommentar enthielt versehentlich einen Kommentar-
+ * Endemarker mitten im Text, wodurch der Kommentar vorzeitig endete und .date-row samt Folgeregeln vom Browser verworfen
+ * wurden (Datumszeile lief nicht mehr als Flexbox, Kreise in der Kalenderansicht sahen kaputt
+ * aus). (2) Sheet-Positionierung bei geöffneter Tastatur auf dieselbe Höhe/Top-Technik wie
+ * wireViewportAwareOverlays() umgestellt (vorher bottom/max-height-Neuberechnung, die bei der
+ * Android-Tastatur-Animation sichtbar nachfederte). (3) Essenstracker-Zahlenfelder von der
+ * globalen Scroll-Rad/Ziffernblock-Umschaltung ausgenommen, bekommen jetzt immer die normale
+ * System-Tastatur. (4) ftOffSearch() (Online-Textsuche) cachte Ergebnisse bisher nicht in
+ * ftOffCache — Klick auf ein Online-Suchergebnis oder dessen Favoriten-Stern tat dadurch
+ * nichts, da ftGetFoodById() das Lebensmittel nicht wiederfand.
+ * v26: Essenstracker-Statistiken ergänzt (Tippen auf die kcal-Zahl → renderFoodStats() in
+ * 15-food-tracker.js) — Balkendiagramm kcal/Tag (Woche/Monat/Quartal/Jahr), interaktiver
+ * Makro-Donut mit Lebensmittel-Aufschlüsselung, Monatsübersicht-Karte unter "Monat".
  * v25: Bugfix Essenstracker-Mengen-Modal — .qty-input hatte kein min-width:0, wodurch der
  * Zahlen-Input in der Gramm/Stück-Zeile nicht unter seine Browser-Mindestbreite schrumpfen
  * konnte und den "+"-Button rechts aus der Sheet-Karte herausdrückte (musste gescrollt
@@ -74,7 +105,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v25';
+const CACHE_NAME = 'trainingsplan-cache-v30';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [

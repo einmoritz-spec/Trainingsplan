@@ -248,6 +248,7 @@ function renderViewByState(state){
     case 'monthReport': renderMonthReport(state.params.year, state.params.month); break;
     case 'exerciseSessionDetail': renderExerciseSessionDetail(state.params.sessionId, state.params.exerciseId); break;
     case 'foodTracker': initFoodTracker().then(renderFoodTracker); break;
+    case 'foodStats': initFoodTracker().then(renderFoodStats); break;
     case 'active': if (active) renderActive(); else renderHome(); break;
     default: renderHome();
   }
