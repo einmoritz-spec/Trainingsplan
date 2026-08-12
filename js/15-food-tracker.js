@@ -310,7 +310,7 @@ function renderFoodTracker(){
   document.getElementById('dLabel').onclick = () => goFoodCalendar();
   document.getElementById('settingsBtn').onclick = ftOpenSettingsSheet;
   FT_MEAL_KEYS.forEach(meal=>{
-    document.getElementById('addBtn_'+meal).onclick = ()=>ftOpenAddSheet(meal);
+    document.getElementById('addBtn_'+meal).onclick = ()=>goFtAddFood(meal);
     ftGetDay(ftCurrentDate)[meal].forEach(e=>{
       const delBtn = document.getElementById('del_'+e.id);
       if(delBtn) delBtn.onclick = (ev)=>{ ev.stopPropagation(); ftRemoveEntry(meal, e.id); };
@@ -321,6 +321,42 @@ function renderFoodTracker(){
     const saveBtn = document.getElementById('saveMeal_'+meal);
     if(saveBtn) saveBtn.onclick = ()=>ftOpenSaveMealPrompt(meal);
   });
+  ftWireDateSwipe();
+}
+
+// Wischen nach links/rechts wechselt den Tag — dieselbe Aktion wie die Pfeil-Buttons neben
+// dem Datum. An .app statt an ein spezielles Wrapper-Element gehängt, da renderFoodTracker()
+// jedesmal komplett neu rendert (app.innerHTML=...) und .app selbst als Element bestehen
+// bleibt — Listener müssen also nur EINMAL sitzen und nicht bei jedem Rendern neu vergeben
+// werden (removeEventListener davor verhindert, dass sich bei wiederholtem Aufruf mehrere
+// Listener stapeln). Bewusst rein additiv (kein preventDefault, passive:true) — normales
+// vertikales Scrollen/Antippen von Buttons bleibt dadurch unangetastet, nur ein eindeutig
+// horizontaler Wisch löst zusätzlich den Tageswechsel aus. Der history.state-Check verhindert,
+// dass ein Wisch auf einer GANZ ANDEREN Seite (z. B. Startseite) versehentlich den
+// Essenstracker-Tag im Hintergrund verändert, obwohl der Listener global an .app hängt.
+let ftSwipeStartX = null, ftSwipeStartY = null;
+let ftSwipeTouchStartHandler = null, ftSwipeTouchEndHandler = null;
+function ftWireDateSwipe(){
+  if (ftSwipeTouchStartHandler) app.removeEventListener('touchstart', ftSwipeTouchStartHandler);
+  if (ftSwipeTouchEndHandler) app.removeEventListener('touchend', ftSwipeTouchEndHandler);
+  ftSwipeTouchStartHandler = (ev) => {
+    if (ev.touches.length !== 1) return;
+    ftSwipeStartX = ev.touches[0].clientX;
+    ftSwipeStartY = ev.touches[0].clientY;
+  };
+  ftSwipeTouchEndHandler = (ev) => {
+    if (ftSwipeStartX === null) return;
+    const startX = ftSwipeStartX, startY = ftSwipeStartY;
+    ftSwipeStartX = null; ftSwipeStartY = null;
+    if (!history.state || history.state.view !== 'foodTracker') return;
+    const t = ev.changedTouches[0];
+    const dx = t.clientX - startX, dy = t.clientY - startY;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+    ftCurrentDate = ftAddDays(ftCurrentDate, dx < 0 ? 1 : -1);
+    renderFoodTracker();
+  };
+  app.addEventListener('touchstart', ftSwipeTouchStartHandler, { passive: true });
+  app.addEventListener('touchend', ftSwipeTouchEndHandler, { passive: true });
 }
 
 function ftMealHTML(meal){
@@ -622,37 +658,45 @@ function goFoodCalendar(push){
   renderFtMonthOverview();
 }
 
-/* ============ Sheet: Lebensmittel hinzufügen ============ */
+/* ============ Seite: Lebensmittel hinzufügen ============
+   War früher ein Bottom-Sheet-Overlay über der Tagesansicht — jetzt eine eigene, vollwertige
+   Seite (wie renderFoodStats() etc.), aus zwei Gründen:
+   1. Ein Bottom-Sheet mit eigener visualViewport-Höhenberechnung (siehe ftApplyOverlayViewport)
+      bleibt auf Android/iOS störanfällig, sobald die Tastatur ein-/ausblendet (leichtes
+      Nachfedern/Springen) — eine normale Seite dagegen nutzt den ganz gewöhnlichen
+      Dokumentfluss, den der Browser für Tastatur-Ein-/Ausblenden nativ und zuverlässig
+      handhabt, exakt wie bei jeder anderen Texteingabe-Seite der App.
+   2. Als eigene Seite lässt sich unmöglich "im Hintergrund weiterscrollen" (kein Hintergrund
+      mehr vorhanden, der Inhalt IST die Seite) — das Scroll-Lock/Viewport-Gefrickel für diesen
+      Anwendungsfall entfällt komplett.
+   Das Suchfeld wird bewusst NICHT mehr automatisch fokussiert (kein autofocus/`.focus()` beim
+   Öffnen) — die Seite startet im normalen Such-losen "Durchstöbern"-Zustand (Favoriten/Zuletzt/
+   Eigene/Gespeicherte Mahlzeiten, siehe ftRenderDefaultResults()), die Tastatur öffnet sich erst
+   nach einem echten Tap auf das Suchfeld selbst, wie bei jedem gewöhnlichen Eingabefeld. */
 let ftAddSheetMeal = null;
 let ftAddSheetSearchToken = 0;
 
-function ftOpenAddSheet(meal){
+function goFtAddFood(meal, push){
+  if (push !== false) pushView('foodAddMeal', { meal });
+  renderFtAddFood(meal);
+}
+
+function renderFtAddFood(meal){
   ftAddSheetMeal = meal;
-  ftOpenOverlay(`
-    <div class="sheet" id="ftAddSheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-head">
-        <div class="sheet-title">${FT_MEAL_LABELS[meal]}</div>
-        <button class="sheet-close" id="ftAddSheetClose">${ftIconX()}</button>
-      </div>
-      <div class="sheet-body">
-        <div class="search-wrap">
-          <input class="search-input" id="ftFoodSearchInput" placeholder="Lebensmittel suchen …" autocomplete="off">
-          <button class="icon-btn" id="ftScanBtn" title="Barcode scannen">${ftIconBarcode()}</button>
-        </div>
-        <div id="ftSearchResults"></div>
-      </div>
+  app.innerHTML = `
+    <div class="back-row" style="margin-top:0;">
+      <button class="back-btn-icon" id="ftAddBackBtn" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button>
     </div>
-  `);
-  document.getElementById('ftAddSheetClose').onclick = ftCloseOverlay;
+    <div class="brand" style="margin-bottom:14px;"><h1 style="font-size:22px;">${FT_MEAL_LABELS[meal]}</h1></div>
+    <div class="search-wrap">
+      <input class="search-input" id="ftFoodSearchInput" placeholder="Lebensmittel suchen …" autocomplete="off">
+      <button class="icon-btn" id="ftScanBtn" title="Barcode scannen">${ftIconBarcode()}</button>
+    </div>
+    <div id="ftSearchResults"></div>
+  `;
+  document.getElementById('ftAddBackBtn').onclick = () => history.back();
   document.getElementById('ftScanBtn').onclick = ftOpenScanner;
   const input = document.getElementById('ftFoodSearchInput');
-  // Direkt beim Öffnen fokussieren, damit sofort losgetippt werden kann, ohne extra ins Feld
-  // tippen zu müssen. Kurzer Timeout statt sofortigem focus(): die Sheet-Einblend-Animation
-  // (siehe .sheet.open, transition .22s) läuft parallel — ein sofortiges focus() lässt die
-  // Tastatur teils schon mitten in der noch laufenden Animation aufspringen und ruckelt dadurch
-  // sichtbar; nach der Animation ist der Übergang sauber.
-  setTimeout(() => input.focus(), 250);
   let searchDebounceTimer = null;
   input.addEventListener('input', ()=>{
     clearTimeout(searchDebounceTimer);
@@ -680,7 +724,12 @@ function ftRenderDefaultResults(){
   box.innerHTML = html || `<div class="no-results">Noch keine Favoriten oder zuletzt genutzten Lebensmittel.</div>` + `<button class="ft-btn-ghost" id="ftNewCustomFoodBtn">+ Eigenes Lebensmittel anlegen</button>`;
   ftWireResultRows(box);
   const newBtn = document.getElementById('ftNewCustomFoodBtn');
-  if(newBtn) newBtn.onclick = ftOpenCustomFoodForm;
+  // Bugfix: newBtn.onclick = ftOpenCustomFoodForm (direkte Referenz) hätte dem Handler den
+  // Klick-Event als ersten Parameter übergeben — ftOpenCustomFoodForm(prefillBarcode) hätte
+  // das MouseEvent-Objekt fälschlich als "prefillBarcode" interpretiert (truthy!), wodurch der
+  // Titel fälschlich "Produkt nicht gefunden" gezeigt und ein kaputter Barcode-Wert am neuen
+  // Lebensmittel hinterlegt worden wäre. Wrapper-Funktion ruft stattdessen ohne Argument auf.
+  if(newBtn) newBtn.onclick = () => ftOpenCustomFoodForm();
 }
 function ftSavedMealsListHTML(){
   if(!ftSavedMeals.length) return `<div class="no-results">Keine gespeicherten Mahlzeiten.</div>`;
@@ -995,7 +1044,16 @@ function ftAddEntryToMeal(food, amountG, mode, pieceCount){
   ftUpdateRecent(ftAddSheetMeal, food.id);
   ftRememberAmount(food.id, mode, amountG, pieceCount);
   ftBumpUsageCount(food.id);
-  renderFoodTracker();
+  // Bleibt auf der "Lebensmittel hinzufügen"-Seite (statt wie früher beim Sheet-Overlay
+  // automatisch zur Tagesansicht zurückzukehren) — so lässt sich direkt das nächste
+  // Lebensmittel für dieselbe Mahlzeit hinzufügen, ohne die Seite jedes Mal neu öffnen zu
+  // müssen. Suchfeld wird geleert und die Standardliste (jetzt mit dem frischen "Zuletzt"-
+  // Eintrag) neu aufgebaut; die Tagesansicht selbst aktualisiert sich automatisch, sobald man
+  // über den Zurück-Pfeil dorthin zurückkehrt (renderFoodTracker() liest ftDays neu ein).
+  const input = document.getElementById('ftFoodSearchInput');
+  if (input) input.value = '';
+  ftRenderDefaultResults();
+  ftToast('Hinzugefügt');
 }
 function ftUpdateRecent(meal, foodId){
   let list = ftRecent[meal] || [];
@@ -1106,9 +1164,11 @@ function ftApplySavedMeal(mealId){
     added++;
   }
   ftSave('days', ftDays);
-  ftCloseOverlay();
-  renderFoodTracker();
-  if(added < sm.items.length) ftToast('Manche Zutaten waren nicht mehr auffindbar');
+  // Wie ftAddEntryToMeal(): bleibt auf der "Lebensmittel hinzufügen"-Seite (kein Overlay mehr
+  // zu schließen, seit diese Seite kein Sheet mehr ist, siehe renderFtAddFood()) und baut die
+  // Ergebnisliste einfach neu auf.
+  ftRenderDefaultResults();
+  ftToast(added < sm.items.length ? 'Hinzugefügt · manche Zutaten waren nicht mehr auffindbar' : 'Mahlzeit hinzugefügt');
 }
 
 /* ============ Barcode-Scanner ============ */

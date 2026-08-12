@@ -153,7 +153,10 @@ function goMonthOverview(push){
 }
 function goMonthReport(year, month, push){
   if (push !== false) pushView('monthReport', { year, month });
-  renderMonthReport(year, month);
+  // Essenstracker-Daten müssen geladen sein, BEVOR der Monatsbericht rendert — er zeigt jetzt
+  // zusätzlich eine Ernährungs-Karte (Ø kcal/Makros) für denselben Monat, siehe
+  // renderMonthReport() (05-calendar.js). initFoodTracker() ist idempotent.
+  initFoodTracker().then(() => renderMonthReport(year, month));
 }
 function goExerciseSessionDetail(sessionId, exerciseId, push){
   if (push !== false) pushView('exerciseSessionDetail', { sessionId, exerciseId });
@@ -250,10 +253,11 @@ function renderViewByState(state){
     case 'bodyWeightChart': renderBodyWeightChart(); break;
     case 'workoutsOverview': renderWorkoutsOverview(); break;
     case 'monthOverview': initFoodTracker().then(renderMonthOverview); break;
-    case 'monthReport': renderMonthReport(state.params.year, state.params.month); break;
+    case 'monthReport': initFoodTracker().then(() => renderMonthReport(state.params.year, state.params.month)); break;
     case 'exerciseSessionDetail': renderExerciseSessionDetail(state.params.sessionId, state.params.exerciseId); break;
     case 'foodTracker': initFoodTracker().then(renderFoodTracker); break;
     case 'foodStats': initFoodTracker().then(renderFoodStats); break;
+    case 'foodAddMeal': initFoodTracker().then(() => renderFtAddFood(state.params.meal)); break;
     case 'foodCalendar': initFoodTracker().then(renderFtMonthOverview); break;
     case 'active': if (active) renderActive(); else renderHome(); break;
     default: renderHome();

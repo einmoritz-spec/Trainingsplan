@@ -250,25 +250,6 @@ function monthOverviewBlockHTML(year, month){
 
   const reportIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"></rect><line x1="8" y1="8" x2="16" y2="8"></line><line x1="8" y1="12" x2="16" y2="12"></line><line x1="8" y1="16" x2="12" y2="16"></line></svg>`;
 
-  // Essenstracker-Monatswerte (nur, wenn im Monat auch tatsächlich etwas protokolliert wurde)
-  // — nutzt ftComputeMonthStats() 1:1 aus 15-food-tracker.js (dieselbe Berechnung wie auf der
-  // Essenstracker-Statistikseite), damit hier keine zweite, evtl. abweichende Logik entsteht.
-  // .macro-row/.macro/.macro-dot sind dieselben Klassen wie im Essenstracker-Kopf (Kopf von
-  // renderFoodTracker()) — bewusst wiederverwendet statt eigener Optik, für einen einheitlichen
-  // Ernährungs-"Look" quer durch die App.
-  const foodStats = (typeof ftComputeMonthStats === 'function') ? ftComputeMonthStats(year, month) : null;
-  const foodStatsHTML = (foodStats && foodStats.count) ? `
-    <div class="section-label" style="margin-top:20px;">Ernährung Ø/Tag</div>
-    <div class="month-overview-food-summary">
-      <div class="month-overview-food-kcal">${foodStats.avgKcal}<span> kcal</span></div>
-      <div class="macro-row" style="margin-top:10px;">
-        <div class="macro"><div><span class="macro-dot" style="background:var(--protein)"></span><span class="macro-val">${foodStats.avgP} g</span></div><div class="macro-label">Protein</div></div>
-        <div class="macro"><div><span class="macro-dot" style="background:var(--carbs)"></span><span class="macro-val">${foodStats.avgC} g</span></div><div class="macro-label">Kohlenhydrate</div></div>
-        <div class="macro"><div><span class="macro-dot" style="background:var(--fat)"></span><span class="macro-val">${foodStats.avgF} g</span></div><div class="macro-label">Fett</div></div>
-      </div>
-    </div>
-  ` : '';
-
   return `
     <div class="month-overview-block">
       <h2 class="month-overview-title">${MONTH_NAMES_DE[month]}${titleYear}</h2>
@@ -277,7 +258,6 @@ function monthOverviewBlockHTML(year, month){
       <div class="month-overview-grid">
         ${gridInner}
       </div>
-      ${foodStatsHTML}
       <button class="month-overview-report-btn" type="button" data-report-month="${year}-${month}">${reportIcon}${MONTH_NAMES_DE[month]} Bericht</button>
     </div>
   `;
@@ -722,6 +702,25 @@ function renderMonthReport(year, month){
   const titleYear = year !== now.getFullYear() ? ` ${year}` : '';
   const accent = cssVar('--accent');
 
+  // Essenstracker-Monatswerte für DENSELBEN Monat — nutzt ftComputeMonthStats() 1:1 aus
+  // 15-food-tracker.js (dieselbe Berechnung wie auf der Essenstracker-Statistikseite), damit
+  // hier keine zweite, evtl. abweichende Logik entsteht. Nur angezeigt, wenn im Monat auch
+  // tatsächlich etwas protokolliert wurde — auf der Monatsübersicht selbst (jeder einzelne
+  // Monatsblock, monthOverviewBlockHTML()) erscheint das NICHT mehr (war dort bei 12 Monaten
+  // auf einmal zu viel/zu oft) — jetzt nur noch hier im Bericht, wenn man ihn gezielt öffnet.
+  const foodStats = (typeof ftComputeMonthStats === 'function') ? ftComputeMonthStats(year, month) : null;
+  const foodCardHTML = (foodStats && foodStats.count) ? `
+    <div class="month-report-card">
+      <div class="month-report-card-title">Ernährung Ø/Tag</div>
+      <div class="macro-row" style="margin-top:4px; gap:16px; flex-wrap:wrap;">
+        <div class="macro"><div><span class="macro-val">${foodStats.avgKcal}</span></div><div class="macro-label">kcal</div></div>
+        <div class="macro"><div><span class="macro-dot" style="background:var(--protein)"></span><span class="macro-val">${foodStats.avgP} g</span></div><div class="macro-label">Protein</div></div>
+        <div class="macro"><div><span class="macro-dot" style="background:var(--carbs)"></span><span class="macro-val">${foodStats.avgC} g</span></div><div class="macro-label">Kohlenhydrate</div></div>
+        <div class="macro"><div><span class="macro-dot" style="background:var(--fat)"></span><span class="macro-val">${foodStats.avgF} g</span></div><div class="macro-label">Fett</div></div>
+      </div>
+    </div>
+  ` : '';
+
   const deltaHTML = (delta, suffix) => {
     if (!hasPrevData || delta === 0) return '';
     const sign = delta > 0 ? '+' : '−';
@@ -823,6 +822,8 @@ function renderMonthReport(year, month){
       <div class="month-report-card-title">Wochenverlauf</div>
       <div class="month-report-chart">${buildBarChart(weeklyPoints, accent, true, 64)}</div>
     </div>
+
+    ${foodCardHTML}
 
     ${highlightRows.length ? `
       <div class="month-report-card">

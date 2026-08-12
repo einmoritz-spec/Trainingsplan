@@ -362,12 +362,6 @@ button.month-overview-day-num{ cursor:pointer; -webkit-tap-highlight-color:trans
 }
 .month-overview-report-btn svg{ width:18px; height:18px; flex:none; }
 .month-overview-sentinel{ height:1px; }
-/* Ernährungs-Zusammenfassung je Monat (siehe monthOverviewBlockHTML()) — die Makro-Reihe
-   selbst nutzt bereits .macro-row/.macro/.macro-dot vom Essenstracker-Kopf, hier nur der
-   große kcal-Wert darüber im selben Stil wie .kcal-value dort. */
-.month-overview-food-summary{ text-align:center; }
-.month-overview-food-kcal{ font-size:1.7rem; font-weight:800; }
-.month-overview-food-kcal span{ font-size:0.85rem; font-weight:600; color:var(--muted); margin-left:2px; }
 .month-report-title{ font-size:24px; font-weight:800; margin:8px 0 18px; }
 /* ---------- Monatsbericht: einheitliches Card-Layout für alle Abschnitte ---------- */
 .month-report-card{
@@ -2136,12 +2130,18 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
      ========================================================================= */
 
 /* ---- Datumszeile ---- */
-.date-row{display:flex; align-items:center; justify-content:center; gap:6px; padding:6px 0 18px; position:relative;}
-/* Gleiche Optik wie der Einstellungen-Button auf der Startseite (.gear.nav-row-icon-only,
-   07-home.js) — dasselbe Zahnrad-Unicode-Zeichen statt eines eigenen SVG-Icons, nur hier
-   absolut in der Datumszeile positioniert statt in der Nav-Zeile. */
+/* Grid statt Flex+absolute Positionierung für den Einstellungen-Button: vorher lag
+   .settings-btn per position:absolute mit einem fest geschätzten top-Offset über der Zeile,
+   was bei leicht schwankender Zeilenhöhe (abhängig von der Schriftart-Einstellung, siehe
+   .date-label) nicht mehr exakt auf gleicher Höhe wie die Pfeile-Buttons lag. Als reguläre
+   Grid-Spalte übernimmt align-items:center dieselbe Zentrierung wie bei den Pfeilen — garantiert
+   pixelgenau gleiche Höhe, unabhängig von der tatsächlichen Zeilenhöhe. */
+.date-row{
+  display:grid; grid-template-columns: 38px 1fr 38px 38px; align-items:center; gap:6px;
+  padding:6px 0 18px;
+}
 .settings-btn{
-  position:absolute; right:0; top:2px; width:38px; height:38px; padding:0;
+  width:38px; height:38px; padding:0;
   display:flex; align-items:center; justify-content:center; font-size:16px;
 }
 .date-arrow{
