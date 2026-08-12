@@ -30,6 +30,25 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v31: 15-food-tracker.js (2083 Zeilen, eine einzige Datei für das komplette
+ * Essenstracker-Feature) aufgeteilt in 15a-food-core.js/15b-food-day.js/
+ * 15c-food-add.js/15d-food-stats.js (siehe Kopfkommentar in 15a-food-core.js) —
+ * reine Architektur-Änderung, kein Funktionsverlust. Dabei zugleich drei
+ * Bugfixes: (1) Fremd-Origin-Antworten (Open-Food-Facts-Barcode-Abfragen,
+ * Online-Textsuche) wurden bisher versehentlich über die generische
+ * Network-first-Route mitgecacht und blähten CACHE_NAME unbegrenzt auf —
+ * neuer expliziter Origin-Filter im fetch-Handler lässt Fremd-Origins jetzt
+ * unangetastet durch (siehe Kommentar dort). (2) ftOffByBarcode() (jetzt
+ * 15a-food-core.js) hatte kein try/catch um fetch()/json() — offline oder bei
+ * API-Ausfall blieb der Scan-Vorgang beim Toast "Suche Produkt …" stumm
+ * hängen, ohne dass der Nutzer je eine Rückmeldung bekam; liefert jetzt immer
+ * ein Ergebnisobjekt inkl. Fehlergrund. (3) Essenstracker-Suche fand bisher
+ * nur Ein-Wort-Treffer ("Hähnchen Brust" fand kein "Hähnchenbrust, paniert")
+ * — durchsucht Suchbegriffe jetzt Wort für Wort. Zusätzlich: Essenstracker-
+ * Tageshistorie liegt jetzt (wie der Trainingsverlauf) in Monats-Chunks statt
+ * einem einzigen Blob (siehe loadAllFoodDays()/saveFoodDayChunk(),
+ * 01-storage.js) — ein einzelner geloggter Bissen serialisiert nicht mehr
+ * die komplette Ernährungshistorie neu.
  * v30: Essenstracker-Suche priorisiert jetzt bereits getrackte Lebensmittel (ftFoodUsageCount,
  * food:usageCount, hochgezählt in ftAddEntryToMeal()/ftApplySavedMeal()) — sie erscheinen bei
  * einer Suche immer vor noch nie getrackten Treffern, sortiert nach Häufigkeit, auch wenn ein
@@ -105,7 +124,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v30';
+const CACHE_NAME = 'trainingsplan-cache-v31';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
@@ -134,7 +153,10 @@ const APP_SHELL = [
   './js/12-session-summary.js',
   './js/13-session-detail-pdf.js',
   './js/data/food-data.js',
-  './js/15-food-tracker.js',
+  './js/15a-food-core.js',
+  './js/15b-food-day.js',
+  './js/15c-food-add.js',
+  './js/15d-food-stats.js',
   './js/14-app-init.js',
   './js/vendor/jspdf.umd.min.js',
   './assets/icons/favicon.png',
@@ -256,6 +278,16 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+
+  // Fremd-Origins (außer den bekannten Font-Hosts unten) lässt der Service Worker komplett
+  // unangetastet durch den Browser laufen, statt sie abzufangen — Bugfix: vorher griff für
+  // ALLES, was nicht auf einen Cache-first-Dateityp (Bild) endete, die generische
+  // Network-first-Route weiter unten, die jede erfolgreiche Antwort in CACHE_NAME schreibt.
+  // Damit landete jede Open-Food-Facts-Barcode-Abfrage und jede Online-Textsuche (Essenstracker,
+  // 15a-food-core.js) dauerhaft im App-Shell-Cache und wurde erst beim nächsten CACHE_NAME-Bump
+  // wieder gelöscht — der Cache wuchs so unbegrenzt mit Fremd-API-Antworten statt nur die
+  // eigene App-Shell zu enthalten.
+  if (url.origin !== self.location.origin && !FONT_HOSTS.includes(url.hostname)) return;
 
   if (FONT_HOSTS.includes(url.hostname)) {
     event.respondWith(
