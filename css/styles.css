@@ -132,7 +132,7 @@ input{ font-family: inherit; }
 }
 /* Button zum Essenstracker-Feature (siehe 15-food-tracker.js), nur sichtbar wenn das Feature
    in den Einstellungen aktiviert ist (isFoodTrackerEnabled(), 07-home.js). Piktogramm vom
-   Nutzer bereitgestellt (siehe gabel-und-messer.png), als Inline-SVG in Akzentfarbe. */
+   Nutzer bereitgestellt (siehe messer-und-gabel.png), als Inline-SVG in Akzentfarbe. */
 .brand-food-btn{
   flex-shrink:0; width:40px; height:40px; border-radius:50%; border:none; background:none;
   color: var(--accent); display:flex; align-items:center; justify-content:center; padding:0;
@@ -2177,6 +2177,40 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
 .macro-val{font-weight:700; font-size:1.05rem;}
 .macro-label{font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin-top:2px;}
 
+/* Ziel-Fortschritt (siehe ftGoals/ftGoalBarHTML(), 15-food-tracker.js) — nur sichtbar, wenn
+   in den Einstellungen tatsächlich ein Ziel hinterlegt wurde. Ohne Ziel bleibt die Karte exakt
+   wie vorher (nur die reine Zahl, kein Balken, kein "/ Ziel"-Zusatz). */
+.ft-goal-of{ color:var(--muted); font-weight:600; }
+.kcal-value .ft-goal-of{ font-size:1.5rem; }
+.macro-val .ft-goal-of{ font-size:0.85rem; }
+.ft-goal-bar{ height:5px; border-radius:3px; background:var(--surface-2); margin-top:10px; overflow:hidden; }
+.ft-goal-bar-fill{ height:100%; border-radius:3px; transition:width .3s ease; }
+.ft-goal-bar-small{ height:3px; margin-top:6px; }
+/* Ziel-Erreichung-Karte (siehe ftGoalComparisonHTML(), 15-food-tracker.js) — mehrere Zeilen
+   mit Ø-Wert vs. Ziel + Balken übereinander innerhalb einer .month-report-card. */
+.ft-goal-compare-row{ margin-bottom:16px; }
+.ft-goal-compare-row:last-child{ margin-bottom:0; }
+.ft-goal-compare-top{ display:flex; justify-content:space-between; align-items:baseline; font-size:0.9rem; font-weight:600; }
+
+/* "Wie gestern übernehmen"-Vorschlag (siehe ftCopyPreviousDay(), 15-food-tracker.js) — nur
+   sichtbar, wenn der aktuelle Tag noch leer ist, daher dezent gehalten statt als große
+   Primary-Aktion, um nicht wichtiger zu wirken als das eigentliche Hinzufügen. */
+.ft-copy-prev-btn{
+  display:flex; align-items:center; justify-content:center; gap:7px; width:100%;
+  background:var(--surface); border:1px dashed var(--border); border-radius:var(--radius);
+  color:var(--muted); font-family:inherit; font-size:0.85rem; font-weight:600;
+  padding:12px; margin-top:14px; cursor:pointer;
+}
+.ft-copy-prev-btn:active{ opacity:0.7; }
+
+/* Ballaststoffe/Zucker/Salz — bewusst NICHT Teil der .summary-card oben (siehe
+   renderFoodTracker()), sondern als kleine, unauffällige Zeile ganz unten nach den
+   Mahlzeiten. */
+.ft-extra-nutrients{ margin-top:22px; text-align:center; }
+.ft-extra-nutrients-label{ font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px; }
+.ft-extra-nutrients-row{ display:flex; justify-content:center; gap:16px; flex-wrap:wrap; font-size:0.78rem; color:var(--muted); }
+.ft-extra-nutrients-row b{ color:var(--text); font-weight:700; }
+
 /* ---- Mahlzeiten ---- */
 .meal-section{margin-top:20px;}
 .meal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; padding:0 2px;}
@@ -2316,6 +2350,14 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
   padding:11px 12px; font-size:16px; color:var(--text); font-family:inherit;
 }
 .unit-toggle{display:flex; background:var(--surface-2); border-radius:12px; padding:3px; gap:3px; margin-bottom:14px;}
+/* Ein-/ausklappbarer "+ Weitere Nährwerte"-Link im Eigenes-Lebensmittel-Formular (siehe
+   ftOpenCustomFoodForm(), 15-food-tracker.js) — hält das Formular standardmäßig kompakt
+   (siehe frühere "Fenster wird zu lang"-Rückmeldung), Ballaststoffe/Zucker/Salz sind optional
+   und für die meisten nicht relevant genug, um sie immer einzublenden. */
+.ft-optional-toggle{
+  background:none; border:none; padding:0; margin:14px 0 10px; font-family:inherit;
+  color:var(--accent); font-size:0.9rem; font-weight:600; cursor:pointer; text-align:left;
+}
 .unit-toggle button{
   flex:1; border:none; background:none; padding:9px; border-radius:9px; font-weight:600; font-size:0.88rem;
   color:var(--muted); cursor:pointer; font-family:inherit;
@@ -2340,6 +2382,7 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
 }
 .qty-preview-kcal{font-family:'Fraunces',serif; font-weight:700; font-size:1.6rem;}
 .qty-preview-macros{display:flex; justify-content:center; gap:14px; margin-top:6px; font-size:0.8rem; color:var(--muted);}
+.qty-preview-extra{ text-align:center; margin-top:6px; font-size:0.72rem; color:var(--muted); opacity:0.8; }
 
 /* Kalender */
 /* .cal-day/.cal-grid/.cal-dow/.cal-nav entfernt — der Essenstracker-Kalender ist jetzt

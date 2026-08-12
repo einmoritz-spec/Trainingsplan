@@ -145,7 +145,7 @@ function monthOverviewDayMarker(year, month, day){
   // protokolliert wurde — auch an trainingsfreien Tagen, damit reine Ernährungstage im Monat
   // ebenfalls sichtbar und antippbar sind (siehe openDayTrainingPopup()).
   const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  const hasFood = typeof ftDays !== 'undefined' && !!ftDays[iso] && FT_MEAL_KEYS.some(k => ftDays[iso][k].length);
+  const hasFood = typeof ftDays !== 'undefined' && !!ftDays[iso] && FT_MEAL_KEYS.some(k => (ftDays[iso][k]||[]).length);
   return { color, isToday, hasFood };
 }
 

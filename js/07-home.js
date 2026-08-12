@@ -183,16 +183,19 @@ function isFoodTrackerEnabled(){
   return !!(plan && plan.foodTrackerEnabled);
 }
 
-// Vom Nutzer bereitgestelltes Gabel/Messer-Piktogramm (siehe gabel-und-messer.png), als Inline-
-// SVG nachgezeichnet statt als Bild eingebunden — dadurch lässt es sich wie die anderen SVG-
-// Icons der App per stroke="currentColor" einfärben (hier bewusst in der Akzentfarbe, siehe
-// Verwendung unten in renderHome()).
+// Vom Nutzer bereitgestelltes Gabel/Messer-Piktogramm (siehe messer-und-gabel.png, ersetzt die
+// vorherige, per Stroke nachgezeichnete Version), als flächig gefülltes Inline-SVG nachgebaut
+// statt als Bild eingebunden — dadurch lässt es sich wie die anderen SVG-Icons der App per
+// fill="currentColor" einfärben (hier bewusst in der Akzentfarbe, siehe Verwendung unten in
+// renderHome()).
 function iconForkKnifeSVG(){
-  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 2v5.5a2 2 0 002 2V21a1 1 0 002 0V9.5a2 2 0 002-2V2"/>
-    <path d="M9.3 2v5"/>
-    <path d="M10.7 2v5"/>
-    <path d="M17.5 2c-1.7.6-2.5 2.6-2.5 5s.6 4 2 4.5V21a1 1 0 002 0V2"/>
+  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+    <rect x="6.3" y="1" width="1.15" height="7.2" rx="0.55"/>
+    <rect x="7.9" y="1" width="1.15" height="7.2" rx="0.55"/>
+    <rect x="9.5" y="1" width="1.15" height="7.2" rx="0.55"/>
+    <path d="M6.15 7.4v.5c0 1.7 1.4 3.1 3.1 3.1s3.1-1.4 3.1-3.1v-.5H6.15z"/>
+    <path d="M8.45 10.85c-.55 0-1 .42-1.04.96l-.66 10.9c-.05.78.62 1.44 1.42 1.44h1.66c.8 0 1.47-.66 1.42-1.44l-.66-10.9c-.04-.54-.49-.96-1.04-.96h-1.1z"/>
+    <path d="M17.9 1.05c-2.05.28-3.65 2.2-3.65 4.55v5.9c0 1.25.72 2.32 2.05 2.68l.65.18v8.3c0 .85.7 1.34 1.55 1.34s1.55-.5 1.55-1.34V1.7c0-.4-.33-.7-.72-.66-.45.05-1.03.01-1.43.01z"/>
   </svg>`;
 }
 

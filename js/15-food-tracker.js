@@ -66,7 +66,7 @@ let ftDays = {};
 let ftFavorites = []; // Array von Food-IDs
 let ftCustomFoods = [];
 let ftSavedMeals = [];
-let ftRecent = { breakfast: [], lunch: [], dinner: [] };
+let ftRecent = { breakfast: [], lunch: [], dinner: [], snacks: [] };
 let ftOffCache = {}; // Barcode/Online-Treffer-Code -> normalisiertes Food-Objekt
 // Zuletzt verwendete Menge je Lebensmittel (food.id -> {unitMode, amountG, pieceCount}) —
 // beim erneuten Hinzufügen desselben Lebensmittels wird das als Vorbelegung im Mengen-Modal
@@ -76,25 +76,31 @@ let ftLastAmounts = {};
 // Such-Reihenfolge (siehe ftRankFoods()): häufig getrackte Lebensmittel erscheinen dort ganz
 // oben, auch wenn ein anderer Treffer textlich besser zum Suchbegriff passen würde.
 let ftFoodUsageCount = {};
+// Tagesziele (kcal/Protein/Kohlenhydrate/Fett) — jedes Feld einzeln optional, null = "kein
+// Ziel gesetzt". Ist NICHTS gesetzt, verhält sich die App exakt wie vorher (reine Zahlen ohne
+// Ziel-Bezug, siehe renderFoodTracker()) — die Fortschrittsanzeige blendet sich erst ein,
+// sobald mindestens ein Ziel hinterlegt ist.
+let ftGoals = { kcal: null, p: null, c: null, f: null };
 let foodTrackerLoaded = false;
 
 async function ftSave(key, val){ await saveJSON('food:' + key, val); }
 
 async function initFoodTracker(){
   if (foodTrackerLoaded) return;
-  const [days, favorites, custom, meals, recent, offCache, lastAmounts, usageCount] = await Promise.all([
+  const [days, favorites, custom, meals, recent, offCache, lastAmounts, usageCount, goals] = await Promise.all([
     loadJSON('food:days', {}),
     loadJSON('food:favorites', []),
     loadJSON('food:customFoods', []),
     loadJSON('food:savedMeals', []),
-    loadJSON('food:recent', { breakfast: [], lunch: [], dinner: [] }),
+    loadJSON('food:recent', { breakfast: [], lunch: [], dinner: [], snacks: [] }),
     loadJSON('food:offCache', {}),
     loadJSON('food:lastAmounts', {}),
     loadJSON('food:usageCount', {}),
+    loadJSON('food:goals', { kcal: null, p: null, c: null, f: null }),
   ]);
   ftDays = days; ftFavorites = favorites; ftCustomFoods = custom;
   ftSavedMeals = meals; ftRecent = recent; ftOffCache = offCache; ftLastAmounts = lastAmounts;
-  ftFoodUsageCount = usageCount;
+  ftFoodUsageCount = usageCount; ftGoals = goals;
   foodTrackerLoaded = true;
 }
 
@@ -133,12 +139,24 @@ function ftDateLabel(iso){
 }
 
 let ftCurrentDate = null;
-const FT_MEAL_KEYS = ['breakfast','lunch','dinner'];
-const FT_MEAL_LABELS = {breakfast:'Frühstück', lunch:'Mittagessen', dinner:'Abendessen'};
+// "snacks" bewusst ans ENDE gehängt (nicht zwischen Mittag-/Abendessen einsortiert) — Snacks
+// passieren über den ganzen Tag verteilt, eine chronologische Einsortierung wäre irreführend;
+// als eigener Abschnitt am Ende sammelt er einfach alles, was nicht in eine der drei
+// Hauptmahlzeiten gehört.
+const FT_MEAL_KEYS = ['breakfast','lunch','dinner','snacks'];
+const FT_MEAL_LABELS = {breakfast:'Frühstück', lunch:'Mittagessen', dinner:'Abendessen', snacks:'Snacks'};
 
+// Liefert IMMER ein Tagesobjekt mit allen FT_MEAL_KEYS als Arrays — auch für Tage, die schon
+// VOR Einführung einer neuen Mahlzeiten-Kategorie (z. B. "snacks") gespeichert wurden und diese
+// Eigenschaft deshalb noch nicht besitzen. Ohne diese Selbstheilung würde jeder Zugriff auf
+// day['snacks'] bei altem Datenbestand mit "Cannot read properties of undefined" abstürzen.
+// Mutiert ftDays[iso] direkt (statt eine Kopie zurückzugeben), damit die Ergänzung fehlender
+// Schlüssel auch tatsächlich hängen bleibt, nicht nur einmalig für diesen Aufruf gilt.
 function ftGetDay(iso){
-  if(!ftDays[iso]) ftDays[iso] = {breakfast:[], lunch:[], dinner:[]};
-  return ftDays[iso];
+  if(!ftDays[iso]) ftDays[iso] = {};
+  const day = ftDays[iso];
+  FT_MEAL_KEYS.forEach(k => { if(!Array.isArray(day[k])) day[k] = []; });
+  return day;
 }
 
 /* ============ Food-Katalog ============ */
@@ -202,7 +220,7 @@ function ftNormalizeOFF(product, code){
   const n = product.nutriments || {};
   const kcal = n['energy-kcal_100g'];
   if(kcal === undefined || kcal === null) return null;
-  return {
+  const f = {
     id: 'off_'+code,
     name: product.product_name || 'Unbenanntes Produkt',
     brand: product.brands ? product.brands.split(',')[0].trim() : '',
@@ -212,6 +230,13 @@ function ftNormalizeOFF(product, code){
     f: ftRound1(n['fat_100g'] || 0),
     piece: null,
   };
+  // Ballaststoffe/Zucker/Salz optional übernehmen — OpenFoodFacts liefert sie nicht für jedes
+  // Produkt, daher nur setzen, wenn tatsächlich ein Wert vorhanden ist (siehe Kommentar in
+  // ftAddEntryToMeal()/ftUpdateEntryInMeal() zum Unterschied "Feld fehlt" vs. "Feld ist 0").
+  if(n['fiber_100g'] !== undefined && n['fiber_100g'] !== null) f.fiber = ftRound1(n['fiber_100g']);
+  if(n['sugars_100g'] !== undefined && n['sugars_100g'] !== null) f.sugar = ftRound1(n['sugars_100g']);
+  if(n['salt_100g'] !== undefined && n['salt_100g'] !== null) f.salt = Math.round(n['salt_100g']*100)/100;
+  return f;
 }
 function ftRound1(n){ return Math.round(n*10)/10; }
 
@@ -261,15 +286,30 @@ async function ftOffSearch(query){
 }
 
 /* ============ Tagessummen ============ */
+// Kleiner Fortschrittsbalken zu einem optionalen Tagesziel (siehe ftGoals, Einstellungen im
+// Essenstracker) — liefert bewusst einen LEEREN String, wenn kein Ziel gesetzt ist, statt
+// einen leeren/0%-Balken zu zeigen: ist gar kein Ziel hinterlegt, soll die Anzeige exakt wie
+// vorher aussehen (nur die reine Zahl), nicht wie ein Fortschritt zu einem nicht vorhandenen
+// Ziel. Bei Überschreiten des Ziels bleibt der Balken bei 100% stehen (kein Überlaufen über
+// den Rand hinaus) — die Zahl daneben zeigt den tatsächlichen Wert ja ohnehin weiterhin an.
+function ftGoalBarHTML(value, goal, color, small){
+  if (!goal) return '';
+  const pct = Math.min(100, Math.round(value / goal * 100));
+  return `<div class="ft-goal-bar${small ? ' ft-goal-bar-small' : ''}"><div class="ft-goal-bar-fill" style="width:${pct}%; background:${color};"></div></div>`;
+}
 function ftComputeTotals(iso){
   const day = ftGetDay(iso);
-  let kcal=0,p=0,c=0,f=0;
+  let kcal=0,p=0,c=0,f=0,fiber=0,sugar=0,salt=0;
   for(const key of FT_MEAL_KEYS){
     for(const e of day[key]){
       kcal += e.kcal; p += e.p; c += e.c; f += e.f;
+      fiber += e.fiber||0; sugar += e.sugar||0; salt += e.salt||0;
     }
   }
-  return {kcal:Math.round(kcal), p:Math.round(p), c:Math.round(c), f:Math.round(f)};
+  return {
+    kcal:Math.round(kcal), p:Math.round(p), c:Math.round(c), f:Math.round(f),
+    fiber:Math.round(fiber*10)/10, sugar:Math.round(sugar*10)/10, salt:Math.round(salt*100)/100,
+  };
 }
 function ftMealTotal(iso, meal){
   return Math.round(ftGetDay(iso)[meal].reduce((s,e)=>s+e.kcal,0));
@@ -280,6 +320,32 @@ function renderFoodTracker(){
   if (!ftCurrentDate) ftCurrentDate = ftTodayISO();
   const day = ftGetDay(ftCurrentDate);
   const totals = ftComputeTotals(ftCurrentDate);
+  const isEmptyDay = FT_MEAL_KEYS.every(k => day[k].length === 0);
+  // "Wie gestern"-Vorschlag nur, wenn der aktuell angezeigte Tag noch KOMPLETT leer ist UND
+  // der Tag davor tatsächlich etwas enthält — verhindert versehentliche Doppel-Einträge, die
+  // ein Klick auf einen Tag mit bereits vorhandenen Einträgen sonst erzeugen würde. Bezieht
+  // sich bewusst auf den Tag VOR dem gerade angezeigten (nicht zwingend "gestern" im
+  // Kalendersinn), damit es auch beim Nachtragen älterer Tage über den Kalender funktioniert.
+  const prevIso = ftAddDays(ftCurrentDate, -1);
+  const prevDayHasEntries = !!ftDays[prevIso] && FT_MEAL_KEYS.some(k => (ftDays[prevIso][k]||[]).length);
+  const copyPrevBtnHTML = (isEmptyDay && prevDayHasEntries) ? `
+    <button class="ft-copy-prev-btn" id="ftCopyPrevBtn" type="button">${ftIconRepeat()} Wie ${prevIso === ftAddDays(ftTodayISO(),-1) ? 'gestern' : 'am Vortag'} übernehmen</button>
+  ` : '';
+  // Ballaststoffe/Zucker/Salz bewusst NICHT in der oberen .summary-card (die bleibt schlank,
+  // nur kcal + die drei Hauptmakros) — stattdessen als kleine, unauffällige Zeile ganz unten
+  // nach den Mahlzeiten, und auch nur, wenn an diesem Tag überhaupt ein Lebensmittel mit
+  // hinterlegten Werten dabei war (sonst stünde dort bedeutungslos "0g").
+  const hasExtra = totals.fiber > 0 || totals.sugar > 0 || totals.salt > 0;
+  const extraNutrientsHTML = hasExtra ? `
+    <div class="ft-extra-nutrients">
+      <div class="ft-extra-nutrients-label">Weitere Nährwerte heute</div>
+      <div class="ft-extra-nutrients-row">
+        ${totals.fiber > 0 ? `<span>Ballaststoffe <b>${totals.fiber} g</b></span>` : ''}
+        ${totals.sugar > 0 ? `<span>Zucker <b>${totals.sugar} g</b></span>` : ''}
+        ${totals.salt > 0 ? `<span>Salz <b>${totals.salt} g</b></span>` : ''}
+      </div>
+    </div>
+  ` : '';
   app.innerHTML = `
     <div class="back-row" style="margin-top:0;">
       <button class="back-btn-icon" id="ftBackBtn" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button>
@@ -292,16 +358,19 @@ function renderFoodTracker(){
     </div>
     <div class="summary-card">
       <button class="kcal-summary-btn" id="ftStatsBtn" type="button" aria-label="Statistiken">
-        <div class="kcal-value">${totals.kcal}</div>
+        <div class="kcal-value">${totals.kcal}${ftGoals.kcal ? `<span class="ft-goal-of"> / ${ftGoals.kcal}</span>` : ''}</div>
         <div class="kcal-label">kcal heute</div>
+        ${ftGoalBarHTML(totals.kcal, ftGoals.kcal, 'var(--accent)')}
       </button>
       <div class="macro-row">
-        <div class="macro"><div><span class="macro-dot" style="background:var(--protein)"></span><span class="macro-val">${totals.p} g</span></div><div class="macro-label">Protein</div></div>
-        <div class="macro"><div><span class="macro-dot" style="background:var(--carbs)"></span><span class="macro-val">${totals.c} g</span></div><div class="macro-label">Kohlenhydrate</div></div>
-        <div class="macro"><div><span class="macro-dot" style="background:var(--fat)"></span><span class="macro-val">${totals.f} g</span></div><div class="macro-label">Fett</div></div>
+        <div class="macro"><div><span class="macro-dot" style="background:var(--protein)"></span><span class="macro-val">${totals.p} g${ftGoals.p ? `<span class="ft-goal-of"> / ${ftGoals.p}</span>` : ''}</span></div><div class="macro-label">Protein</div>${ftGoalBarHTML(totals.p, ftGoals.p, 'var(--protein)', true)}</div>
+        <div class="macro"><div><span class="macro-dot" style="background:var(--carbs)"></span><span class="macro-val">${totals.c} g${ftGoals.c ? `<span class="ft-goal-of"> / ${ftGoals.c}</span>` : ''}</span></div><div class="macro-label">Kohlenhydrate</div>${ftGoalBarHTML(totals.c, ftGoals.c, 'var(--carbs)', true)}</div>
+        <div class="macro"><div><span class="macro-dot" style="background:var(--fat)"></span><span class="macro-val">${totals.f} g${ftGoals.f ? `<span class="ft-goal-of"> / ${ftGoals.f}</span>` : ''}</span></div><div class="macro-label">Fett</div>${ftGoalBarHTML(totals.f, ftGoals.f, 'var(--fat)', true)}</div>
       </div>
     </div>
+    ${copyPrevBtnHTML}
     ${FT_MEAL_KEYS.map(ftMealHTML).join('')}
+    ${extraNutrientsHTML}
   `;
   document.getElementById('ftBackBtn').onclick = () => history.back();
   document.getElementById('ftStatsBtn').onclick = () => goFoodStats();
@@ -309,6 +378,8 @@ function renderFoodTracker(){
   document.getElementById('dArrowFwd').onclick = ()=>{ ftCurrentDate = ftAddDays(ftCurrentDate,1); renderFoodTracker(); };
   document.getElementById('dLabel').onclick = () => goFoodCalendar();
   document.getElementById('settingsBtn').onclick = ftOpenSettingsSheet;
+  const copyPrevBtn = document.getElementById('ftCopyPrevBtn');
+  if (copyPrevBtn) copyPrevBtn.onclick = ftCopyPreviousDay;
   FT_MEAL_KEYS.forEach(meal=>{
     document.getElementById('addBtn_'+meal).onclick = ()=>goFtAddFood(meal);
     ftGetDay(ftCurrentDate)[meal].forEach(e=>{
@@ -409,6 +480,35 @@ function ftRemoveEntry(meal, entryId){
   });
 }
 
+// Übernimmt alle Einträge des Tages VOR dem gerade angezeigten in den aktuellen Tag (Button
+// nur sichtbar, wenn der aktuelle Tag noch komplett leer ist, siehe renderFoodTracker()) —
+// erspart das erneute manuelle Zusammensuchen bei ähnlichem Tagesablauf. Jeder Eintrag
+// bekommt eine FRISCHE id/ts (statt die des Originaleintrags zu übernehmen), damit z. B.
+// Löschen eines kopierten Eintrags nicht versehentlich mit dem Original am Vortag kollidiert.
+function ftCopyPreviousDay(){
+  const dateIso = ftCurrentDate;
+  const prevIso = ftAddDays(dateIso, -1);
+  const prevDay = ftDays[prevIso];
+  if(!prevDay) return;
+  const day = ftGetDay(dateIso);
+  let count = 0;
+  FT_MEAL_KEYS.forEach(meal => {
+    (prevDay[meal]||[]).forEach(e => {
+      day[meal].push({ ...e, id: 'e_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), ts: Date.now() });
+      count++;
+    });
+  });
+  if(!count) return;
+  ftSave('days', ftDays);
+  renderFoodTracker();
+  ftToastWithUndo(`${count} Einträge übernommen`, ()=>{
+    const d = ftGetDay(dateIso);
+    FT_MEAL_KEYS.forEach(meal => { d[meal] = []; });
+    ftSave('days', ftDays);
+    if(ftCurrentDate === dateIso) renderFoodTracker();
+  });
+}
+
 /* ============ Icons ============ */
 function ftIconChevron(dir){
   const rotate = dir==='left' ? '' : 'transform="scale(-1,1)"';
@@ -423,6 +523,9 @@ function ftIconBarcode(){
 }
 function ftIconTrash(){
   return `<svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V4.5a1 1 0 011-1h4a1 1 0 011 1V7m-9 0l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function ftIconRepeat(){
+  return `<svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M17 2l4 4-4 4M3 11V9a4 4 0 014-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 01-4 4H3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 function ftIconGear(){
   return `<svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V19.5a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H4.5a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H10a1.65 1.65 0 001-1.51V4.5a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V10a1.65 1.65 0 001.51 1h.09a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
@@ -565,7 +668,7 @@ if (window.visualViewport){
    (eigene Seite mit Zurück-Pfeil, Hardware-Zurück-Taste funktioniert automatisch richtig). */
 function ftMonthOverviewDayMarker(year, month, day){
   const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  const hasEntries = ftDays[iso] && FT_MEAL_KEYS.some(k => ftDays[iso][k].length);
+  const hasEntries = ftDays[iso] && FT_MEAL_KEYS.some(k => (ftDays[iso][k]||[]).length);
   return {
     color: hasEntries ? cssVar('--accent') : null,
     isToday: iso === ftTodayISO(),
@@ -940,9 +1043,18 @@ function ftOpenQuantityModal(food, editCtx){
     const p = Math.round(food.p*factor*10)/10;
     const c = Math.round(food.c*factor*10)/10;
     const f = Math.round(food.f*factor*10)/10;
+    // Ballaststoffe/Zucker/Salz nur einblenden, wenn für DIESES Lebensmittel überhaupt Werte
+    // hinterlegt sind (siehe ftNormalizeOFF()/ftOpenCustomFoodForm()) — bewusst als
+    // zusätzliche, kleine/unauffällige Zeile UNTER kcal/Makros statt gleichrangig daneben,
+    // da diese Werte für die meisten Lebensmittel (v. a. die Basisliste) gar nicht vorliegen.
+    const extraParts = [];
+    if (food.fiber !== undefined) extraParts.push(`Ballaststoffe ${Math.round(food.fiber*factor*10)/10}g`);
+    if (food.sugar !== undefined) extraParts.push(`Zucker ${Math.round(food.sugar*factor*10)/10}g`);
+    if (food.salt !== undefined) extraParts.push(`Salz ${Math.round(food.salt*factor*100)/100}g`);
     document.getElementById('ftQtyPreview').innerHTML = `
       <div class="qty-preview-kcal">${kcal} kcal</div>
       <div class="qty-preview-macros"><span>P ${p}g</span><span>K ${c}g</span><span>F ${f}g</span></div>
+      ${extraParts.length ? `<div class="qty-preview-extra">${extraParts.join(' · ')}</div>` : ''}
     `;
   }
   gInput.addEventListener('input', updatePreview);
@@ -1009,6 +1121,15 @@ function ftUpdateEntryInMeal(meal, entryId, food, amountG, mode, pieceCount){
   if(!entry) return;
   const factor = amountG/100;
   entry.kcal = food.kcal*factor; entry.p = food.p*factor; entry.c = food.c*factor; entry.f = food.f*factor;
+  // fiber/sugar/salt (Ballaststoffe/Zucker/Salz) sind OPTIONALE Zusatzwerte — nicht jedes
+  // Lebensmittel (v. a. die kuratierte Basisliste) hat sie hinterlegt, siehe food-data.js.
+  // Fehlen sie am Lebensmittel, wird der Eintrag hier bewusst NICHT auf 0 gesetzt, sondern
+  // bleibt undefined — sonst würde ein Update eines Eintrags mit z. B. 3g Ballaststoffen
+  // (ursprünglich von OpenFoodFacts übernommen) diese beim Bearbeiten fälschlich auf 0
+  // zurücksetzen, nur weil "food" hier evtl. aus einem anderen Kontext ohne diese Felder kommt.
+  if (food.fiber !== undefined) entry.fiber = food.fiber*factor; else delete entry.fiber;
+  if (food.sugar !== undefined) entry.sugar = food.sugar*factor; else delete entry.sugar;
+  if (food.salt !== undefined) entry.salt = food.salt*factor; else delete entry.salt;
   entry.amountG = Math.round(amountG);
   entry.unitMode = mode;
   entry.pieceCount = pieceCount;
@@ -1038,6 +1159,12 @@ function ftAddEntryToMeal(food, amountG, mode, pieceCount){
     pieceCount: pieceCount,
     ts: Date.now(),
   };
+  // Ballaststoffe/Zucker/Salz nur übernehmen, wenn das Lebensmittel sie überhaupt hinterlegt
+  // hat (siehe Kommentar in ftUpdateEntryInMeal()) — sonst fehlt das Feld am Eintrag komplett,
+  // statt fälschlich 0 zu suggerieren.
+  if (food.fiber !== undefined) entry.fiber = food.fiber*factor;
+  if (food.sugar !== undefined) entry.sugar = food.sugar*factor;
+  if (food.salt !== undefined) entry.salt = food.salt*factor;
   const day = ftGetDay(ftCurrentDate);
   day[ftAddSheetMeal].push(entry);
   ftSave('days', ftDays);
@@ -1088,11 +1215,25 @@ function ftOpenCustomFoodForm(prefillBarcode){
         <input class="text-input" id="ftCfF" type="number" inputmode="decimal">
         <div class="field-label">Stückgewicht (optional, in g)</div>
         <input class="text-input" id="ftCfPieceG" type="number" inputmode="decimal" placeholder="z. B. 55">
+        <button type="button" class="ft-optional-toggle" id="ftCfMoreToggle">+ Weitere Nährwerte (optional)</button>
+        <div id="ftCfMoreFields" class="hidden">
+          <div class="field-label">Ballaststoffe (g/100g)</div>
+          <input class="text-input" id="ftCfFiber" type="number" inputmode="decimal">
+          <div class="field-label">Zucker (g/100g)</div>
+          <input class="text-input" id="ftCfSugar" type="number" inputmode="decimal">
+          <div class="field-label">Salz (g/100g)</div>
+          <input class="text-input" id="ftCfSalt" type="number" inputmode="decimal">
+        </div>
         <button class="ft-btn-primary" id="ftCfSave" style="margin-top:18px">Speichern</button>
       </div>
     </div>
   `);
   document.getElementById('ftCustomClose').onclick = ftCloseOverlay;
+  document.getElementById('ftCfMoreToggle').onclick = (ev) => {
+    const el = document.getElementById('ftCfMoreFields');
+    const nowHidden = el.classList.toggle('hidden');
+    ev.currentTarget.textContent = nowHidden ? '+ Weitere Nährwerte (optional)' : '– Weitere Nährwerte ausblenden';
+  };
   document.getElementById('ftCfSave').onclick = ()=>{
     const name = document.getElementById('ftCfName').value.trim();
     const kcal = parseFloat(document.getElementById('ftCfKcal').value);
@@ -1108,6 +1249,16 @@ function ftOpenCustomFoodForm(prefillBarcode){
       piece: (!isNaN(pieceG) && pieceG>0) ? {label:'1 '+name, g:pieceG} : null,
       barcode: prefillBarcode || null,
     };
+    // Ballaststoffe/Zucker/Salz bleiben unausgefüllt = "nicht bekannt" (Feld fehlt komplett),
+    // nicht "0" — sonst würde ein einfach leer gelassenes Feld später fälschlich als "enthält
+    // 0g Zucker" gewertet, statt als "dazu liegt keine Angabe vor" (siehe ftComputeTotals()
+    // etc., die fehlende Felder korrekt einfach überspringen).
+    const fiber = parseFloat(document.getElementById('ftCfFiber').value);
+    const sugar = parseFloat(document.getElementById('ftCfSugar').value);
+    const salt = parseFloat(document.getElementById('ftCfSalt').value);
+    if(!isNaN(fiber)) food.fiber = fiber;
+    if(!isNaN(sugar)) food.sugar = sugar;
+    if(!isNaN(salt)) food.salt = salt;
     ftCustomFoods.push(food);
     ftSave('customFoods', ftCustomFoods);
     ftOpenQuantityModal(food);
@@ -1159,6 +1310,9 @@ function ftApplySavedMeal(mealId){
       pieceCount: item.pieceCount,
       ts: Date.now(),
     };
+    if (food.fiber !== undefined) entry.fiber = food.fiber*factor;
+    if (food.sugar !== undefined) entry.sugar = food.sugar*factor;
+    if (food.salt !== undefined) entry.salt = food.salt*factor;
     ftGetDay(ftCurrentDate)[ftAddSheetMeal].push(entry);
     ftBumpUsageCount(food.id);
     added++;
@@ -1280,7 +1434,22 @@ function ftOpenSettingsSheet(){
         <button class="sheet-close" id="ftSettingsClose">${ftIconX()}</button>
       </div>
       <div class="sheet-body">
-        <div class="ft-section-label" style="margin-top:0;">Daten sichern</div>
+        <div class="ft-section-label" style="margin-top:0;">Tagesziele</div>
+        <div class="no-results" style="text-align:left; padding:0 4px 14px">
+          Leer lassen, wenn kein Ziel gewünscht ist — die App zeigt dann wie gewohnt nur die
+          reinen Tageswerte ohne Bezug zu einem Ziel.
+        </div>
+        <div class="field-label">kcal pro Tag</div>
+        <input class="text-input" id="ftGoalKcal" type="number" inputmode="decimal" placeholder="z. B. 2200" value="${ftGoals.kcal ?? ''}">
+        <div class="field-label">Protein (g)</div>
+        <input class="text-input" id="ftGoalP" type="number" inputmode="decimal" placeholder="z. B. 150" value="${ftGoals.p ?? ''}">
+        <div class="field-label">Kohlenhydrate (g)</div>
+        <input class="text-input" id="ftGoalC" type="number" inputmode="decimal" placeholder="optional" value="${ftGoals.c ?? ''}">
+        <div class="field-label">Fett (g)</div>
+        <input class="text-input" id="ftGoalF" type="number" inputmode="decimal" placeholder="optional" value="${ftGoals.f ?? ''}">
+        <button class="ft-btn-primary" id="ftGoalSaveBtn" style="margin-top:6px;">Ziele speichern</button>
+
+        <div class="ft-section-label">Daten sichern</div>
         <div class="no-results" style="text-align:left; padding:0 4px 14px">
           ${dayCount} Tage · ${ftCustomFoods.length} eigene Lebensmittel · ${ftSavedMeals.length} gespeicherte Mahlzeiten · ${ftFavorites.length} Favoriten
         </div>
@@ -1291,6 +1460,19 @@ function ftOpenSettingsSheet(){
     </div>
   `);
   document.getElementById('ftSettingsClose').onclick = ftCloseOverlay;
+  document.getElementById('ftGoalSaveBtn').onclick = async () => {
+    const readGoal = id => {
+      const raw = document.getElementById(id).value.trim();
+      if (!raw) return null;
+      const n = parseFloat(raw);
+      return (!isNaN(n) && n > 0) ? n : null;
+    };
+    ftGoals = { kcal: readGoal('ftGoalKcal'), p: readGoal('ftGoalP'), c: readGoal('ftGoalC'), f: readGoal('ftGoalF') };
+    await ftSave('goals', ftGoals);
+    ftCloseOverlay();
+    renderFoodTracker();
+    ftToast('Ziele gespeichert');
+  };
   document.getElementById('ftExportBtn').onclick = ftExportData;
   const fileInput = document.getElementById('ftImportFileInput');
   document.getElementById('ftImportBtn').onclick = ()=>fileInput.click();
@@ -1312,7 +1494,7 @@ function ftOpenSettingsSheet(){
 function ftBuildExportPayload(){
   return {
     days: ftDays, favorites: ftFavorites, customFoods: ftCustomFoods, savedMeals: ftSavedMeals,
-    recent: ftRecent, lastAmounts: ftLastAmounts, usageCount: ftFoodUsageCount,
+    recent: ftRecent, lastAmounts: ftLastAmounts, usageCount: ftFoodUsageCount, goals: ftGoals,
   };
 }
 // Übernimmt ein per ftBuildExportPayload() (oder kompatibel) erzeugtes Essenstracker-
@@ -1324,9 +1506,10 @@ async function ftApplyImportedData(food){
   ftFavorites = food.favorites || [];
   ftCustomFoods = food.customFoods || [];
   ftSavedMeals = food.savedMeals || [];
-  ftRecent = food.recent || {breakfast:[], lunch:[], dinner:[]};
+  ftRecent = food.recent || {breakfast:[], lunch:[], dinner:[], snacks:[]};
   ftLastAmounts = food.lastAmounts || {};
   ftFoodUsageCount = food.usageCount || {};
+  ftGoals = food.goals || { kcal: null, p: null, c: null, f: null };
   foodTrackerLoaded = true;
   await Promise.all([
     ftSave('days', ftDays),
@@ -1336,6 +1519,7 @@ async function ftApplyImportedData(food){
     ftSave('recent', ftRecent),
     ftSave('lastAmounts', ftLastAmounts),
     ftSave('usageCount', ftFoodUsageCount),
+    ftSave('goals', ftGoals),
   ]);
 }
 
@@ -1415,10 +1599,16 @@ let ftMacroOutsideClickHandler = null;
 function ftDayTotalsForISO(iso){
   const day = ftDays[iso];
   if (!day) return null;
-  let kcal=0,p=0,c=0,f=0;
-  FT_MEAL_KEYS.forEach(k => day[k].forEach(e => { kcal+=e.kcal; p+=e.p; c+=e.c; f+=e.f; }));
+  let kcal=0,p=0,c=0,f=0,fiber=0,sugar=0,salt=0;
+  FT_MEAL_KEYS.forEach(k => (day[k]||[]).forEach(e => {
+    kcal+=e.kcal; p+=e.p; c+=e.c; f+=e.f;
+    fiber+=e.fiber||0; sugar+=e.sugar||0; salt+=e.salt||0;
+  }));
   if (!kcal) return null;
-  return { kcal: Math.round(kcal), p: Math.round(p), c: Math.round(c), f: Math.round(f) };
+  return {
+    kcal: Math.round(kcal), p: Math.round(p), c: Math.round(c), f: Math.round(f),
+    fiber: Math.round(fiber*10)/10, sugar: Math.round(sugar*10)/10, salt: Math.round(salt*100)/100,
+  };
 }
 function ftAllDayTotals(){
   return Object.keys(ftDays).map(iso => {
@@ -1495,7 +1685,7 @@ function ftFoodMacroBreakdown(macroKey, periodDays){
   const map = {};
   Object.keys(ftDays).forEach(iso => {
     if (iso < cutoffIso) return;
-    FT_MEAL_KEYS.forEach(k => ftDays[iso][k].forEach(e => {
+    FT_MEAL_KEYS.forEach(k => (ftDays[iso][k]||[]).forEach(e => {
       const val = e[macroKey] || 0;
       if (!val) return;
       map[e.name] = (map[e.name] || 0) + val;
@@ -1530,6 +1720,103 @@ function ftComputeMonthStats(year, month){
     count, avgKcal: avg('kcal'), avgP: avg('p'), avgC: avg('c'), avgF: avg('f'),
     highest, lowest, prevAvgKcal
   };
+}
+
+// Ø-Wert vs. Ziel je Nährwert im gewählten Zeitraum (siehe ftGoals, Einstellungen im
+// Essenstracker) — nur, wenn mindestens ein Ziel gesetzt ist UND im Zeitraum überhaupt
+// protokolliert wurde. Zeigt bewusst nur die tatsächlich gesetzten Ziele (nicht alle vier
+// pauschal), da z. B. oft nur ein kcal-Ziel ohne feste Makro-Ziele gepflegt wird.
+function ftGoalComparisonHTML(periodDays){
+  if (!ftGoals.kcal && !ftGoals.p && !ftGoals.c && !ftGoals.f) return '';
+  const days = ftDayTotalsInPeriod(periodDays);
+  if (!days.length) return '';
+  const avg = key => Math.round(days.reduce((a,d) => a+d[key], 0) / days.length);
+  const rows = [];
+  if (ftGoals.kcal) rows.push({ label:'kcal', val: avg('kcal'), goal: ftGoals.kcal, unit:'', color:'var(--accent)' });
+  if (ftGoals.p) rows.push({ label:'Protein', val: avg('p'), goal: ftGoals.p, unit:'g', color:'var(--protein)' });
+  if (ftGoals.c) rows.push({ label:'Kohlenhydrate', val: avg('c'), goal: ftGoals.c, unit:'g', color:'var(--carbs)' });
+  if (ftGoals.f) rows.push({ label:'Fett', val: avg('f'), goal: ftGoals.f, unit:'g', color:'var(--fat)' });
+  const rowsHTML = rows.map(r => `
+    <div class="ft-goal-compare-row">
+      <div class="ft-goal-compare-top">
+        <span>${r.label}</span>
+        <span>${r.val}${r.unit} <span class="ft-goal-of">/ ${r.goal}${r.unit}</span></span>
+      </div>
+      ${ftGoalBarHTML(r.val, r.goal, r.color)}
+    </div>
+  `).join('');
+  return `
+    <div class="section-label" style="margin-top:22px;">Ziel-Erreichung · Ø pro Tag</div>
+    <div class="month-report-card">${rowsHTML}</div>
+  `;
+}
+
+// Ø kcal je Wochentag im gewählten Zeitraum — zeigt Muster wie "am Wochenende wird spürbar
+// mehr gegessen", die im reinen Zeitverlauf (chartHTML oben) leicht untergehen. Bewusst über
+// ALLE Tage des Buckets gemittelt (auch wenn an einem Wochentag nur 1x im Zeitraum
+// protokolliert wurde) statt eine Mindestanzahl zu verlangen — bei kurzen Zeiträumen (Woche)
+// wäre sonst fast nie genug Datenbasis vorhanden.
+function ftWeekdayAverageHTML(periodDays){
+  const days = ftDayTotalsInPeriod(periodDays);
+  if (!days.length) return '';
+  const labels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+  const sums = [0,0,0,0,0,0,0], counts = [0,0,0,0,0,0,0];
+  days.forEach(d => {
+    const wd = (ftParseISO(d.date).getDay() + 6) % 7; // 0 = Montag
+    sums[wd] += d.kcal; counts[wd]++;
+  });
+  const points = labels.map((l,i) => ({ label:l, value: counts[i] ? Math.round(sums[i]/counts[i]) : 0 }));
+  return `
+    <div class="section-label" style="margin-top:22px;">Ø kcal nach Wochentag</div>
+    ${buildBarChart(points, cssVar('--accent'), true, 130)}
+  `;
+}
+
+// Aktuelle und längste Tracking-Serie (aufeinanderfolgende protokollierte Tage) — bewusst über
+// den GESAMTEN Datenbestand berechnet, nicht auf den gewählten Statistik-Zeitraum begrenzt,
+// da eine Serie naturgemäß über Zeiträume hinweg läuft (eine Serie von 40 Tagen würde in der
+// "Woche"-Ansicht sonst wie 7 aussehen). Die aktuelle Serie gilt als noch "am Leben", solange
+// der letzte protokollierte Tag heute oder gestern war — bricht also nicht schon mitten am Tag
+// ab, nur weil man den heutigen Tag noch nicht (fertig) eingetragen hat.
+function ftTrackingStreaks(){
+  const dates = ftAllDayTotals().map(d => d.date); // aufsteigend sortiert
+  if (!dates.length) return { current: 0, longest: 0 };
+  let longest = 1, run = 1;
+  for (let i = 1; i < dates.length; i++){
+    run = (ftAddDays(dates[i-1], 1) === dates[i]) ? run + 1 : 1;
+    if (run > longest) longest = run;
+  }
+  const today = ftTodayISO();
+  const yesterday = ftAddDays(today, -1);
+  const last = dates[dates.length - 1];
+  let current = 0;
+  if (last === today || last === yesterday){
+    current = 1;
+    let cursor = last;
+    for (let i = dates.length - 2; i >= 0; i--){
+      if (dates[i] === ftAddDays(cursor, -1)){ current++; cursor = dates[i]; } else break;
+    }
+  }
+  return { current, longest };
+}
+function ftStreakHTML(){
+  const { current, longest } = ftTrackingStreaks();
+  if (!longest) return '';
+  return `
+    <div class="section-label" style="margin-top:22px;">Tracking-Serie</div>
+    <div class="month-report-card">
+      <div class="month-report-stat-grid">
+        <div class="month-report-stat-cell">
+          <div class="month-report-stat-value">${current}</div>
+          <div class="month-report-stat-label">Aktuelle Serie (Tage)</div>
+        </div>
+        <div class="month-report-stat-cell">
+          <div class="month-report-stat-value">${longest}</div>
+          <div class="month-report-stat-label">Längste Serie (Tage)</div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderFoodStats(){
@@ -1628,6 +1915,9 @@ function renderFoodStats(){
     </div>
     ${chartHTML}
     ${donutSectionHTML}
+    ${ftGoalComparisonHTML(periodDays)}
+    ${ftWeekdayAverageHTML(periodDays)}
+    ${ftStreakHTML()}
     ${monthOverviewHTML}
   `;
 
