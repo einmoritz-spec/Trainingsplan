@@ -998,6 +998,7 @@ function renderSettings(){
     </div>
 
     <div class="section-label">Daten</div>
+    <p class="settings-hint">Enthält Übungen, Trainingsverlauf und Essenstracker-Daten (Ernährung lässt sich zusätzlich separat exportieren, siehe Einstellungen im Essenstracker).</p>
     <div class="muscle-group-header settings-static-row" style="margin-top:0;">
       <div class="settings-row-btns" style="width:100%;">
         <button class="btn btn-ghost btn-small" id="btnExport" style="flex:1;">Exportieren</button>
@@ -1276,8 +1277,16 @@ function renderSettings(){
 
   const btnExportEl = document.getElementById('btnExport');
   if (btnExportEl) btnExportEl.onclick = async () => {
+    // Essenstracker-Daten müssen geladen sein, BEVOR das Backup gebaut wird — initFoodTracker()
+    // ist idempotent, falls der Essenstracker in dieser Sitzung schon offen war, lädt es nichts
+    // erneut nach. Das gemeinsame Backup enthält jetzt auch die Ernährungsdaten (siehe
+    // ftBuildExportPayload(), 15-food-tracker.js) — ein Export deckt beides ab, statt dass man
+    // Training und Essenstracker separat sichern muss. Der eigenständige Essenstracker-Export
+    // in dessen eigenen Einstellungen bleibt zusätzlich bestehen, falls nur die Ernährungsdaten
+    // gebraucht werden.
+    await initFoodTracker();
     const nowISO = new Date().toISOString();
-    const payload = { version: 1, exportedAt: nowISO, plan, sessions, lastPerformance };
+    const payload = { version: 1, exportedAt: nowISO, plan, sessions, lastPerformance, food: ftBuildExportPayload() };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1309,6 +1318,7 @@ function renderSettings(){
           return;
         }
         let warnMsg = 'Import überschreibt deine aktuellen Übungen, Einheiten und den gespeicherten Fortschritt auf diesem Gerät.';
+        if (check.cleaned.food) warnMsg += ' Enthält die Datei auch Essenstracker-Daten, werden diese ebenfalls überschrieben.';
         if (check.droppedExercises > 0 || check.droppedSessions > 0){
           warnMsg += '\n\nHinweis: ' +
             (check.droppedExercises > 0 ? `${check.droppedExercises} Übung(en) ` : '') +
@@ -1324,6 +1334,12 @@ function renderSettings(){
         await saveJSON('plan', plan);
         await saveAllSessionsBulk(sessions);
         await saveJSON('lastPerformance', lastPerformance);
+        // Essenstracker-Daten nur übernehmen, wenn die Datei welche enthält (gemeinsames
+        // Backup, siehe ftBuildExportPayload()/ftApplyImportedData(), 15-food-tracker.js) —
+        // ein reiner Trainings-Export (oder ein Export von vor der Zusammenlegung) hat kein
+        // "food"-Feld, dann bleiben die vorhandenen Essenstracker-Daten auf diesem Gerät
+        // unangetastet.
+        if (check.cleaned.food) await ftApplyImportedData(check.cleaned.food);
         planSearchQuery = '';
         planGroupOpen = new Set();
         alert('Import erfolgreich.');

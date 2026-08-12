@@ -271,6 +271,22 @@ function validateFullExportPayload(data){
   }
   if (errors.length) return { valid: false, errors };
 
+  // Essenstracker-Daten (siehe ftBuildExportPayload(), 15-food-tracker.js) sind ein optionales
+  // Zusatzfeld im gemeinsamen Backup — ältere Export-Dateien (vor der Zusammenlegung) und reine
+  // Trainings-Exports haben es schlicht nicht, das ist kein Fehler. Hier bewusst NICHT tief
+  // validiert (kein eigenes Schema je Essenstracker-Unterfeld) — ftApplyImportedData() fängt
+  // fehlende/falsche Unterfelder beim Anwenden selbst mit "|| Standardwert" ab, genau wie
+  // beim eigenständigen Essenstracker-Import (ftImportData()).
+  let cleanedFood = null;
+  if (data.food !== undefined){
+    if (typeof data.food !== 'object' || data.food === null || Array.isArray(data.food)){
+      errors.push('"food" ist vorhanden, aber kein Objekt.');
+    } else {
+      cleanedFood = data.food;
+    }
+  }
+  if (errors.length) return { valid: false, errors };
+
   return {
     valid: true,
     errors: [],
@@ -279,7 +295,8 @@ function validateFullExportPayload(data){
     cleaned: {
       plan: { ...data.plan, exercises: cleanedExercises },
       sessions: cleanedSessions,
-      lastPerformance: cleanedLastPerformance
+      lastPerformance: cleanedLastPerformance,
+      food: cleanedFood
     }
   };
 }
@@ -317,10 +334,15 @@ const HARD_UPDATE_MARKER = 'eisenprotokoll:hardUpdatePending';
 
 // Vollständiger Datenexport als Download. Inhaltlich identisch zum "Exportieren"-Button
 // in den Einstellungen (siehe renderSettings(), 10-plan-settings.js), hier aber ohne
-// UI-Abhängigkeit, damit runHardUpdate() ihn direkt aufrufen kann.
-function exportAllDataToFile(filePrefix){
+// UI-Abhängigkeit, damit runHardUpdate() ihn direkt aufrufen kann. Async, da die
+// Essenstracker-Daten (siehe ftBuildExportPayload(), 15-food-tracker.js) ggf. erst per
+// initFoodTracker() geladen werden müssen, falls der Essenstracker in dieser Sitzung noch
+// nicht geöffnet wurde — initFoodTracker() ist idempotent, kostet bei bereits geladenen
+// Daten also nichts.
+async function exportAllDataToFile(filePrefix){
+  await initFoodTracker();
   const nowISO = new Date().toISOString();
-  const payload = { version: 1, exportedAt: nowISO, plan, sessions, lastPerformance };
+  const payload = { version: 1, exportedAt: nowISO, plan, sessions, lastPerformance, food: ftBuildExportPayload() };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -354,7 +376,7 @@ async function runHardUpdate(){
   const btn = document.getElementById('updateToastBtn');
   if (btn){ btn.disabled = true; btn.textContent = 'Lädt…'; }
   try{
-    try{ exportAllDataToFile('trainingsplan-backup-vor-update'); }catch(e){ /* Download blockiert: Update trotzdem durchziehen, Daten bleiben ja unangetastet */ }
+    try{ await exportAllDataToFile('trainingsplan-backup-vor-update'); }catch(e){ /* Download blockiert: Update trotzdem durchziehen, Daten bleiben ja unangetastet */ }
     try{ localStorage.setItem(HARD_UPDATE_MARKER, '1'); }catch(e){ /* Banner nach dem Neustart entfällt dann, Update selbst läuft normal */ }
 
     if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations){

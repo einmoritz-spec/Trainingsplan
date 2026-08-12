@@ -1300,12 +1300,50 @@ function ftOpenSettingsSheet(){
   };
 }
 
+// Essenstracker-Nutzdaten als reines Objekt (ohne Hüllen-Metadaten wie version/exportedAt) —
+// von ZWEI Stellen genutzt, damit beide exakt dasselbe Format schreiben/lesen:
+// 1. ftExportData() unten (eigenständiger Essenstracker-Export in den Essenstracker-
+//    Einstellungen, weiterhin separat möglich).
+// 2. Der allgemeine "Exportieren"-Button in den Trainings-Einstellungen (renderSettings(),
+//    10-plan-settings.js) sowie exportAllDataToFile() (04-utils.js) — betten das Ergebnis
+//    hier als "food"-Feld in ihr gemeinsames Backup ein, damit EIN Export/Import beides
+//    abdeckt, ohne dass an zwei Stellen leicht unterschiedliche Kopien der Feldliste gepflegt
+//    werden müssen.
+function ftBuildExportPayload(){
+  return {
+    days: ftDays, favorites: ftFavorites, customFoods: ftCustomFoods, savedMeals: ftSavedMeals,
+    recent: ftRecent, lastAmounts: ftLastAmounts, usageCount: ftFoodUsageCount,
+  };
+}
+// Übernimmt ein per ftBuildExportPayload() (oder kompatibel) erzeugtes Essenstracker-
+// Datenobjekt UND speichert es persistent — von ftImportData() (eigenständiger Essenstracker-
+// Import) UND vom allgemeinen Trainings-Import (10-plan-settings.js) genutzt, wenn die
+// importierte Datei ein "food"-Feld enthält.
+async function ftApplyImportedData(food){
+  ftDays = food.days || {};
+  ftFavorites = food.favorites || [];
+  ftCustomFoods = food.customFoods || [];
+  ftSavedMeals = food.savedMeals || [];
+  ftRecent = food.recent || {breakfast:[], lunch:[], dinner:[]};
+  ftLastAmounts = food.lastAmounts || {};
+  ftFoodUsageCount = food.usageCount || {};
+  foodTrackerLoaded = true;
+  await Promise.all([
+    ftSave('days', ftDays),
+    ftSave('favorites', ftFavorites),
+    ftSave('customFoods', ftCustomFoods),
+    ftSave('savedMeals', ftSavedMeals),
+    ftSave('recent', ftRecent),
+    ftSave('lastAmounts', ftLastAmounts),
+    ftSave('usageCount', ftFoodUsageCount),
+  ]);
+}
+
 function ftExportData(){
   const payload = {
     exportedAt: new Date().toISOString(),
     version: 1,
-    days: ftDays, favorites: ftFavorites, customFoods: ftCustomFoods, savedMeals: ftSavedMeals, recent: ftRecent,
-    lastAmounts: ftLastAmounts, usageCount: ftFoodUsageCount,
+    ...ftBuildExportPayload(),
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -1321,7 +1359,7 @@ function ftExportData(){
 
 async function ftImportData(file){
   const reader = new FileReader();
-  reader.onload = ()=>{
+  reader.onload = async ()=>{
     let parsed;
     try{ parsed = JSON.parse(reader.result); }
     catch(e){ ftToast('Datei ist kein gültiges JSON'); return; }
@@ -1330,20 +1368,7 @@ async function ftImportData(file){
       return;
     }
     if(!confirm('Vorhandene Daten auf diesem Gerät werden durch die Backup-Datei ersetzt. Fortfahren?')) return;
-    ftDays = parsed.days || {};
-    ftFavorites = parsed.favorites || [];
-    ftCustomFoods = parsed.customFoods || [];
-    ftSavedMeals = parsed.savedMeals || [];
-    ftRecent = parsed.recent || {breakfast:[], lunch:[], dinner:[]};
-    ftLastAmounts = parsed.lastAmounts || {};
-    ftFoodUsageCount = parsed.usageCount || {};
-    ftSave('days', ftDays);
-    ftSave('favorites', ftFavorites);
-    ftSave('customFoods', ftCustomFoods);
-    ftSave('savedMeals', ftSavedMeals);
-    ftSave('recent', ftRecent);
-    ftSave('lastAmounts', ftLastAmounts);
-    ftSave('usageCount', ftFoodUsageCount);
+    await ftApplyImportedData(parsed);
     ftCloseOverlay();
     renderFoodTracker();
     ftToast('Import erfolgreich');
@@ -1665,21 +1690,42 @@ function ftWireMacroDonut(segments, periodDays){
       return;
     }
     const seg = segments.find(s => s.key === selected);
-    const breakdown = ftFoodMacroBreakdown(selected, periodDays);
-    const subTotal = breakdown.reduce((a,e) => a+e.val, 0);
+    const fullBreakdown = ftFoodMacroBreakdown(selected, periodDays);
+    // subTotal bewusst aus der VOLLSTÄNDIGEN, ungefilterten Liste berechnet — die
+    // Prozentangaben bleiben dadurch über verschiedene Zeiträume hinweg vergleichbar
+    // (Woche/Monat/Jahr können hier stark unterschiedlich viele Lebensmittel enthalten, siehe
+    // Filterung unten), statt sich künstlich zu verschieben, nur weil ein paar Mini-Beiträge
+    // aus der ANZEIGE rausfallen.
+    const subTotal = fullBreakdown.reduce((a,e) => a+e.val, 0);
+    // Vernachlässigbare Beiträge ausblenden (auf 0% gerundet ODER nur ~1g) — bei häufig
+    // protokollierten Mahlzeiten sammeln sich sonst über die Zeit viele Gewürz-/Topping-Reste
+    // in Spurenmengen an, die weder im Ring noch in der Liste zusätzlichen Erkenntniswert
+    // bringen, beide aber unübersichtlich aufblähen. Zusätzlich auf die 7 größten Quellen
+    // gedeckelt (schon absteigend sortiert, siehe ftFoodMacroBreakdown()) — bewusst dynamisch
+    // aus der jeweils aktuellen Liste ermittelt statt fest vorausgewählt, da sich die
+    // häufigsten Quellen je nach Zeitraum (Woche/Monat/Jahr) stark unterscheiden können.
+    const significant = fullBreakdown.filter(e => e.val >= 1.5 && (subTotal ? Math.round(e.val / subTotal * 100) : 0) > 0);
+    const shown = significant.slice(0, 7);
+    const restVal = significant.slice(7).reduce((a,e) => a+e.val, 0);
+    const restCount = significant.length - shown.length;
 
     if (selectedRange && subTotal){
       let a = selectedRange.startAngle;
-      const gapDeg = breakdown.length > 1 ? 1.4 : 0;
-      breakdown.forEach((e, i) => {
+      // Der Ring zeigt exakt dieselben Unterabschnitte wie die Liste darunter (siehe rows
+      // weiter unten) — die übrigen, nicht einzeln gezeigten Quellen fließen als EIN
+      // gemeinsamer, neutral eingefärbter "Rest"-Abschnitt ein, statt einfach zu fehlen (der
+      // Ring würde sonst sichtbar kleiner wirken als der Makro-Anteil tatsächlich ist).
+      const arcItems = restVal > 0 ? [...shown, { name: `+${restCount} weitere`, val: restVal, isRest: true }] : shown;
+      const gapDeg = arcItems.length > 1 ? 1.4 : 0;
+      arcItems.forEach((e, i) => {
         const fraction = e.val / subTotal;
         const rawEnd = a + fraction * (selectedRange.endAngle - selectedRange.startAngle);
         const startA = a + (i > 0 ? gapDeg/2 : 0);
-        const endA = rawEnd - (i < breakdown.length - 1 ? gapDeg/2 : 0);
+        const endA = rawEnd - (i < arcItems.length - 1 ? gapDeg/2 : 0);
         a = rawEnd;
         const subPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         subPath.setAttribute('d', donutArcPath(startA, endA));
-        subPath.setAttribute('fill', shadeMuscleColor(seg.color, i));
+        subPath.setAttribute('fill', e.isRest ? cssVar('--muted') : shadeMuscleColor(seg.color, i));
         subPath.setAttribute('class', 'donut-seg donut-subseg');
         subPath.style.transitionDelay = (i * 35) + 'ms';
         subPath.onclick = () => toggle(selected);
@@ -1699,7 +1745,7 @@ function ftWireMacroDonut(segments, periodDays){
       selLabelEl.textContent = seg.label;
     }
 
-    const rows = breakdown.map((e, i) => {
+    const rows = shown.map((e, i) => {
       const pct = subTotal ? Math.round(e.val / subTotal * 100) : 0;
       return `
         <div class="muscle-balance-legend-row">
@@ -1709,8 +1755,15 @@ function ftWireMacroDonut(segments, periodDays){
         </div>
       `;
     }).join('');
+    const restRowHTML = restVal > 0 ? `
+      <div class="muscle-balance-legend-row">
+        <span class="muscle-balance-swatch-static" style="color:var(--muted);">${subTotal ? Math.round(restVal / subTotal * 100) : 0}%</span>
+        <span class="muscle-balance-legend-label">+${restCount} weitere</span>
+        <span class="muscle-balance-legend-value">${Math.round(restVal)} g</span>
+      </div>
+    ` : '';
     document.getElementById('ftBreakdownTitle').textContent = `${seg.label} – nach Lebensmittel`;
-    document.getElementById('ftBreakdownList').innerHTML = rows || '<div class="history-empty">Keine Daten.</div>';
+    document.getElementById('ftBreakdownList').innerHTML = (rows + restRowHTML) || '<div class="history-empty">Keine Daten.</div>';
     if (panel){
       panel.style.display = 'block';
       requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add('open')));
