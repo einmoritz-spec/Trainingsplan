@@ -1,0 +1,41 @@
+{
+  "id": "/trainingsplan/",
+  "name": "Trainingsplan",
+  "short_name": "Training",
+  "description": "Trainingsplan-App zum Loggen von Krafttraining, Fortschritts- und Muskelbalance-Auswertung — läuft komplett offline, alle Daten bleiben lokal auf dem Gerät.",
+  "lang": "de",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#121316",
+  "theme_color": "#121316",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Training starten",
+      "short_name": "Start",
+      "description": "Direkt zur Auswahl des heutigen Trainings springen",
+      "url": "./?shortcut=start"
+    }
+  ]
+}

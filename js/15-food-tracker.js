@@ -288,7 +288,7 @@ function renderFoodTracker(){
       <button class="date-arrow" id="dArrowBack">${ftIconChevron('left')}</button>
       <button class="date-label" id="dLabel">${ftDateLabel(ftCurrentDate)}</button>
       <button class="date-arrow" id="dArrowFwd">${ftIconChevron('right')}</button>
-      <button class="date-arrow settings-btn" id="settingsBtn" title="Einstellungen">${ftIconGear()}</button>
+      <button class="gear settings-btn" id="settingsBtn" aria-label="Einstellungen">⚙</button>
     </div>
     <div class="summary-card">
       <button class="kcal-summary-btn" id="ftStatsBtn" type="button" aria-label="Statistiken">
@@ -307,7 +307,7 @@ function renderFoodTracker(){
   document.getElementById('ftStatsBtn').onclick = () => goFoodStats();
   document.getElementById('dArrowBack').onclick = ()=>{ ftCurrentDate = ftAddDays(ftCurrentDate,-1); renderFoodTracker(); };
   document.getElementById('dArrowFwd').onclick = ()=>{ ftCurrentDate = ftAddDays(ftCurrentDate,1); renderFoodTracker(); };
-  document.getElementById('dLabel').onclick = ftOpenCalendar;
+  document.getElementById('dLabel').onclick = () => goFoodCalendar();
   document.getElementById('settingsBtn').onclick = ftOpenSettingsSheet;
   FT_MEAL_KEYS.forEach(meal=>{
     document.getElementById('addBtn_'+meal).onclick = ()=>ftOpenAddSheet(meal);
@@ -516,54 +516,110 @@ if (window.visualViewport){
   window.visualViewport.addEventListener('scroll', ftApplyOverlayViewport);
 }
 
-/* ============ Kalender ============ */
-let ftCalMonth = null; // {y, m}
-function ftOpenCalendar(){
-  const d = ftParseISO(ftCurrentDate);
-  ftCalMonth = {y:d.getFullYear(), m:d.getMonth()};
-  ftOpenOverlay(`
-    <div class="modal" id="ftCalModal">
-      <div class="modal-head"><div class="modal-title">Kalender</div><button class="sheet-close" id="ftCalCloseBtn">${ftIconX()}</button></div>
-      <div class="modal-body" id="ftCalBody"></div>
-    </div>
-  `, {type:'modal'});
-  document.getElementById('ftCalCloseBtn').onclick = ftCloseOverlay;
-  ftRenderCalendar();
+/* ============ Kalender ============
+   Kein eigenes Kalender-Popup mehr — stattdessen exakt dieselbe Monatsübersicht-Seite wie
+   beim Training (monthGridHTML()/monthOverviewBlockHTML() in 05-calendar.js), nur mit
+   Essenstracker-eigenen Tagesmarkierungen (Tage mit Einträgen statt Trainingstage) und einem
+   dritten Zustand ("selected" = der gerade im Essenstracker angezeigte Tag, Akzentfarb-Ring,
+   siehe monthGridHTML()). Anders als beim Training ist hier JEDER Tag antippbar (auch ohne
+   Einträge), da er direkt zum Sprung auf diesen Tag dient statt ein Detail-Popup zu öffnen —
+   siehe allDaysClickable-Flag in monthGridHTML(). Navigation läuft über die normale
+   pushView/history-Route (goFoodCalendar()/case 'foodCalendar', 06-navigation.js) statt über
+   das Sheet/Modal-Overlay-System, damit sie sich exakt wie renderMonthOverview() verhält
+   (eigene Seite mit Zurück-Pfeil, Hardware-Zurück-Taste funktioniert automatisch richtig). */
+function ftMonthOverviewDayMarker(year, month, day){
+  const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const hasEntries = ftDays[iso] && FT_MEAL_KEYS.some(k => ftDays[iso][k].length);
+  return {
+    color: hasEntries ? cssVar('--accent') : null,
+    isToday: iso === ftTodayISO(),
+    selected: iso === ftCurrentDate,
+  };
 }
-function ftRenderCalendar(){
-  const {y,m} = ftCalMonth;
-  const first = new Date(y,m,1);
-  const startOffset = (first.getDay()+6)%7; // Montag=0
-  const daysInMonth = new Date(y,m+1,0).getDate();
-  const monthLabel = first.toLocaleDateString('de-DE',{month:'long', year:'numeric'});
-  const dows = ['Mo','Di','Mi','Do','Fr','Sa','So'];
-  let cells = '';
-  for(let i=0;i<startOffset;i++) cells += `<div class="cal-day empty"></div>`;
-  for(let day=1; day<=daysInMonth; day++){
-    const iso = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const hasEntries = ftDays[iso] && FT_MEAL_KEYS.some(k=>ftDays[iso][k].length);
-    const cls = ['cal-day'];
-    if(iso === ftTodayISO()) cls.push('today');
-    if(iso === ftCurrentDate) cls.push('selected');
-    if(hasEntries) cls.push('has-entries');
-    cells += `<button class="${cls.join(' ')}" data-iso="${iso}">${day}</button>`;
-  }
-  document.getElementById('ftCalBody').innerHTML = `
-    <div class="cal-nav">
-      <button class="date-arrow" id="ftCalPrev">${ftIconChevron('left')}</button>
-      <div style="font-weight:600">${monthLabel}</div>
-      <button class="date-arrow" id="ftCalNext">${ftIconChevron('right')}</button>
-    </div>
-    <div class="cal-grid">
-      ${dows.map(d=>`<div class="cal-dow">${d}</div>`).join('')}
-      ${cells}
+function ftMonthBlockHTML(year, month){
+  const monthDays = ftAllDayTotals().filter(d => {
+    const dt = ftParseISO(d.date);
+    return dt.getFullYear() === year && dt.getMonth() === month;
+  });
+  const count = monthDays.length;
+  const subtitle = `${count} Tag${count === 1 ? '' : 'e'} protokolliert`;
+  const now = new Date();
+  const titleYear = year !== now.getFullYear() ? ` ${year}` : '';
+  const gridInner = monthGridHTML(
+    year, month, ftMonthOverviewDayMarker,
+    day => `data-ft-day-select="${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}" aria-label="${day}.${month+1}. auswählen"`,
+    true
+  );
+  return `
+    <div class="month-overview-block">
+      <h2 class="month-overview-title">${MONTH_NAMES_DE[month]}${titleYear}</h2>
+      <p class="month-overview-subtitle">${subtitle}</p>
+      <div class="month-overview-grid">
+        ${gridInner}
+      </div>
     </div>
   `;
-  document.getElementById('ftCalPrev').onclick = ()=>{ ftCalMonth.m--; if(ftCalMonth.m<0){ftCalMonth.m=11;ftCalMonth.y--;} ftRenderCalendar(); };
-  document.getElementById('ftCalNext').onclick = ()=>{ ftCalMonth.m++; if(ftCalMonth.m>11){ftCalMonth.m=0;ftCalMonth.y++;} ftRenderCalendar(); };
-  ftOverlays.querySelectorAll('.cal-day[data-iso]').forEach(btn=>{
-    btn.onclick = ()=>{ ftCurrentDate = btn.dataset.iso; ftCloseOverlay(); renderFoodTracker(); };
-  });
+}
+// Analog zu monthOverviewBase/-NextOffset/-Observer (05-calendar.js), eigener Satz Variablen,
+// da unabhängig vom Trainings-Infinite-Scroll blätterbar (man kann im Essenstracker-Kalender
+// vor- und zurückblättern, während in der Trainings-Monatsübersicht nur vorwärts gescrollt
+// wird — abgeschlossene Trainingsjahre stecken dort stattdessen in Akkordeons).
+let ftMonthOverviewBase = null;
+let ftMonthOverviewNextOffset = 0;
+let ftMonthOverviewObserver = null;
+function ftGoMonthOffset(offset){
+  const d = new Date(ftMonthOverviewBase.year, ftMonthOverviewBase.month + offset, 1);
+  return { year: d.getFullYear(), month: d.getMonth() };
+}
+function appendFtMonthOverviewMonth(offset){
+  const list = document.getElementById('ftMonthOverviewList');
+  if (!list) return;
+  const { year, month } = ftGoMonthOffset(offset);
+  list.insertAdjacentHTML('beforeend', ftMonthBlockHTML(year, month));
+  const block = list.lastElementChild;
+  if (block){
+    block.querySelectorAll('[data-ft-day-select]').forEach(btn => {
+      btn.onclick = () => {
+        ftCurrentDate = btn.dataset.ftDaySelect;
+        history.back();
+      };
+    });
+  }
+}
+function renderFtMonthOverview(){
+  const d = ftParseISO(ftCurrentDate);
+  ftMonthOverviewBase = { year: d.getFullYear(), month: d.getMonth() };
+  ftMonthOverviewNextOffset = 1;
+  if (ftMonthOverviewObserver){ ftMonthOverviewObserver.disconnect(); ftMonthOverviewObserver = null; }
+
+  app.innerHTML = `
+    <div class="back-row month-overview-back-sticky" style="margin-top:0;">
+      <button class="back-btn-icon" id="ftCalBackBtn" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button>
+    </div>
+    <div id="ftMonthOverviewList"></div>
+    <div class="month-overview-sentinel" id="ftMonthOverviewSentinel"></div>
+  `;
+  document.getElementById('ftCalBackBtn').onclick = () => history.back();
+
+  // Start: der Monat des gerade im Essenstracker angezeigten Tages (nicht zwingend der
+  // laufende Kalendermonat) — vorherige Monate kommen wie beim Training per Infinite-Scroll
+  // hinzu, sobald man ans Ende der Liste scrollt.
+  appendFtMonthOverviewMonth(0);
+
+  const sentinel = document.getElementById('ftMonthOverviewSentinel');
+  ftMonthOverviewObserver = new IntersectionObserver((entries) => {
+    if (entries.some(e => e.isIntersecting)){
+      appendFtMonthOverviewMonth(-ftMonthOverviewNextOffset);
+      ftMonthOverviewNextOffset++;
+    }
+  }, { rootMargin: '600px 0px' });
+  ftMonthOverviewObserver.observe(sentinel);
+
+  window.scrollTo(0, 0);
+}
+function goFoodCalendar(push){
+  if (push !== false) pushView('foodCalendar');
+  renderFtMonthOverview();
 }
 
 /* ============ Sheet: Lebensmittel hinzufügen ============ */
@@ -1266,13 +1322,24 @@ let ftMacroOutsideClickHandler = null;
 
 // Tagessummen für ALLE Tage mit mindestens einem Eintrag, aufsteigend sortiert — Grundlage
 // für sowohl das Balkendiagramm als auch den Makro-Donut/die Monatsübersicht unten.
+// Tagesgesamtwerte (kcal/Protein/Kohlenhydrate/Fett) für EINEN Tag — ausgelagert aus
+// ftAllDayTotals() (ruft diese Funktion jetzt für jeden Tag auf, siehe unten), damit auch
+// foodDayPopupBlockHTML() (05-calendar.js, Tages-Popup im Trainingskalender) exakt dieselbe
+// Berechnung für einen einzelnen Tag nutzen kann, statt sie zu duplizieren. Liefert null, wenn
+// an diesem Tag nichts protokolliert wurde (kein Eintrag bzw. 0 kcal).
+function ftDayTotalsForISO(iso){
+  const day = ftDays[iso];
+  if (!day) return null;
+  let kcal=0,p=0,c=0,f=0;
+  FT_MEAL_KEYS.forEach(k => day[k].forEach(e => { kcal+=e.kcal; p+=e.p; c+=e.c; f+=e.f; }));
+  if (!kcal) return null;
+  return { kcal: Math.round(kcal), p: Math.round(p), c: Math.round(c), f: Math.round(f) };
+}
 function ftAllDayTotals(){
   return Object.keys(ftDays).map(iso => {
-    const day = ftDays[iso];
-    let kcal=0,p=0,c=0,f=0;
-    FT_MEAL_KEYS.forEach(k => day[k].forEach(e => { kcal+=e.kcal; p+=e.p; c+=e.c; f+=e.f; }));
-    return { date: iso, kcal, p, c, f };
-  }).filter(d => d.kcal > 0)
+    const totals = ftDayTotalsForISO(iso);
+    return totals ? { date: iso, ...totals } : null;
+  }).filter(Boolean)
     .sort((a,b) => a.date.localeCompare(b.date));
 }
 function ftDayTotalsInPeriod(periodDays){
@@ -1511,11 +1578,18 @@ function ftWireMacroDonut(segments, periodDays){
     const selected = ftMacroDrilldown;
     const selectedRange = ranges.find(r => segments.find(s => s.label === r.label && s.key === selected));
 
-    svg.querySelectorAll('.donut-seg').forEach(path => {
+    svg.querySelectorAll('.donut-seg:not(.donut-subseg)').forEach(path => {
       const seg = segments.find(s => s.label === path.dataset.group);
       const isSelected = seg && selected === seg.key;
+      path.classList.toggle('donut-seg-hidden', isSelected);
       path.classList.toggle('donut-seg-dim', !!selected && !isSelected);
     });
+    // Der ausgewählte Ring-Abschnitt selbst wird ausgeblendet (donut-seg-hidden oben) und
+    // stattdessen in einzelne, nach Lebensmittel eingefärbte Unterabschnitte aufgeteilt —
+    // exakt dasselbe Muster wie bei der Muskelgruppen-Verteilung (applyMuscleDonutSelection(),
+    // 08b-stats-muscle-balance.js): shadeMuscleColor() für abgestufte Farbtöne derselben
+    // Makro-Farbe, donutArcPath() für die Geometrie der Unterabschnitte.
+    svg.querySelectorAll('.donut-subseg').forEach(el => el.remove());
 
     const defaultCenter = document.getElementById('pieCenterDefault-food');
     const selectedCenter = document.getElementById('pieCenterSelected-food');
@@ -1534,6 +1608,28 @@ function ftWireMacroDonut(segments, periodDays){
     const breakdown = ftFoodMacroBreakdown(selected, periodDays);
     const subTotal = breakdown.reduce((a,e) => a+e.val, 0);
 
+    if (selectedRange && subTotal){
+      let a = selectedRange.startAngle;
+      const gapDeg = breakdown.length > 1 ? 1.4 : 0;
+      breakdown.forEach((e, i) => {
+        const fraction = e.val / subTotal;
+        const rawEnd = a + fraction * (selectedRange.endAngle - selectedRange.startAngle);
+        const startA = a + (i > 0 ? gapDeg/2 : 0);
+        const endA = rawEnd - (i < breakdown.length - 1 ? gapDeg/2 : 0);
+        a = rawEnd;
+        const subPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        subPath.setAttribute('d', donutArcPath(startA, endA));
+        subPath.setAttribute('fill', shadeMuscleColor(seg.color, i));
+        subPath.setAttribute('class', 'donut-seg donut-subseg');
+        subPath.style.transitionDelay = (i * 35) + 'ms';
+        subPath.onclick = () => toggle(selected);
+        svg.appendChild(subPath);
+      });
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        svg.querySelectorAll('.donut-subseg').forEach(el => el.classList.add('donut-subseg-in'));
+      }));
+    }
+
     const selValueEl = document.getElementById('pieCenterSelectedValue-food');
     const selLabelEl = document.getElementById('pieCenterSelectedLabel-food');
     if (selValueEl && selLabelEl && selectedRange){
@@ -1543,11 +1639,11 @@ function ftWireMacroDonut(segments, periodDays){
       selLabelEl.textContent = seg.label;
     }
 
-    const rows = breakdown.map(e => {
+    const rows = breakdown.map((e, i) => {
       const pct = subTotal ? Math.round(e.val / subTotal * 100) : 0;
       return `
         <div class="muscle-balance-legend-row">
-          <span class="muscle-balance-swatch-static" style="color:${seg.color};">${pct}%</span>
+          <span class="muscle-balance-swatch-static" style="color:${shadeMuscleColor(seg.color, i)};">${pct}%</span>
           <span class="muscle-balance-legend-label">${ftEscapeHTML(e.name)}</span>
           <span class="muscle-balance-legend-value">${Math.round(e.val)} g</span>
         </div>

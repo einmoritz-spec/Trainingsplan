@@ -137,13 +137,70 @@ function monthOverviewDayMarker(year, month, day){
   const today = new Date();
   today.setHours(0,0,0,0);
   const isToday = d.getTime() === today.getTime();
-  return { color, isToday };
+  // Essenstracker-Einträge an diesem Tag (falls schon geladen, siehe initFoodTracker()-Aufruf
+  // vor renderMonthOverview()/openDayTrainingPopup() weiter unten) — eigenes "hasFood"-Flag
+  // statt die Kachelfarbe zu überschreiben, da ein Trainingstag weiterhin klar per Kachelfarbe
+  // erkennbar bleiben soll; ein zusätzlicher kleiner Punkt (siehe monthGridHTML()/CSS
+  // .month-overview-day-num-hasfood) zeigt UNABHÄNGIG davon an, ob an diesem Tag auch Essen
+  // protokolliert wurde — auch an trainingsfreien Tagen, damit reine Ernährungstage im Monat
+  // ebenfalls sichtbar und antippbar sind (siehe openDayTrainingPopup()).
+  const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const hasFood = typeof ftDays !== 'undefined' && !!ftDays[iso] && FT_MEAL_KEYS.some(k => ftDays[iso][k].length);
+  return { color, isToday, hasFood };
+}
+
+// Generischer Monats-Tagesraster-Baustein (Wochentag-Kopfzeile + führende Leerzellen + die
+// eigentlichen Tageszahlen) — NICHT nur optisch, sondern als tatsächlich gemeinsam genutzte
+// Funktion sowohl von monthOverviewBlockHTML() hier (Trainings-Monatsübersicht) als auch von
+// ftMonthBlockHTML() (15-food-tracker.js, Essenstracker-Kalender) verwendet, damit beide exakt
+// dieselbe Geometrie/Optik haben und nicht zwei leicht unterschiedliche Implementierungen
+// auseinanderlaufen. markerFn(year,month,day) liefert {color, isToday, selected} für einen Tag
+// (Trainingstage bzw. Tage mit Essens-Einträgen farbig gefüllt, "selected" umrandet den gerade
+// ausgewählten Tag in Akzentfarbe). dayAttrFn(day) liefert die HTML-Attribute für den Button
+// eines Tages (z. B. data-day-popup beim Training bzw. data-ft-day-select beim Essenstracker).
+// allDaysClickable: beim Training bleiben nur Trainingstage antippbar (öffnen ein Popup mit den
+// Trainingsdetails, siehe openDayTrainingPopup) — leere Tage haben dort keine Funktion. Beim
+// Essenstracker dagegen soll JEDER Tag antippbar sein, um zu ihm zu springen, auch ohne
+// bisherige Einträge, daher hier per Flag umschaltbar statt zwei fast identischer Funktionen.
+function monthGridHTML(year, month, markerFn, dayAttrFn, allDaysClickable){
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // 0 = Montag
+  const dayLabels = ['Mo','Di','Mi','Do','Fr','Sa','So'].map(l => `<div class="month-overview-daylabel">${l}</div>`).join('');
+  const blanks = Array.from({ length: firstWeekday }, () => `<div class="month-overview-day"></div>`).join('');
+  const dayCells = Array.from({ length: daysInMonth }, (_, i) => {
+    const day = i + 1;
+    const marker = markerFn(year, month, day);
+    const textColor = marker.color ? contrastTextColor(marker.color) : 'var(--text)';
+    const badgeStyle = marker.color
+      ? `background:${marker.color}; color:${textColor};`
+      : `background:none; color:var(--text);`;
+    const ringStyle = marker.selected
+      ? `box-shadow:0 0 0 2px var(--accent);`
+      : (marker.isToday ? `box-shadow:0 0 0 2px var(--border);` : '');
+    // marker.hasFood (siehe monthOverviewDayMarker()) markiert unabhängig von der
+    // Trainings-Kachelfarbe zusätzlich einen kleinen Punkt unter der Tageszahl, wenn an
+    // diesem Tag auch im Essenstracker etwas protokolliert wurde — macht reine
+    // Ernährungstage (ohne Training) im Trainingskalender sichtbar UND antippbar.
+    const cls = 'month-overview-day-num'
+      + (marker.color ? ' month-overview-day-num-filled' : '')
+      + (marker.hasFood ? ' month-overview-day-num-hasfood' : '');
+    if (marker.color || marker.hasFood || allDaysClickable){
+      return `
+        <div class="month-overview-day">
+          <button class="${cls}" type="button" style="${badgeStyle}${ringStyle}" ${dayAttrFn(day)}>${day}</button>
+        </div>
+      `;
+    }
+    return `
+      <div class="month-overview-day">
+        <div class="${cls}" style="${badgeStyle}${ringStyle}">${day}</div>
+      </div>
+    `;
+  }).join('');
+  return `${dayLabels}${blanks}${dayCells}`;
 }
 
 function monthOverviewBlockHTML(year, month){
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // 0 = Montag
-
   const monthCount = sessions.filter(s => {
     const sd = new Date(s.date);
     return sd.getFullYear() === year && sd.getMonth() === month;
@@ -185,33 +242,32 @@ function monthOverviewBlockHTML(year, month){
   const now = new Date();
   const titleYear = year !== now.getFullYear() ? ` ${year}` : '';
 
-  const dayLabels = ['Mo','Di','Mi','Do','Fr','Sa','So'].map(l => `<div class="month-overview-daylabel">${l}</div>`).join('');
-
-  const blanks = Array.from({ length: firstWeekday }, () => `<div class="month-overview-day"></div>`).join('');
-
-  const dayCells = Array.from({ length: daysInMonth }, (_, i) => {
-    const day = i + 1;
-    const marker = monthOverviewDayMarker(year, month, day);
-    const textColor = marker.color ? contrastTextColor(marker.color) : 'var(--text)';
-    const badgeStyle = marker.color
-      ? `background:${marker.color}; color:${textColor};`
-      : `background:none; color:var(--text);`;
-    const ringStyle = marker.isToday ? `box-shadow:0 0 0 2px var(--border);` : '';
-    if (marker.color){
-      return `
-        <div class="month-overview-day">
-          <button class="month-overview-day-num month-overview-day-num-filled" type="button" style="${badgeStyle}${ringStyle}" data-day-popup="${year}-${month}-${day}" aria-label="Training am ${day}.${month+1}. anzeigen">${day}</button>
-        </div>
-      `;
-    }
-    return `
-      <div class="month-overview-day">
-        <div class="month-overview-day-num" style="${badgeStyle}${ringStyle}">${day}</div>
-      </div>
-    `;
-  }).join('');
+  const gridInner = monthGridHTML(
+    year, month, monthOverviewDayMarker,
+    day => `data-day-popup="${year}-${month}-${day}" aria-label="Übersicht für den ${day}.${month+1}. anzeigen"`,
+    false
+  );
 
   const reportIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"></rect><line x1="8" y1="8" x2="16" y2="8"></line><line x1="8" y1="12" x2="16" y2="12"></line><line x1="8" y1="16" x2="12" y2="16"></line></svg>`;
+
+  // Essenstracker-Monatswerte (nur, wenn im Monat auch tatsächlich etwas protokolliert wurde)
+  // — nutzt ftComputeMonthStats() 1:1 aus 15-food-tracker.js (dieselbe Berechnung wie auf der
+  // Essenstracker-Statistikseite), damit hier keine zweite, evtl. abweichende Logik entsteht.
+  // .macro-row/.macro/.macro-dot sind dieselben Klassen wie im Essenstracker-Kopf (Kopf von
+  // renderFoodTracker()) — bewusst wiederverwendet statt eigener Optik, für einen einheitlichen
+  // Ernährungs-"Look" quer durch die App.
+  const foodStats = (typeof ftComputeMonthStats === 'function') ? ftComputeMonthStats(year, month) : null;
+  const foodStatsHTML = (foodStats && foodStats.count) ? `
+    <div class="section-label" style="margin-top:20px;">Ernährung Ø/Tag</div>
+    <div class="month-overview-food-summary">
+      <div class="month-overview-food-kcal">${foodStats.avgKcal}<span> kcal</span></div>
+      <div class="macro-row" style="margin-top:10px;">
+        <div class="macro"><div><span class="macro-dot" style="background:var(--protein)"></span><span class="macro-val">${foodStats.avgP} g</span></div><div class="macro-label">Protein</div></div>
+        <div class="macro"><div><span class="macro-dot" style="background:var(--carbs)"></span><span class="macro-val">${foodStats.avgC} g</span></div><div class="macro-label">Kohlenhydrate</div></div>
+        <div class="macro"><div><span class="macro-dot" style="background:var(--fat)"></span><span class="macro-val">${foodStats.avgF} g</span></div><div class="macro-label">Fett</div></div>
+      </div>
+    </div>
+  ` : '';
 
   return `
     <div class="month-overview-block">
@@ -219,10 +275,9 @@ function monthOverviewBlockHTML(year, month){
       <p class="month-overview-subtitle">${subtitle}</p>
       ${trackingSubtitle}
       <div class="month-overview-grid">
-        ${dayLabels}
-        ${blanks}
-        ${dayCells}
+        ${gridInner}
       </div>
+      ${foodStatsHTML}
       <button class="month-overview-report-btn" type="button" data-report-month="${year}-${month}">${reportIcon}${MONTH_NAMES_DE[month]} Bericht</button>
     </div>
   `;
@@ -262,17 +317,50 @@ function sessionDayStats(session){
   return { exercises, sets, starCount, improvedCount };
 }
 
+// Essenstracker-Pendant zu sessionDayStats() — Tagesgesamtwerte (kcal/Protein/Kohlenhydrate/
+// Fett) für EINEN Tag, Grundlage für den Ernährungs-Block im Tages-Popup unten. Baut auf
+// ftDayTotalsForISO() (15-food-tracker.js) auf statt eigener Aufsummierung, damit Training und
+// Essenstracker exakt dieselbe Berechnung verwenden. ftDays ist zu diesem Zeitpunkt bereits
+// geladen — siehe initFoodTracker()-Aufruf vor renderMonthOverview() (case 'monthOverview',
+// 06-navigation.js) bzw. vor goMonthOverview().
+function foodDayPopupBlockHTML(totals){
+  const stats = [
+    { value: totals.kcal, label: 'kcal', color: null },
+    { value: `${totals.p} g`, label: 'Protein', color: cssVar('--protein') },
+    { value: `${totals.c} g`, label: 'Kohlenhydrate', color: cssVar('--carbs') },
+    { value: `${totals.f} g`, label: 'Fett', color: cssVar('--fat') },
+  ];
+  const statsHTML = stats.map(s => `
+    <div class="day-popup-stat">
+      <div class="day-popup-stat-value"${s.color ? ` style="color:${s.color};"` : ''}>${s.value}</div>
+      <div class="day-popup-stat-label">${s.label}</div>
+    </div>
+  `).join('');
+  return `
+    <div class="day-popup-block">
+      <div class="day-popup-tile-name">Ernährung</div>
+      <div class="day-popup-stats">
+        ${statsHTML}
+      </div>
+    </div>
+  `;
+}
+
 function openDayTrainingPopup(year, month, day){
   const sessionsOnDay = sessions.filter(s => {
     const sd = new Date(s.date);
     return sd.getFullYear() === year && sd.getMonth() === month && sd.getDate() === day;
   });
-  if (!sessionsOnDay.length) return;
+  const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const foodTotals = (typeof ftDayTotalsForISO === 'function') ? ftDayTotalsForISO(iso) : null;
+  // Weder Training noch Essen an diesem Tag protokolliert (z. B. Klick auf einen Tag, der nur
+  // wegen allDaysClickable/marker.hasFood theoretisch antippbar wäre) — nichts zu zeigen.
+  if (!sessionsOnDay.length && !foodTotals) return;
 
   const existing = document.getElementById('dayTrainingPopupOverlay');
   if (existing) existing.remove();
 
-  const blocksHTML = sessionsOnDay.map(session => {
+  const trainingBlocksHTML = sessionsOnDay.map(session => {
     const { exercises, sets, starCount, improvedCount } = sessionDayStats(session);
     // Nur Kennzahlen >0 anzeigen (flex:1 auf .day-popup-stat verteilt die verbleibenden
     // dadurch automatisch gleichmäßig über die Zeilenbreite).
@@ -296,7 +384,21 @@ function openDayTrainingPopup(year, month, day){
         </div>
       </div>
     `;
-  }).join('<div class="day-popup-divider"></div>');
+  });
+  // An Tagen mit BEIDEM (Training und Ernährung) stehen die Blöcke untereinander, exakt wie
+  // bei mehreren Trainingseinheiten am selben Tag — derselbe .day-popup-divider trennt sie.
+  const blocksHTML = [...trainingBlocksHTML, ...(foodTotals ? [foodDayPopupBlockHTML(foodTotals)] : [])]
+    .join('<div class="day-popup-divider"></div>');
+
+  const titleDate = sessionsOnDay.length
+    ? fmtDate(sessionsOnDay[0].date)
+    : new Date(year, month, day).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
+
+  // "Im Verlauf öffnen" bezieht sich auf die Trainingsdetails — ergibt an einem reinen
+  // Ernährungstag (keine Sessions) keinen Sinn, daher dort weggelassen.
+  const historyBtnHTML = sessionsOnDay.length
+    ? `<button class="day-popup-history-btn" id="dayTrainingPopupHistory" type="button" aria-label="Im Verlauf öffnen"><img src="${ICON_HISTORY}" alt=""></button>`
+    : '';
 
   const overlay = document.createElement('div');
   overlay.className = 'add-exercise-overlay centered-overlay';
@@ -304,9 +406,9 @@ function openDayTrainingPopup(year, month, day){
   overlay.innerHTML = `
     <div class="add-exercise-modal" style="max-height:none;">
       <div class="add-exercise-modal-header">
-        <div class="add-exercise-modal-title">${fmtDate(sessionsOnDay[0].date)}</div>
+        <div class="add-exercise-modal-title">${titleDate}</div>
         <div class="add-exercise-modal-header-icons">
-          <button class="day-popup-history-btn" id="dayTrainingPopupHistory" type="button" aria-label="Im Verlauf öffnen"><img src="${ICON_HISTORY}" alt=""></button>
+          ${historyBtnHTML}
           <button class="add-exercise-modal-close" id="dayTrainingPopupClose" aria-label="Schließen">✕</button>
         </div>
       </div>
@@ -330,7 +432,8 @@ function openDayTrainingPopup(year, month, day){
   // Verlauf-Übersicht bei mehreren Einheiten) per Android-Zurück direkt wieder im Kalender —
   // der Seite, die VOR dem Popup offen war — statt einen zusätzlichen Schritt für das
   // inzwischen geschlossene Popup zu brauchen.
-  document.getElementById('dayTrainingPopupHistory').onclick = () => {
+  const historyBtn = document.getElementById('dayTrainingPopupHistory');
+  if (historyBtn) historyBtn.onclick = () => {
     if (overlayCloseStack[overlayCloseStack.length - 1] === remove) overlayCloseStack.pop();
     remove();
     resetAllAccordions();

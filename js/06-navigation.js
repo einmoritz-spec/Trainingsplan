@@ -144,7 +144,12 @@ function goWorkoutsOverview(push){
 }
 function goMonthOverview(push){
   if (push !== false) pushView('monthOverview');
-  renderMonthOverview();
+  // Essenstracker-Daten (ftDays) müssen geladen sein, BEVOR die Monatsübersicht rendert —
+  // sie zeigt jetzt auch Ernährungs-Infos je Tag/Monat (siehe monthOverviewDayMarker()/
+  // monthOverviewBlockHTML(), 05-calendar.js). initFoodTracker() ist idempotent (lädt nur
+  // beim allerersten Aufruf wirklich, siehe foodTrackerLoaded-Flag), kostet bei bereits
+  // geladenen Daten also nichts.
+  initFoodTracker().then(renderMonthOverview);
 }
 function goMonthReport(year, month, push){
   if (push !== false) pushView('monthReport', { year, month });
@@ -244,11 +249,12 @@ function renderViewByState(state){
     case 'statsChart': renderStatsChart(state.params.metric); break;
     case 'bodyWeightChart': renderBodyWeightChart(); break;
     case 'workoutsOverview': renderWorkoutsOverview(); break;
-    case 'monthOverview': renderMonthOverview(); break;
+    case 'monthOverview': initFoodTracker().then(renderMonthOverview); break;
     case 'monthReport': renderMonthReport(state.params.year, state.params.month); break;
     case 'exerciseSessionDetail': renderExerciseSessionDetail(state.params.sessionId, state.params.exerciseId); break;
     case 'foodTracker': initFoodTracker().then(renderFoodTracker); break;
     case 'foodStats': initFoodTracker().then(renderFoodStats); break;
+    case 'foodCalendar': initFoodTracker().then(renderFtMonthOverview); break;
     case 'active': if (active) renderActive(); else renderHome(); break;
     default: renderHome();
   }
