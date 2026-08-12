@@ -288,26 +288,44 @@ function ftPersistOffFoodIfNeeded(food){
 }
 
 // Liefert IMMER ein Ergebnisobjekt statt food|null — {ok:true, food} bei Erfolg,
-// {ok:false, reason:'notFound'|'network'} sonst. Bugfix: die Vorgängerversion hatte kein
-// try/catch um fetch()/json() — offline oder bei API-Ausfall warf der Aufruf unbehandelt,
-// ftHandleScannedCode() (15c-food-add.js) fing das nicht ab und blieb stumm beim Toast
-// "Suche Produkt …" hängen, ohne dass der Nutzer je eine Rückmeldung bekam.
+// {ok:false, reason:'notFound'|'offline'|'unreachable'} sonst. Bugfix: die Vorgängerversion
+// hatte kein try/catch um fetch()/json() — offline oder bei API-Ausfall warf der Aufruf
+// unbehandelt, ftHandleScannedCode() (15c-food-add.js) fing das nicht ab und blieb stumm beim
+// Toast "Suche Produkt …" hängen, ohne dass der Nutzer je eine Rückmeldung bekam.
+// 'offline' vs. 'unreachable': ein fehlgeschlagener fetch() kann viele Ursachen haben, die
+// NICHTS mit der eigenen Internetverbindung zu tun haben (CORS-Preflight-Fehler beim relativ
+// neuen search.openfoodfacts.org-Endpunkt, DNS-Filterung einzelner Subdomains, kurzzeitiger
+// API-Ausfall) — navigator.onLine ist zwar auch nur eine Heuristik (meldet nur "OS denkt, es
+// gibt eine Netzwerkschnittstelle"), aber deutlich zuverlässiger als "jeder fetch()-Fehler
+// bedeutet automatisch kein Internet". Nur wenn der Browser SELBST von keiner Verbindung
+// ausgeht, wird 'offline' gemeldet; sonst 'unreachable' mit entsprechend vorsichtigerem Text.
+// EIN automatischer Retry nach kurzer Pause (ftDelay()), bevor endgültig aufgegeben wird —
+// viele Fehlschläge gegen Open-Food-Facts sind transient (kurzzeitige Überlastung, einzelne
+// verworfene Anfrage) und beim zweiten Versuch bereits wieder da.
+function ftDelay(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+async function ftOffByBarcodeAttempt(code){
+  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,brands,nutriments`;
+  const res = await fetch(url, {headers:FT_OFF_HEADERS});
+  if(!res.ok) return {ok:false, reason: navigator.onLine ? 'unreachable' : 'offline'};
+  const data = await res.json();
+  if(data.status !== 1) return {ok:false, reason:'notFound'};
+  const f = ftNormalizeOFF(data.product, code);
+  if(!f) return {ok:false, reason:'notFound'};
+  ftPersistOffFoodIfNeeded(f);
+  return {ok:true, food:f};
+}
 async function ftOffByBarcode(code){
   if(ftOffCache['off_'+code]) return {ok:true, food: ftOffCache['off_'+code]};
   if(ftOffMemCache['off_'+code]) return {ok:true, food: ftOffMemCache['off_'+code]};
-  try{
-    const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,brands,nutriments`;
-    const res = await fetch(url, {headers:FT_OFF_HEADERS});
-    if(!res.ok) return {ok:false, reason:'network'};
-    const data = await res.json();
-    if(data.status !== 1) return {ok:false, reason:'notFound'};
-    const f = ftNormalizeOFF(data.product, code);
-    if(!f) return {ok:false, reason:'notFound'};
-    ftPersistOffFoodIfNeeded(f);
-    return {ok:true, food:f};
-  }catch(e){
-    return {ok:false, reason:'network'};
-  }
+  let result;
+  try{ result = await ftOffByBarcodeAttempt(code); }
+  catch(e){ result = {ok:false, reason: navigator.onLine ? 'unreachable' : 'offline'}; }
+  // 'notFound' nicht erneut versuchen — das Produkt existiert schlicht nicht in der Datenbank,
+  // ein zweiter Versuch ändert daran nichts und würde nur unnötig warten lassen.
+  if(result.ok || result.reason === 'notFound') return result;
+  await ftDelay(700);
+  try{ return await ftOffByBarcodeAttempt(code); }
+  catch(e){ return {ok:false, reason: navigator.onLine ? 'unreachable' : 'offline'}; }
 }
 
 function ftNormalizeOFF(product, code){
@@ -334,24 +352,28 @@ function ftNormalizeOFF(product, code){
 }
 function ftRound1(n){ return Math.round(n*10)/10; }
 
-// Liefert {results, offline}. Ergebnisse werden NUR noch in den flüchtigen ftOffMemCache
+// Liefert {results, reason}. Ergebnisse werden NUR noch in den flüchtigen ftOffMemCache
 // gelegt (nicht mehr in ftOffCache/ftSave) — sonst hätte jede Texteingabe in der Suche (bis
 // zu 15 Treffer, alle paar hundert Millisekunden) den kompletten persistenten Cache neu auf
 // die Platte geschrieben, obwohl die allermeisten Treffer nie angetippt werden. Ein Treffer
 // wird erst dauerhaft gespeichert, wenn er wirklich benutzt wird (ftPersistOffFoodIfNeeded()
 // oben). ftGetFoodById() findet ihn bis dahin trotzdem zuverlässig über ftOffMemCache — der
 // ursprüngliche Bugfix ("Klick auf Online-Treffer tat nichts") bleibt damit erhalten.
-// `offline` unterscheidet "wirklich keine Treffer" von "Anfrage kam gar nicht durch" (wird auf
-// false gesetzt, sobald mindestens eine der beiden Anfragen überhaupt eine Antwort bekam) —
-// ftHandleSearchInput() (15c-food-add.js) zeigt dafür zwei unterschiedliche Hinweise.
-async function ftOffSearch(query){
+// `reason` ist null bei einer erfolgreich durchgeführten Suche (auch mit 0 Treffern), sonst
+// 'offline' oder 'unreachable' — siehe ausführlichen Kommentar bei ftOffByBarcode() oben zum
+// Unterschied: ein fetch()-Fehler bedeutet NICHT automatisch fehlendes Internet (CORS-Hänger,
+// DNS-Filterung einzelner Subdomains, kurzzeitiger API-Ausfall sehen identisch aus). Erst wenn
+// navigator.onLine selbst false meldet, wird ehrlich "offline" statt des vorsichtigeren
+// "unreachable" gemeldet. ftHandleSearchInput() (15c-food-add.js) zeigt dafür unterschiedliche
+// Hinweise, statt jeden Fetch-Fehler pauschal als "kein Internet" darzustellen.
+async function ftOffSearchAttempt(query){
   // Primär: Search-a-licious. Fallback: legacy search.pl.
-  let networkFailed = true;
+  let requestFailed = true;
   try{
     const url = `https://search.openfoodfacts.org/search?q=${encodeURIComponent(query)}&langs=de&page_size=15&fields=code,product_name,brands,nutriments`;
     const res = await fetch(url, {headers:FT_OFF_HEADERS});
     if(res.ok){
-      networkFailed = false;
+      requestFailed = false;
       const data = await res.json();
       const hits = data.hits || data.results || [];
       const out = [];
@@ -363,14 +385,14 @@ async function ftOffSearch(query){
       }
       if(out.length){
         out.forEach(f => { ftOffMemCache[f.id] = f; });
-        return {results: out, offline: false};
+        return {results: out, reason: null};
       }
     }
   }catch(e){ /* weiter zu Fallback */ }
   try{
     const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=15&fields=code,product_name,brands,nutriments`;
     const res = await fetch(url, {headers:FT_OFF_HEADERS});
-    networkFailed = false;
+    requestFailed = false;
     const data = await res.json();
     const out = [];
     for(const p of (data.products || [])){
@@ -380,8 +402,21 @@ async function ftOffSearch(query){
       if(f) out.push(f);
     }
     if(out.length) out.forEach(f => { ftOffMemCache[f.id] = f; });
-    return {results: out, offline: false};
-  }catch(e){ return {results: [], offline: networkFailed}; }
+    return {results: out, reason: null};
+  }catch(e){
+    return {results: [], reason: (requestFailed && !navigator.onLine) ? 'offline' : (requestFailed ? 'unreachable' : null)};
+  }
+}
+// Ein Fehlschlag (reason !== null, egal ob 'offline' oder 'unreachable') wird EINMAL nach
+// kurzer Pause wiederholt, bevor die Suche endgültig aufgibt — viele Fehlschläge gegen
+// Open-Food-Facts sind transient und beim zweiten Versuch (wenige hundert Millisekunden
+// später) bereits wieder da. Kostet nur auf dem Fehlschlag-Pfad zusätzliche Zeit, der
+// erfolgreiche Regelfall bleibt genauso schnell wie zuvor.
+async function ftOffSearch(query){
+  const first = await ftOffSearchAttempt(query);
+  if(!first.reason) return first;
+  await ftDelay(700);
+  return ftOffSearchAttempt(query);
 }
 
 /* ============ Tagessummen ============ */

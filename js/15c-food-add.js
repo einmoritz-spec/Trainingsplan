@@ -209,7 +209,7 @@ async function ftHandleSearchInput(q){
   ftWireResultRows(box);
 
   const token = ++ftAddSheetSearchToken;
-  const { results: offResults, offline } = await ftOffSearch(q);
+  const { results: offResults, reason } = await ftOffSearch(q);
   if(token !== ftAddSheetSearchToken || ftLastQuery !== q) return; // veraltete Antwort
   const loadingRow = document.getElementById('ftOffLoadingRow');
   if(!loadingRow) return;
@@ -218,13 +218,17 @@ async function ftHandleSearchInput(q){
     // Ergebnisse zuerst, nach Häufigkeit sortiert.
     const sorted = offResults.slice().sort((a,b) => (ftFoodUsageCount[b.id]||0) - (ftFoodUsageCount[a.id]||0));
     loadingRow.outerHTML = sorted.map(ftResultRowHTML).join('');
+  } else if(reason === 'offline'){
+    // Echtes "kein Internet" (navigator.onLine meldet false, siehe ftOffSearch()).
+    loadingRow.outerHTML = `<div class="no-results">Offline — nur lokale Treffer verfügbar.</div>`;
+  } else if(reason === 'unreachable'){
+    // Anfrage kam nicht durch, OBWOHL der Browser eine Verbindung meldet (z. B. CORS-Hänger,
+    // kurzzeitiger API-Ausfall, DNS-Filterung einzelner Subdomains) — das fälschlich als
+    // "Offline" zu bezeichnen, hätte den Nutzer nur auf die falsche Fährte geschickt, wenn
+    // seine Internetverbindung nachweislich in Ordnung war.
+    loadingRow.outerHTML = `<div class="no-results">Online-Datenbank gerade nicht erreichbar — nur lokale Treffer.</div>`;
   } else {
-    // "Offline" (Anfrage kam gar nicht durch) und "wirklich keine Treffer" waren bisher
-    // dieselbe Meldung — bei fehlender Verbindung wirkte das wie ein bestätigtes Nicht-
-    // Vorhandensein des Lebensmittels, obwohl schlicht nicht gesucht werden konnte.
-    loadingRow.outerHTML = offline
-      ? `<div class="no-results">Offline — nur lokale Treffer verfügbar.</div>`
-      : `<div class="no-results">Keine Online-Treffer.</div>`;
+    loadingRow.outerHTML = `<div class="no-results">Keine Online-Treffer.</div>`;
   }
   ftWireResultRows(box);
 }
@@ -466,22 +470,29 @@ function ftUpdateRecent(meal, foodId){
 
 /* ============ Eigenes Lebensmittel ============
    Optionaler Parameter prefillBarcode: wird gesetzt, wenn dieses Formular aus einem nicht in
-   der Online-Datenbank gefundenen ODER wegen fehlender Verbindung nicht abfragbaren Scan
-   heraus geöffnet wurde (siehe ftHandleScannedCode()) — der Barcode wird dann am gespeicherten
-   Lebensmittel hinterlegt (food.barcode), damit derselbe Code beim nächsten Scan sofort
-   wiedererkannt wird, ohne die Werte erneut eingeben zu müssen. Zweiter optionaler Parameter
-   offline unterscheidet die beiden Fälle nur im angezeigten Hinweistext — bei einem echten
-   Verbindungsfehler ist "Produkt nicht gefunden" irreführend, das Produkt könnte durchaus in
-   der Datenbank stehen. */
-function ftOpenCustomFoodForm(prefillBarcode, offline){
+   der Online-Datenbank gefundenen ODER wegen einer fehlgeschlagenen Anfrage nicht abfragbaren
+   Scan heraus geöffnet wurde (siehe ftHandleScannedCode()) — der Barcode wird dann am
+   gespeicherten Lebensmittel hinterlegt (food.barcode), damit derselbe Code beim nächsten Scan
+   sofort wiedererkannt wird, ohne die Werte erneut eingeben zu müssen. Dritter optionaler
+   Parameter failReason ('offline'|'unreachable', nur relevant wenn prefillBarcode gesetzt ist)
+   steuert NUR den angezeigten Hinweistext: bei 'offline' steht wirklich kein Internet zur
+   Verfügung (navigator.onLine meldet false); bei 'unreachable' kam die Anfrage aus einem
+   anderen Grund nicht durch (z. B. kurzzeitiger API-Ausfall), OBWOHL eine Verbindung besteht —
+   das fälschlich als "kein Internet" zu bezeichnen, würde den Nutzer nur auf die falsche
+   Fährte schicken. */
+function ftOpenCustomFoodForm(prefillBarcode, failReason){
+  const titleByReason = { offline: 'Kein Internet', unreachable: 'Nicht erreichbar' };
+  const hintByReason = {
+    offline: `Keine Verbindung — Barcode ${ftEscapeHTML(prefillBarcode)} konnte nicht abgefragt werden. Trag die Werte einmalig ein, oder scanne erneut, sobald du wieder online bist.`,
+    unreachable: `Barcode ${ftEscapeHTML(prefillBarcode)} konnte gerade nicht abgefragt werden (Online-Datenbank momentan nicht erreichbar). Trag die Werte einmalig ein, oder scanne später erneut.`,
+  };
   ftOpenOverlay(`
     <div class="sheet" id="ftCustomSheet">
       <div class="sheet-handle"></div>
-      <div class="sheet-head"><div class="sheet-title">${prefillBarcode ? (offline ? 'Kein Internet' : 'Produkt nicht gefunden') : 'Eigenes Lebensmittel'}</div><button class="sheet-close" id="ftCustomClose">${ftIconX()}</button></div>
+      <div class="sheet-head"><div class="sheet-title">${prefillBarcode ? (titleByReason[failReason] || 'Produkt nicht gefunden') : 'Eigenes Lebensmittel'}</div><button class="sheet-close" id="ftCustomClose">${ftIconX()}</button></div>
       <div class="sheet-body">
-        ${prefillBarcode ? `<div class="no-results" style="text-align:left; padding:0 4px 14px;">${offline
-          ? `Keine Verbindung — Barcode ${ftEscapeHTML(prefillBarcode)} konnte nicht abgefragt werden. Trag die Werte einmalig ein, oder scanne erneut, sobald du wieder online bist.`
-          : `Barcode ${ftEscapeHTML(prefillBarcode)} ist nicht in der Online-Datenbank hinterlegt. Trag die Werte einmalig ein — beim nächsten Scan dieses Codes erkennt die App das Produkt dann automatisch.`
+        ${prefillBarcode ? `<div class="no-results" style="text-align:left; padding:0 4px 14px;">${
+          hintByReason[failReason] || `Barcode ${ftEscapeHTML(prefillBarcode)} ist nicht in der Online-Datenbank hinterlegt. Trag die Werte einmalig ein — beim nächsten Scan dieses Codes erkennt die App das Produkt dann automatisch.`
         }</div>` : ''}
         <div class="field-label">Name</div>
         <input class="text-input" id="ftCfName" placeholder="z. B. Mamas Linsensuppe">
@@ -693,12 +704,12 @@ async function ftHandleScannedCode(code){
   // API-Ausfall stumm stehen, ohne dass je eine Rückmeldung kam.
   const result = await ftOffByBarcode(code);
   if(!result.ok){
-    // "notFound" (Barcode existiert nicht in der Datenbank) und "network" (Anfrage kam gar
-    // nicht durch) bekommen unterschiedliche Hinweistexte im Formular (siehe
-    // ftOpenCustomFoodForm()) — beide öffnen aber direkt das Formular für ein eigenes
-    // Lebensmittel mit vorbelegtem Barcode, statt den Nutzer nur mit einer Fehlermeldung
-    // stehen zu lassen.
-    ftOpenCustomFoodForm(code, result.reason === 'network');
+    // "notFound" (Barcode existiert nicht in der Datenbank), "offline" (wirklich kein Internet)
+    // und "unreachable" (Anfrage kam trotz bestehender Verbindung nicht durch) bekommen
+    // unterschiedliche Hinweistexte im Formular (siehe ftOpenCustomFoodForm()) — alle drei
+    // öffnen aber direkt das Formular für ein eigenes Lebensmittel mit vorbelegtem Barcode,
+    // statt den Nutzer nur mit einer Fehlermeldung stehen zu lassen.
+    ftOpenCustomFoodForm(code, result.reason);
     return;
   }
   ftOpenQuantityModal(result.food);
