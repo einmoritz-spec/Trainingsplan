@@ -762,6 +762,7 @@ function renderSettings(){
   const zahlBadge = numberModeLabels[numberInputMode()] || '';
   const homeOnTop = homeLayoutMode() !== 'historyFirst';
   const weekStripEnabled = isWeekStripEnabled();
+  const foodTrackerEnabled = isFoodTrackerEnabled();
   const ringOn = restRingEnabled();
   // Globale Grundauswahl, welche Statistiken auf Übungsdetailseiten angezeigt werden (siehe
   // PROGRESS_STAT_LABELS/progressStatsHidden weiter oben) — pro Übungsart (Kraft/Zeit) eine
@@ -908,6 +909,13 @@ function renderSettings(){
     <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
       <span class="mg-name">Kalender</span>
       <button class="toggle-switch ${weekStripEnabled ? 'on' : ''}" id="weekStripToggle" type="button" role="switch" aria-checked="${weekStripEnabled}" aria-label="Kalender">
+        <span class="toggle-knob"></span>
+      </button>
+    </div>
+
+    <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
+      <span class="mg-name">Essenstracker</span>
+      <button class="toggle-switch ${foodTrackerEnabled ? 'on' : ''}" id="foodTrackerToggle" type="button" role="switch" aria-checked="${foodTrackerEnabled}" aria-label="Essenstracker">
         <span class="toggle-knob"></span>
       </button>
     </div>
@@ -1150,6 +1158,12 @@ function renderSettings(){
 
   document.getElementById('weekStripToggle').onclick = async () => {
     plan.weekStripEnabled = !weekStripEnabled;
+    await saveJSON('plan', plan);
+    renderSettings();
+  };
+
+  document.getElementById('foodTrackerToggle').onclick = async () => {
+    plan.foodTrackerEnabled = !foodTrackerEnabled;
     await saveJSON('plan', plan);
     renderSettings();
   };

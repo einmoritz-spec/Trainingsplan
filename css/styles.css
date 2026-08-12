@@ -13,6 +13,13 @@
   --accent-3: #6f9bd1;
   --border: #33363b;
   --radius: 10px;
+  /* Makro-Farbrollen für das Essenstracker-Feature (15-food-tracker.js) — bewusst fest
+     (nicht wie --accent frei wählbar), da Protein/Kohlenhydrate/Fett feste, wiedererkennbare
+     Rollen sind, die unabhängig von der gewählten Akzentfarbe stabil bleiben sollen. */
+  --protein: #6f9bd1;
+  --carbs: #c9982e;
+  --fat: #a3577a;
+  --danger: #b3462c;
   --pause-icon-url: url("data:image/png;base64,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");
 }
 /* Light Mode: wird per JS auf <html> gesetzt (data-theme="light", siehe applyTheme() /
@@ -27,6 +34,9 @@ html[data-theme="light"]{
   --text: #1c1d20;
   --muted: #6b6f76;
   --border: #dcdad5;
+  --protein: #4f6f9e;
+  --carbs: #c98a2e;
+  --fat: #a3577a;
 }
 
 *{ box-sizing: border-box; }
@@ -111,7 +121,7 @@ input{ font-family: inherit; }
 .add-category-btn-small:active{ color: var(--text); opacity:0.8; }
 
 /* ---------- Top identity ---------- */
-.brand{ margin-bottom: 14px; }
+.brand{ margin-bottom: 14px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .brand h1{
   font-family:'Bebas Neue', sans-serif;
   font-size: clamp(24px, 8vw, 34px);
@@ -120,6 +130,14 @@ input{ font-family: inherit; }
   word-break: break-word;
   margin:0;
 }
+/* Button zum Essenstracker-Feature (siehe 15-food-tracker.js), nur sichtbar wenn das Feature
+   in den Einstellungen aktiviert ist (isFoodTrackerEnabled(), 07-home.js). Piktogramm vom
+   Nutzer bereitgestellt (siehe gabel-und-messer.png), als Inline-SVG in Akzentfarbe. */
+.brand-food-btn{
+  flex-shrink:0; width:40px; height:40px; border-radius:50%; border:none; background:none;
+  color: var(--accent); display:flex; align-items:center; justify-content:center; padding:0;
+}
+.brand-food-btn:active{ opacity:0.7; }
 .gear{
   background:none; border:1px solid var(--border); color:var(--muted);
   border-radius: 8px; padding:8px 12px; font-size:13px;
@@ -2081,4 +2099,219 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
   .summary-thumb, .summary-thumb-fallback{ width:34px; height:34px; }
   .summary-thumb-fallback{ background:#eee; color:#000; }
   .history-row, .history-month-label{ color:#000; }
+}
+
+
+/* =========================================================================
+   Essenstracker-Feature (15-food-tracker.js)
+   -------------------------------------------------------------------------
+   Ursprünglich das CSS einer eigenständigen App, hier unverändert in der
+   Optik übernommen (eigene .food-row/.sheet/.modal/... Klassen), nur:
+   - eigene :root/[data-theme=dark]-Variablenblöcke entfernt (die Basisrollen
+     --bg/--surface/--surface-2/--border/--text/--muted/--accent kommen jetzt
+     vom bereits oben stehenden globalen Theme; --protein/--carbs/--fat/
+     --danger sind oben ins :root/[data-theme=light] mit aufgenommen)
+   - globale body{font-family}/#app{max-width}-Regeln entfernt (hätten die
+     App-weite Schriftart bzw. Container-Breite überschrieben)
+   - .section-label/.btn-primary/.btn-ghost zu .ft-section-label/
+     .ft-btn-primary/.ft-btn-ghost umbenannt (Namenskollision mit oben
+     bereits anders gestylten Klassen gleichen Namens)
+   - eigene Design-Einstellungen-Optik (.mode-toggle/.swatch*/.custom-hex-
+     row) entfernt, da die zugehörige Funktionalität komplett entfallen ist
+     ========================================================================= */
+
+/* ---- Datumszeile ---- */
+.date-row{display:flex; align-items:center; justify-content:center; gap:6px; padding:6px 0 18px; position:relative;}
+.settings-btn{position:absolute; right:0; top:6px; width:34px; height:34px;}
+.date-arrow{
+  width:38px; height:38px; border-radius:50%; border:none; background:var(--surface-2);
+  color:var(--text); display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.date-arrow svg{width:18px; height:18px;}
+.date-label{
+  font-family:'Fraunces',serif; font-weight:600; font-size:1.05rem;
+  background:none; border:none; color:var(--text); cursor:pointer;
+  padding:6px 14px; border-radius:20px; min-width:150px; text-align:center;
+}
+.date-label:active{background:var(--surface-2);}
+
+/* ---- Kopf: kcal + Makros ---- */
+.summary-card{
+  background:var(--surface); border-radius:var(--radius); padding:22px 20px 18px;
+  text-align:center; border:1px solid var(--border);
+}
+.kcal-value{font-family:'Fraunces',serif; font-weight:700; font-size:3.1rem; line-height:1; letter-spacing:-0.01em;}
+.kcal-label{color:var(--muted); font-size:0.8rem; margin-top:4px; letter-spacing:0.04em; text-transform:uppercase;}
+.macro-row{display:flex; justify-content:center; gap:22px; margin-top:18px;}
+.macro{text-align:center;}
+.macro-dot{width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:5px;}
+.macro-val{font-weight:700; font-size:1.05rem;}
+.macro-label{font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin-top:2px;}
+
+/* ---- Mahlzeiten ---- */
+.meal-section{margin-top:20px;}
+.meal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; padding:0 2px;}
+.meal-title{font-family:'Fraunces',serif; font-weight:600; font-size:1.15rem; display:flex; align-items:center; gap:8px;}
+.meal-kcal{color:var(--muted); font-size:0.9rem; font-weight:500;}
+.meal-add{
+  width:32px; height:32px; border-radius:50%; border:none; background:var(--accent); color:#fff;
+  font-size:1.3rem; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.food-list{background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); overflow:hidden;}
+.food-row{
+  display:flex; align-items:center; justify-content:space-between; padding:12px 14px;
+  border-bottom:1px solid var(--border); cursor:pointer;
+}
+.food-row:last-child{border-bottom:none;}
+.food-row-main{display:flex; flex-direction:column; gap:2px; min-width:0;}
+.food-row-name{font-weight:600; font-size:0.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.food-row-sub{font-size:0.78rem; color:var(--muted);}
+.food-row-right{display:flex; align-items:center; gap:10px; flex-shrink:0;}
+.food-row-kcal{font-weight:700; font-size:0.95rem;}
+.food-row-del{
+  width:26px; height:26px; border-radius:50%; border:none; background:var(--surface-2); color:var(--muted);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.empty-meal{padding:16px 14px; color:var(--muted); font-size:0.88rem; text-align:center;}
+.save-meal-btn{
+  display:block; width:100%; text-align:center; background:none; border:none; color:var(--accent);
+  font-weight:600; font-size:0.82rem; padding:10px 0 2px; cursor:pointer;
+}
+
+/* ---- Overlay-Grundlagen ---- */
+.overlay-backdrop{
+  position:fixed; inset:0; background:rgba(20,17,10,0.4); z-index:40;
+  opacity:0; pointer-events:none; transition:opacity .18s;
+}
+.overlay-backdrop.open{opacity:1; pointer-events:auto;}
+.sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:41; background:var(--surface);
+  border-radius:22px 22px 0 0; max-height:88vh; display:flex; flex-direction:column;
+  transform:translateY(100%); transition:transform .22s ease, bottom .18s ease, max-height .18s ease; box-shadow:0 -8px 30px rgba(0,0,0,0.18);
+}
+.sheet.open{transform:translateY(0);}
+.sheet-handle{width:36px; height:4px; background:var(--border); border-radius:2px; margin:10px auto 4px;}
+.sheet-head{display:flex; align-items:center; justify-content:space-between; padding:6px 18px 10px; border-bottom:1px solid var(--border);}
+.sheet-title{font-family:'Fraunces',serif; font-weight:600; font-size:1.1rem;}
+.sheet-close{
+  width:30px; height:30px; border-radius:50%; border:none; background:var(--surface-2); color:var(--text);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.sheet-body{overflow-y:auto; overflow-x:hidden; padding:14px 18px 26px; -webkit-overflow-scrolling:touch;}
+
+/* Modal (zentriert, für Kalender/Mengen) */
+.modal{
+  position:fixed; left:50%; top:50%; transform:translate(-50%,-50%) scale(0.96); z-index:41;
+  background:var(--surface); border-radius:var(--radius); width:calc(100% - 40px); max-width:400px;
+  max-height:86vh; overflow-y:auto; opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;
+  box-shadow:0 12px 40px rgba(0,0,0,0.22);
+}
+.modal.open{opacity:1; pointer-events:auto; transform:translate(-50%,-50%) scale(1);}
+.modal-head{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border);}
+.modal-title{font-family:'Fraunces',serif; font-weight:600; font-size:1.05rem;}
+.modal-body{padding:16px;}
+
+/* Suchfeld */
+.search-wrap{display:flex; gap:8px; align-items:center; margin-bottom:14px;}
+.search-input{
+  flex:1; min-width:0; background:var(--surface-2); border:1px solid var(--border); border-radius:12px;
+  padding:11px 14px; font-size:0.95rem; color:var(--text); font-family:inherit;
+}
+.search-input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+.icon-btn{
+  width:42px; height:42px; border-radius:12px; border:1px solid var(--border); background:var(--surface-2);
+  color:var(--text); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
+}
+.icon-btn svg{width:20px; height:20px;}
+
+.ft-section-label{font-size:0.74rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin:16px 0 8px; padding:0 2px;}
+.ft-section-label:first-child{margin-top:0;}
+.result-row{
+  display:flex; align-items:center; justify-content:space-between; padding:11px 4px;
+  border-bottom:1px solid var(--border); cursor:pointer;
+}
+.result-row:last-child{border-bottom:none;}
+.result-main{min-width:0;}
+.result-name{font-weight:600; font-size:0.92rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.result-sub{font-size:0.76rem; color:var(--muted); margin-top:1px;}
+.result-star{
+  width:30px; height:30px; border:none; background:none; color:var(--carbs); flex-shrink:0; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+.result-star svg{width:18px; height:18px;}
+.result-star[data-del-food], .result-star[data-del-meal]{color:var(--muted);}
+.result-star[data-del-food] svg, .result-star[data-del-meal] svg{width:17px; height:17px;}
+.loading-row{padding:14px 4px; color:var(--muted); font-size:0.85rem; text-align:center;}
+.no-results{padding:20px 4px; color:var(--muted); font-size:0.88rem; text-align:center;}
+
+.ft-btn-primary{
+  width:100%; background:var(--accent); color:#fff; border:none; border-radius:12px; padding:13px;
+  font-weight:600; font-size:0.95rem; cursor:pointer; font-family:inherit;
+}
+.ft-btn-ghost{
+  width:100%; background:none; color:var(--accent); border:1.5px solid var(--accent); border-radius:12px;
+  padding:12px; font-weight:600; font-size:0.92rem; cursor:pointer; font-family:inherit; margin-top:8px;
+}
+.field-label{font-size:0.78rem; color:var(--muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:0.04em;}
+.field-label:first-child{margin-top:0;}
+.text-input{
+  width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:10px;
+  padding:11px 12px; font-size:0.95rem; color:var(--text); font-family:inherit;
+}
+.unit-toggle{display:flex; background:var(--surface-2); border-radius:12px; padding:3px; gap:3px; margin-bottom:14px;}
+.unit-toggle button{
+  flex:1; border:none; background:none; padding:9px; border-radius:9px; font-weight:600; font-size:0.88rem;
+  color:var(--muted); cursor:pointer; font-family:inherit;
+}
+.unit-toggle button.active{background:var(--surface); color:var(--text); box-shadow:0 1px 3px rgba(0,0,0,0.08);}
+.qty-row{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+.qty-btn{
+  width:40px; height:40px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2);
+  font-size:1.2rem; color:var(--text); cursor:pointer; flex-shrink:0;
+}
+/* Bugfix: ohne min-width:0 verhindert der Browser bei Flex-Kindern mit type="number", dass
+   das Feld unter seine intrinsische Breite schrumpft — dadurch wurde die Zeile insgesamt
+   breiter als der Sheet-Inhalt und das "+" rechts aus der Karte herausgedrückt (musste
+   gescrollt werden, um es zu sehen). min-width:0 erlaubt dem Feld, sich normal wie jedes
+   andere Flex-Element auf den verfügbaren Platz zu begrenzen. */
+.qty-input{
+  flex:1; min-width:0; text-align:center; font-size:1.15rem; font-weight:700; background:var(--surface-2);
+  border:1px solid var(--border); border-radius:10px; padding:9px; font-family:inherit; color:var(--text);
+}
+.qty-preview{
+  text-align:center; margin-top:12px; padding:14px; background:var(--surface-2); border-radius:12px;
+}
+.qty-preview-kcal{font-family:'Fraunces',serif; font-weight:700; font-size:1.6rem;}
+.qty-preview-macros{display:flex; justify-content:center; gap:14px; margin-top:6px; font-size:0.8rem; color:var(--muted);}
+
+/* Kalender */
+.cal-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
+.cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; text-align:center;}
+.cal-dow{font-size:0.7rem; color:var(--muted); padding-bottom:4px;}
+.cal-day{
+  aspect-ratio:1; display:flex; align-items:center; justify-content:center; border-radius:50%;
+  font-size:0.88rem; cursor:pointer; position:relative; color:var(--text);
+}
+.cal-day.empty{cursor:default;}
+.cal-day.today{border:1.5px solid var(--accent);}
+.cal-day.selected{background:var(--accent); color:#fff;}
+.cal-day.has-entries::after{
+  content:''; position:absolute; bottom:3px; width:4px; height:4px; border-radius:50%; background:var(--carbs);
+}
+.cal-day.selected.has-entries::after{background:#fff;}
+
+.hidden{display:none !important;}
+.toast{
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--text); color:var(--bg);
+  padding:10px 18px; border-radius:24px; font-size:0.85rem; font-weight:500; z-index:60; opacity:0;
+  transition:opacity .2s; pointer-events:none;
+}
+.toast.show{opacity:1;}
+.toast-undo{
+  display:flex; align-items:center; gap:14px; padding:10px 10px 10px 18px; pointer-events:auto;
+  max-width:calc(100vw - 40px);
+}
+.toast-undo-btn{
+  background:none; border:none; color:var(--accent); font-weight:700; font-size:0.85rem; cursor:pointer;
+  padding:6px 10px; flex-shrink:0; font-family:inherit;
 }

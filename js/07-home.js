@@ -172,6 +172,30 @@ function isWeekStripEnabled(){
   return !(plan && plan.weekStripEnabled === false);
 }
 
+// Ein-/Ausschalter für das Essenstracker-Feature (siehe 15-food-tracker.js) — standardmäßig
+// AUS (Standard: aus, wie gewünscht), in den Einstellungen unter "Allgemein" umschaltbar
+// (siehe renderSettings(), 10-plan-settings.js). Nur bei aktivem Feature erscheint der
+// Gabel/Messer-Button oben rechts neben "Trainingsplan" (renderHome() unten) UND ist der
+// Screen selbst über die Zurück-/Vorwärts-Navigation erreichbar (case 'foodTracker' in
+// renderViewByState(), 06-navigation.js) — ausgeschaltet bleibt goFoodTracker() zwar technisch
+// aufrufbar (kein hartes Verstecken der Funktion nötig), nur eben ohne Einstiegspunkt in der UI.
+function isFoodTrackerEnabled(){
+  return !!(plan && plan.foodTrackerEnabled);
+}
+
+// Vom Nutzer bereitgestelltes Gabel/Messer-Piktogramm (siehe gabel-und-messer.png), als Inline-
+// SVG nachgezeichnet statt als Bild eingebunden — dadurch lässt es sich wie die anderen SVG-
+// Icons der App per stroke="currentColor" einfärben (hier bewusst in der Akzentfarbe, siehe
+// Verwendung unten in renderHome()).
+function iconForkKnifeSVG(){
+  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 2v5.5a2 2 0 002 2V21a1 1 0 002 0V9.5a2 2 0 002-2V2"/>
+    <path d="M9.3 2v5"/>
+    <path d="M10.7 2v5"/>
+    <path d="M17.5 2c-1.7.6-2.5 2.6-2.5 5s.6 4 2 4.5V21a1 1 0 002 0V2"/>
+  </svg>`;
+}
+
 // Ab wie vielen Tagen seit dem letzten Export (siehe lastExportAt, 02-state-theme.js / 10-plan-
 // settings.js) die Backup-Erinnerung auf der Startseite erscheint.
 const BACKUP_REMINDER_DAYS = 30;
@@ -231,10 +255,15 @@ function renderHome(){
     </div>
   ` : '';
 
+  const foodTrackerBtnHTML = isFoodTrackerEnabled() ? `
+    <button class="brand-food-btn" id="btnFoodTracker" aria-label="Essenstracker" title="Essenstracker">${iconForkKnifeSVG()}</button>
+  ` : '';
+
   app.innerHTML = `
     <div class="${isHistoryFirst ? 'home-thumb-wrap' : ''}">
       <div class="brand" style="margin-bottom:${isHistoryFirst ? '20px' : '14px'};">
         <h1>Trainingsplan</h1>
+        ${foodTrackerBtnHTML}
       </div>
       ${backupReminderHTML}
       ${isWeekStripEnabled() ? weekStripHTML() : ''}
@@ -247,6 +276,7 @@ function renderHome(){
   document.getElementById('btnProgress').onclick = () => goProgressList();
   document.getElementById('btnSettings').onclick = () => goSettings();
   document.getElementById('btnHistoryLabel').onclick = () => goWorkoutsOverview();
+  if (document.getElementById('btnFoodTracker')) document.getElementById('btnFoodTracker').onclick = () => goFoodTracker();
   if (document.getElementById('btnBackupReminder')){
     // Führt direkt in die Einstellungen zum Exportieren-Button statt nur die Seite zu öffnen —
     // Backup-Erinnerung soll in einem Tap zur Handlung führen, nicht nur zur Fundstelle.

@@ -30,6 +30,14 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v25: Bugfix Essenstracker-Mengen-Modal — .qty-input hatte kein min-width:0, wodurch der
+ * Zahlen-Input in der Gramm/Stück-Zeile nicht unter seine Browser-Mindestbreite schrumpfen
+ * konnte und den "+"-Button rechts aus der Sheet-Karte herausdrückte (musste gescrollt
+ * werden). Zusätzlich: Mengenfeld leert sich jetzt beim Antippen statt den vorbelegten Wert
+ * stehen zu lassen, Suchfeld im "+"-Sheet wird beim Öffnen automatisch fokussiert.
+ * v24: Essenstracker-Feature ergänzt (js/data/food-data.js, js/15-food-tracker.js neu in der
+ * Precache-Liste) — standardmäßig ausgeblendet (Einstellungen → Allgemein), siehe
+ * isFoodTrackerEnabled() in 07-home.js.
  * v11: Icon-Dateien bereinigt (icon-192.png, icon-512.png, icon-512-maskable.png) — die
  * gestrichelten Führungslinien, die versehentlich mit ins finale PNG exportiert wurden (sichtbar
  * z. B. in icon-512-maskable.png), sind entfernt. icon-512-maskable.png ist jetzt außerdem
@@ -66,7 +74,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v23';
+const CACHE_NAME = 'trainingsplan-cache-v25';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
@@ -94,6 +102,8 @@ const APP_SHELL = [
   './js/11c-active-session-rest.js',
   './js/12-session-summary.js',
   './js/13-session-detail-pdf.js',
+  './js/data/food-data.js',
+  './js/15-food-tracker.js',
   './js/14-app-init.js',
   './js/vendor/jspdf.umd.min.js',
   './assets/icons/favicon.png',
