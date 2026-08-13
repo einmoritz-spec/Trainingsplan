@@ -142,37 +142,37 @@ function ftWireDateSwipe(){
 /* ============ Vergangene Mahlzeiten automatisch einklappen + aktuelle hervorheben ============
    Rein zeitbasiert (Wanduhrzeit), nur für den HEUTIGEN Tag relevant — beim Blättern zu einem
    anderen Tag über die Pfeile/den Kalender ergibt "welche Mahlzeit ist gerade dran" keinen
-   Sinn, dort bleibt daher alles wie bisher aufgeklappt und ohne Hervorhebung.
+   Sinn, dort bleibt daher alles standardmäßig eingeklappt, ohne Hervorhebung.
    ftMealCollapseOverride hält ausschließlich MANUELLE Auf-/Zuklapp-Aktionen fest (Tap auf den
    Mahlzeiten-Kopf) und übersteuert damit den Zeit-Default für den Rest der Sitzung — tippt man
-   z. B. das bereits automatisch eingeklappte Frühstück wieder auf, bleibt es trotz "nach 10
-   Uhr" so lange offen, bis man es selbst wieder zuklappt. Key ist "datum_mahlzeit", damit beim
-   Zurückblättern zu einem Tag, an dem man vorher manuell etwas umgeschaltet hat, dieser Zustand
-   erhalten bleibt, ohne dass sich das mit anderen Tagen überschneidet. */
+   z. B. das automatisch eingeklappte Frühstück auf, bleibt es so lange offen, bis man es selbst
+   wieder zuklappt, auch wenn man das Zeitfenster längst verlassen hat. Key ist
+   "datum_mahlzeit", damit beim Zurückblättern zu einem Tag, an dem man vorher manuell etwas
+   umgeschaltet hat, dieser Zustand erhalten bleibt, ohne sich mit anderen Tagen zu überschneiden. */
 let ftMealCollapseOverride = {};
-const FT_MEAL_COLLAPSE_FROM_HOUR = { breakfast: 10, lunch: 14, dinner: 19 };
+// [von, bis] in Stunden (inklusive) — NUR innerhalb dieses Fensters ist eine Mahlzeit am
+// heutigen Tag automatisch aufgeklappt UND als "aktuell" hervorgehoben. Außerhalb (auch in den
+// Lücken dazwischen, z. B. 10–11 Uhr) UND an jedem anderen Tag gilt der Standard: eingeklappt.
+const FT_MEAL_WINDOW = { breakfast: [7, 10], lunch: [11, 14], dinner: [15, 19.5] };
 function ftMealDefaultCollapsed(meal, dateIso){
-  if (meal === 'snacks') return true; // Snacks: immer eingeklappter Sammeltopf, nie "die aktuelle Mahlzeit"
-  if (dateIso !== ftTodayISO()) return false;
-  const now = new Date();
-  const hour = now.getHours() + now.getMinutes() / 60;
-  return hour >= FT_MEAL_COLLAPSE_FROM_HOUR[meal];
+  if (meal === 'snacks') return true; // Snacks: immer eingeklappter Sammeltopf, öffnet nie automatisch
+  return ftCurrentMeal(dateIso) !== meal;
 }
 function ftMealIsCollapsed(meal, dateIso){
   const key = dateIso + '_' + meal;
   return key in ftMealCollapseOverride ? ftMealCollapseOverride[key] : ftMealDefaultCollapsed(meal, dateIso);
 }
-// Welche Mahlzeit gerade "dran" ist (für die farbige Hervorhebung) — dieselben Zeitgrenzen wie
-// oben: vor 10 Uhr Frühstück, 10–14 Uhr Mittag, 14–19 Uhr Abendessen, ab 19 Uhr keine mehr (der
-// Tag ist im Wesentlichen gelaufen, nichts wird mehr als "aktuell" hervorgehoben). Snacks
-// werden hier bewusst nie zurückgegeben — die sind kein fester Zeitpunkt im Tag.
+// Welche Mahlzeit gerade "dran" ist (automatisches Aufklappen + farbige Hervorhebung) — nur für
+// heute, nur innerhalb des jeweiligen Zeitfensters oben. In den Lücken dazwischen (z. B.
+// 10–11 Uhr) und außerhalb aller Fenster ist keine Mahlzeit "aktuell".
 function ftCurrentMeal(dateIso){
   if (dateIso !== ftTodayISO()) return null;
   const now = new Date();
   const hour = now.getHours() + now.getMinutes() / 60;
-  if (hour < FT_MEAL_COLLAPSE_FROM_HOUR.breakfast) return 'breakfast';
-  if (hour < FT_MEAL_COLLAPSE_FROM_HOUR.lunch) return 'lunch';
-  if (hour < FT_MEAL_COLLAPSE_FROM_HOUR.dinner) return 'dinner';
+  for (const meal of ['breakfast', 'lunch', 'dinner']){
+    const [from, to] = FT_MEAL_WINDOW[meal];
+    if (hour >= from && hour <= to) return meal;
+  }
   return null;
 }
 
@@ -200,6 +200,15 @@ function ftMealHTML(meal){
       </div>
     </div>
   `;
+  // EIN durchgehender Kasten für die ganze Mahlzeit, ob ein- oder ausgeklappt (.meal-section
+  // selbst trägt jetzt Rahmen/Ecken/Hintergrund, siehe CSS) — vorher hatte der aufgeklappte
+  // Zustand den Titel als freistehende Zeile darüber und die Zutaten in einer eigenen,
+  // zusätzlich umrandeten .food-list-Box darunter, was wie zwei separate Felder mit Lücke
+  // dazwischen wirkte. Kopf und Inhalt (Vorschauzeile bzw. Zutatenliste) sitzen jetzt als
+  // direkte Kinder in DERSELBEN Karte; nur wenn tatsächlich Inhalt unter dem Kopf folgt, kommt
+  // eine einzelne Trennlinie dazwischen (.meal-section.has-body), Zutaten selbst trennen sich
+  // nur noch durch die normale .food-row-Unterstreichung — keine doppelten/verschachtelten
+  // Rahmen mehr.
   if (collapsed){
     // Kompakte Vorschau statt der vollen Zutatenliste — dasselbe Muster wie das "Mahlzeiten"-
     // Akkordeon auf der Startseite (homeMealsAccordionBodyHTML(), 07-home.js): nur die ersten
@@ -210,14 +219,14 @@ function ftMealHTML(meal){
     const previewNames = entries.slice().reverse().slice(0, 3).map(e => e.name);
     const previewText = previewNames.join(' · ') + (entries.length > 3 ? ' …' : '');
     return `
-      <div class="meal-section collapsed${isCurrent ? ' current' : ''}" data-meal="${meal}">
+      <div class="meal-section${isCurrent ? ' current' : ''}${entries.length ? ' has-body' : ''}" data-meal="${meal}">
         ${headHTML}
         ${entries.length ? `<div class="meal-collapsed-items">${ftEscapeHTML(previewText)}</div>` : ''}
       </div>
     `;
   }
   return `
-    <div class="meal-section${isCurrent ? ' current' : ''}" data-meal="${meal}">
+    <div class="meal-section${isCurrent ? ' current' : ''} has-body" data-meal="${meal}">
       ${headHTML}
       <div class="food-list">
         ${entries.length ? entries.slice().reverse().map(e=> e.kind==='mealGroup' ? ftMealGroupRowHTML(meal,e) : ftFoodRowHTML(meal, e)).join('') : `<div class="empty-meal">Noch nichts eingetragen</div>`}
