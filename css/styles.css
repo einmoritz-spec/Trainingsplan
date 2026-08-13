@@ -2252,8 +2252,22 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
 .ft-extra-nutrients-row b{ color:var(--text); font-weight:700; }
 
 /* ---- Mahlzeiten ---- */
-.meal-section{margin-top:20px;}
-.meal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; padding:0 2px; cursor:pointer;}
+/* Eine Mahlzeit ist IMMER dieselbe eine Karte — Rahmen/Ecken/Hintergrund sitzen direkt auf
+   .meal-section, egal ob gerade ein- oder ausgeklappt (siehe ftMealHTML(), 15b-food-day.js).
+   Vorher hatte der aufgeklappte Zustand den Titel als freistehende Zeile OHNE eigenen Rahmen
+   darüber und die Zutaten in einer separaten, zusätzlich umrandeten .food-list-Box darunter —
+   wirkte wie zwei Felder mit Lücke. Jetzt trägt die Karte selbst den einzigen Rahmen, der Kopf
+   verliert seinen eigenen Look komplett, und Kopf/Inhalt trennt nur noch EINE Linie
+   (.meal-section.has-body), nicht mehr Rahmen + Trennlinie + Rahmen wie zuvor. */
+.meal-section{
+  margin-top:20px; border:1px solid var(--border); border-radius:var(--radius);
+  background:var(--surface); overflow:hidden;
+}
+.meal-head{
+  display:flex; align-items:center; justify-content:space-between;
+}
+.meal-section > .meal-head{ padding:13px 14px; cursor:pointer; }
+.meal-section.has-body > .meal-head{ border-bottom:1px solid var(--border); }
 .meal-head-actions{display:flex; align-items:center; gap:8px;}
 .meal-title{font-family:'Fraunces',serif; font-weight:600; font-size:1.15rem; display:flex; align-items:center; gap:8px;}
 .meal-kcal{color:var(--muted); font-size:0.9rem; font-weight:500;}
@@ -2261,7 +2275,9 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
   width:32px; height:32px; border-radius:50%; border:none; background:var(--accent); color:#fff;
   font-size:1.3rem; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer;
 }
-.food-list{background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); overflow:hidden;}
+/* .food-list ist jetzt reiner Zeilen-Container OHNE eigenen Rahmen (der sitzt auf der
+   umgebenden .meal-section-Karte) — sonst wieder Kasten-im-Kasten wie vorher. */
+.food-list{ overflow:hidden; }
 .food-row{
   display:flex; align-items:center; justify-content:space-between; padding:12px 14px;
   border-bottom:1px solid var(--border); cursor:pointer;
@@ -2279,30 +2295,20 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
 .empty-meal{padding:16px 14px; color:var(--muted); font-size:0.88rem; text-align:center;}
 .save-meal-btn{
   display:block; width:100%; text-align:center; background:none; border:none; color:var(--accent);
-  font-weight:600; font-size:0.82rem; padding:10px 0 2px; cursor:pointer;
+  font-weight:600; font-size:0.82rem; padding:10px 0 12px; cursor:pointer;
 }
-/* Eingeklappte Mahlzeit in der Tagesansicht (ftMealHTML(), 15b-food-day.js) — bewusst dasselbe
-   platzsparende Muster wie die Mahlzeiten-Übersicht auf der Startseite (.home-meal-box weiter
-   unten): eigene umrandete Box statt der vollen .food-list, Kopfzeile bleibt identisch
-   (.meal-head/.meal-title/.meal-add werden 1:1 wiederverwendet), darunter höchstens eine
-   einzeilige Vorschau der ersten paar Lebensmittel. Anders als .home-meal-box ist hier NICHT
-   die ganze Box der Klick-Ziel (das bleibt .meal-head, siehe dortiges Wiring) — die Box selbst
-   trägt daher keinen eigenen cursor:pointer/Klick-Handler, nur die Kopfzeile.*/
-.meal-section.collapsed{
-  border:1px solid var(--border); border-radius:var(--radius); background:var(--surface);
-  padding:10px 12px 12px;
-}
-.meal-section.collapsed .meal-head{ margin-bottom:0; }
+/* Eingeklappte Vorschauzeile — ersetzt die volle .food-list im eingeklappten Zustand
+   (ftMealHTML()), bleibt innerhalb derselben Karte, kein eigener Rahmen. */
 .meal-collapsed-items{
-  font-size:0.72rem; color:var(--muted); margin-top:4px; padding-left:2px;
+  font-size:0.78rem; color:var(--muted); padding:0 14px 12px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 /* Farbige Hervorhebung der gerade "aktuellen" Mahlzeit (ftCurrentMeal(), 15b-food-day.js) —
-   Titel in Akzentfarbe plus ein akzentfarbener Rahmen um die Karte (Food-List im aufgeklappten,
-   die Box selbst im eingeklappten Zustand), dasselbe Muster wie z. B. .period-btn.active. */
+   Titel in Akzentfarbe plus ein akzentfarbener Kartenrahmen, dasselbe Muster wie z. B.
+   .period-btn.active. Da der Rahmen jetzt einheitlich auf .meal-section sitzt, reicht eine
+   einzige Regel für beide Zustände (vorher zwei getrennte für .food-list/.collapsed). */
+.meal-section.current{ border-color:var(--accent); }
 .meal-section.current .meal-title{ color:var(--accent); }
-.meal-section.current .food-list{ border-color:var(--accent); }
-.meal-section.current.collapsed{ border-color:var(--accent); }
 /* Kompakte Mahlzeiten-Übersicht auf der Startseite (Akkordeon "Mahlzeiten" in renderHome(),
    07-home.js) — bewusst NICHT die vollen .food-list/.food-row-Karten aus dem Essenstracker
    selbst (zu groß für einen Überblick auf der Startseite), sondern eine schlanke, umrandete
