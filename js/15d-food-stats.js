@@ -151,11 +151,16 @@ function ftMacroKcalSegments(periodDays){
 // sonst würde z.B. "Porridge Standard" als ein einziger riesiger Posten erscheinen, obwohl
 // die Aufschlüsselung ja gerade zeigen soll, WELCHE Lebensmittel wie viel beitragen.
 function ftFoodMacroBreakdown(macroKey, periodDays){
-  const cutoffIso = ftAddDays(ftTodayISO(), -(periodDays - 1));
+  const todayIso = ftTodayISO();
+  const cutoffIso = ftAddDays(todayIso, -(periodDays - 1));
   const map = {};
   const add = (name, val) => { if(val) map[name] = (map[name] || 0) + val; };
   Object.keys(ftDays).forEach(iso => {
-    if (iso < cutoffIso) return;
+    // Dieselbe obere Grenze wie in ftDayTotalsInPeriod() (15d-food-stats.js) — ohne sie zählen
+    // künftig datierte Tage (z. B. vorausgeplante/verschobene Kalendereinträge) bei JEDEM
+    // Zeitraum mit, auch bei "Tag", und tauchen dann fälschlich in der Lebensmittel-
+    // Aufschlüsselung eines Makros auf, obwohl sie gar nicht zum gewählten Zeitraum gehören.
+    if (iso < cutoffIso || iso > todayIso) return;
     FT_MEAL_KEYS.forEach(k => (ftDays[iso][k]||[]).forEach(e => {
       if(e.kind === 'mealGroup'){
         (e.items||[]).forEach(i => add(i.name, (i[macroKey] || 0) * (e.portion ?? 1)));
