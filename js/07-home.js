@@ -2,6 +2,11 @@
    HOME
 --------------------------------------------------- */
 let historyExpanded = false;
+// Akkordeon-Zustand der beiden neuen Home-Bereiche "Verlauf" und "Mahlzeiten" — nur relevant
+// (und nur gerendert), wenn der Essenstracker aktiviert ist, siehe renderHome(). Beide starten
+// eingeklappt, wie alle anderen Akkordeons in der App.
+let homeVerlaufOpen = false;
+let homeMealsOpen = false;
 let accentPickerOpen = false;
 let bgPickerOpen = false;
 // Klappt den Bereich "Eigene Schriftarten" (hochgeladene Dateien) in Design → Schriftart auf,
@@ -209,6 +214,35 @@ function isBackupReminderDue(){
   return daysSince >= BACKUP_REMINDER_DAYS;
 }
 
+// Inhalt des Mahlzeiten-Akkordeons auf der Startseite (renderHome()) — bewusst sehr kompakt
+// im Vergleich zur vollen Tagesansicht im Essenstracker (ftMealHTML(), 15b-food-day.js): pro
+// Mahlzeit nur eine umrandete Box mit Kopfzeile (identische .meal-title/.meal-add-Klassen wie
+// im Essenstracker, siehe Screenshot-Vorlage) und darunter — falls vorhanden — alle bereits
+// eingetragenen Lebensmittel als EINE kleine, einzeilige Liste statt einzelner Zeilen wie dort.
+// Arbeitet immer mit dem HEUTIGEN Datum (ftTodayISO()), unabhängig vom zuletzt im
+// Essenstracker angezeigten ftCurrentDate — ein schneller Überblick auf der Startseite soll
+// sich nicht danach richten, welcher Tag dort zuletzt zufällig offen war.
+function homeMealsAccordionBodyHTML(){
+  if (!foodTrackerLoaded){
+    return `<div class="loading-row">Lädt …</div>`;
+  }
+  const iso = ftTodayISO();
+  const day = ftGetDay(iso);
+  return FT_MEAL_KEYS.map(meal => {
+    const entries = day[meal];
+    const kcal = ftMealTotal(iso, meal);
+    const itemsText = entries.map(e => e.name).join(' · ');
+    return `
+      <div class="home-meal-box" data-home-meal-box="${meal}">
+        <div class="meal-head" style="margin-bottom:0;">
+          <div class="meal-title" style="font-size:0.95rem;">${FT_MEAL_LABELS[meal]}${entries.length ? ` <span class="meal-kcal">· ${kcal} kcal</span>` : ''}</div>
+          <button class="meal-add" style="width:26px; height:26px; font-size:1.1rem;" data-home-meal-add="${meal}">+</button>
+        </div>
+        ${entries.length ? `<div class="home-meal-box-items">${ftEscapeHTML(itemsText)}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
 function renderHome(){
   const allSorted = sessions.slice().reverse();
   const recent = allSorted.slice(0, 5);
@@ -234,19 +268,59 @@ function renderHome(){
     </div>
   `;
   const startBtnHTML = `<button class="btn btn-primary" id="btnStart">Training starten</button>`;
-  const historyHTML = `
-    <button class="section-label section-label-link" id="btnHistoryLabel" type="button"><img class="section-label-icon" src="${ICON_HISTORY}" alt="">Verlauf</button>
+  const foodOn = isFoodTrackerEnabled();
+  // Bei aktiviertem Essenstracker wird "Verlauf" (das bisherige feste Trainings-Protokoll auf
+  // der Startseite) zu einem einklappbaren Akkordeon — Wunsch: Trainings sollen dann nicht
+  // mehr den ganzen Startbildschirm einnehmen, Platz für die neue Mahlzeiten-Übersicht
+  // darunter. Ohne aktivierten Essenstracker bleibt exakt das bisherige, feste Verhalten
+  // (Kopfzeile direkt klickbar → Workouts-Übersicht, Liste immer sichtbar).
+  const historyBodyInnerHTML = `
     <div class="history">
       ${recentHTML || '<div class="history-empty">Noch keine Einheit protokolliert.</div>'}
     </div>
     ${toggleHTML}
   `;
+  const historyHTML = foodOn ? `
+    <div class="muscle-group" style="margin-top:0;">
+      <button class="muscle-group-header" id="btnHomeHistoryToggle" type="button">
+        <span class="mg-name" style="display:flex; align-items:center; gap:8px;"><img class="section-label-icon" src="${ICON_HISTORY}" alt="" style="width:14px; height:14px;">Verlauf</span>
+        <span class="mg-meta"><span class="mg-arrow">${homeVerlaufOpen ? '▾' : '▸'}</span></span>
+      </button>
+      <div class="muscle-group-body" style="display:${homeVerlaufOpen ? 'block' : 'none'};">
+        ${historyBodyInnerHTML}
+      </div>
+    </div>
+  ` : `
+    <button class="section-label section-label-link" id="btnHistoryLabel" type="button"><img class="section-label-icon" src="${ICON_HISTORY}" alt="">Verlauf</button>
+    ${historyBodyInnerHTML}
+  `;
+
+  // Mahlzeiten-Akkordeon: kompakte Übersicht der heutigen Mahlzeiten mit "+"-Button pro
+  // Mahlzeit, der direkt in denselben Hinzufügen-Flow wie im vollen Essenstracker führt
+  // (goFtAddFood(), 15c-food-add.js) — siehe homeMealsAccordionBodyHTML() weiter unten für den
+  // eigentlichen Inhalt. Essenstracker-Daten werden dabei bewusst erst BEIM ERSTEN Aufklappen
+  // geladen (initFoodTracker(), asynchron), nicht schon beim bloßen Anzeigen der Startseite —
+  // vermeidet unnötige IndexedDB-Reads, wenn der Bereich ohnehin eingeklappt bleibt.
+  const mealsHTML = foodOn ? (() => {
+    const todayKcal = foodTrackerLoaded ? ftComputeTotals(ftTodayISO()).kcal : 0;
+    return `
+    <div class="muscle-group" style="margin-top:16px;">
+      <button class="muscle-group-header" id="btnHomeMealsToggle" type="button">
+        <span class="mg-name">Mahlzeiten</span>
+        <span class="mg-meta">${todayKcal ? `<span>${todayKcal} kcal</span>` : ''}<span class="mg-arrow">${homeMealsOpen ? '▾' : '▸'}</span></span>
+      </button>
+      <div class="muscle-group-body" style="display:${homeMealsOpen ? 'block' : 'none'};">
+        ${homeMealsAccordionBodyHTML()}
+      </div>
+    </div>
+  `;
+  })() : '';
 
   const isHistoryFirst = homeLayoutMode() === 'historyFirst';
-  const historyFirstBlockHTML = `${historyHTML}<div style="margin-top:26px;">${navRowHTML}</div><div style="margin-top:14px;">${startBtnHTML}</div>`;
+  const historyFirstBlockHTML = `${historyHTML}${mealsHTML}<div style="margin-top:26px;">${navRowHTML}</div><div style="margin-top:14px;">${startBtnHTML}</div>`;
   const bodyHTML = isHistoryFirst
     ? `<div class="home-thumb-spacer"></div><div class="home-thumb-block">${historyFirstBlockHTML}</div>`
-    : `${navRowHTML}<div style="margin:0 0 22px;">${startBtnHTML}</div>${historyHTML}`;
+    : `${navRowHTML}<div style="margin:0 0 22px;">${startBtnHTML}</div>${historyHTML}${mealsHTML}`;
 
   // Backup-Erinnerung: dezenter Hinweis, kein blockierendes Popup — alle lokalen Daten
   // (localStorage/IndexedDB) sind ein Geräteverlust oder ein "Browserdaten löschen" von einem
@@ -258,7 +332,7 @@ function renderHome(){
     </div>
   ` : '';
 
-  const foodTrackerBtnHTML = isFoodTrackerEnabled() ? `
+  const foodTrackerBtnHTML = foodOn ? `
     <button class="brand-food-btn" id="btnFoodTracker" aria-label="Essenstracker" title="Essenstracker">${iconForkKnifeSVG()}</button>
   ` : '';
 
@@ -278,7 +352,29 @@ function renderHome(){
   document.getElementById('btnPlan').onclick = () => goPlan();
   document.getElementById('btnProgress').onclick = () => goProgressList();
   document.getElementById('btnSettings').onclick = () => goSettings();
-  document.getElementById('btnHistoryLabel').onclick = () => goWorkoutsOverview();
+  if (document.getElementById('btnHistoryLabel')) document.getElementById('btnHistoryLabel').onclick = () => goWorkoutsOverview();
+  if (document.getElementById('btnHomeHistoryToggle')){
+    document.getElementById('btnHomeHistoryToggle').onclick = () => { homeVerlaufOpen = !homeVerlaufOpen; renderHome(); };
+  }
+  if (document.getElementById('btnHomeMealsToggle')){
+    document.getElementById('btnHomeMealsToggle').onclick = () => {
+      homeMealsOpen = !homeMealsOpen;
+      if (homeMealsOpen && !foodTrackerLoaded){
+        initFoodTracker().then(() => { if (document.getElementById('btnHomeMealsToggle')) renderHome(); });
+      }
+      renderHome();
+    };
+  }
+  app.querySelectorAll('[data-home-meal-add]').forEach(btn => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      ftCurrentDate = ftTodayISO();
+      goFtAddFood(btn.dataset.homeMealAdd);
+    };
+  });
+  app.querySelectorAll('.home-meal-box').forEach(box => {
+    box.onclick = () => { ftCurrentDate = ftTodayISO(); goFoodTracker(); };
+  });
   if (document.getElementById('btnFoodTracker')) document.getElementById('btnFoodTracker').onclick = () => goFoodTracker();
   if (document.getElementById('btnBackupReminder')){
     // Führt direkt in die Einstellungen zum Exportieren-Button statt nur die Seite zu öffnen —

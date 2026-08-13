@@ -78,6 +78,18 @@ let ftFoodUsageCount = {};
 // Ziel-Bezug, siehe renderFoodTracker()) — die Fortschrittsanzeige blendet sich erst ein,
 // sobald mindestens ein Ziel hinterlegt ist.
 let ftGoals = { kcal: null, p: null, c: null, f: null };
+// Eigenes, vom allgemeinen Trainingsplan-Design UNABHÄNGIGES Farbschema für den Essenstracker
+// (Wunsch: "gesondert von den allgemeinen App-Einstellungen") — siehe ftOpenSettingsSheet()
+// (15b-food-day.js, Akkordeon "Design") für die Bedienoberfläche und ftApplyTheme() weiter
+// unten für die Anwendung. JEDES Feld ist standardmäßig undefined/fehlt = "nichts Eigenes
+// eingestellt, allgemeine App-Einstellung übernehmen" (Wunsch: "sollten aber vorher immer
+// erst die allgemeinen Einstellungen angewendet werden falls man nichts custom hat") — erst
+// ein explizit im Essenstracker gewählter Wert überschreibt das. bgColorId==='default' ist
+// dabei bewusst ein ANDERER Zustand als "gar nicht gesetzt": es bedeutet "im Essenstracker
+// AUSDRÜCKLICH kein eigener Hintergrund", auch wenn die allgemeine App gerade einen eigenen
+// Hintergrund hat — nur so lässt sich ein einmal geerbter Hintergrund im Essenstracker gezielt
+// wieder abschalten, ohne dafür zwangsläufig eine eigene Farbe wählen zu müssen.
+let ftThemeOverride = {};
 let foodTrackerLoaded = false;
 
 async function ftSave(key, val){ await saveJSON('food:' + key, val); }
@@ -91,7 +103,7 @@ async function ftSaveDays(iso){ await saveFoodDayChunk(iso, ftDays); }
 
 async function initFoodTracker(){
   if (foodTrackerLoaded) return;
-  const [days, favorites, custom, meals, recent, offCache, lastAmounts, usageCount, goals] = await Promise.all([
+  const [days, favorites, custom, meals, recent, offCache, lastAmounts, usageCount, goals, themeOverride] = await Promise.all([
     loadAllFoodDays(),
     loadJSON('food:favorites', []),
     loadJSON('food:customFoods', []),
@@ -101,10 +113,11 @@ async function initFoodTracker(){
     loadJSON('food:lastAmounts', {}),
     loadJSON('food:usageCount', {}),
     loadJSON('food:goals', { kcal: null, p: null, c: null, f: null }),
+    loadJSON('food:themeOverride', {}),
   ]);
   ftDays = days; ftFavorites = favorites; ftCustomFoods = custom;
   ftSavedMeals = meals; ftRecent = recent; ftOffCache = offCache; ftLastAmounts = lastAmounts;
-  ftFoodUsageCount = usageCount; ftGoals = goals;
+  ftFoodUsageCount = usageCount; ftGoals = goals; ftThemeOverride = themeOverride || {};
   ftOffMemCache = {};
   foodTrackerLoaded = true;
 }
@@ -505,6 +518,109 @@ async function ftOffMultiWordSearchAttempt(query, tokens){
 // Modal(), 15c) UND vom Tages-Snapshot-PDF (ftExportDaySnapshotPdf(), hier in 15b) genutzt —
 // deshalb hier in 15a statt in einer der beiden Dateien, damit beide es ohne Ladereihenfolge-
 // Probleme aufrufen können.
+/* ============ Eigenes Design (Akkordeon "Design" in ftOpenSettingsSheet(), 15b-food-day.js)
+   ============
+   Effektive Getter, die IMMER zuerst ftThemeOverride prüfen und nur bei fehlendem Feld auf die
+   allgemeine App-Einstellung zurückfallen (siehe Kommentar an ftThemeOverride oben) — genutzt
+   sowohl vom Design-Akkordeon selbst (aktuellen Wert anzeigen) als auch von ftApplyTheme()
+   (tatsächliches Setzen der CSS-Variablen). */
+function ftCurrentThemeMode(){
+  return ftThemeOverride.themeMode || currentThemeMode();
+}
+function ftCurrentAccentColor(){
+  if (ftThemeOverride.accentColorId === 'custom' && ftThemeOverride.accentCustomHex){
+    return { id: 'custom', name: 'Eigene Farbe', hex: ftThemeOverride.accentCustomHex };
+  }
+  if (ftThemeOverride.accentColorId){
+    const found = allAccentSwatches().find(c => c.id === ftThemeOverride.accentColorId);
+    if (found) return found;
+  }
+  return currentAccentColor();
+}
+function ftCurrentBgColor(){
+  if (ftThemeOverride.bgColorId === 'custom' && ftThemeOverride.bgCustomHex){
+    return { id: 'custom', name: 'Eigene Farbe', hex: ftThemeOverride.bgCustomHex };
+  }
+  if (ftThemeOverride.bgColorId === 'default') return null; // ausdrücklich KEIN eigener Hintergrund
+  if (ftThemeOverride.bgColorId){
+    const found = allBgSwatches().find(c => c.id === ftThemeOverride.bgColorId);
+    if (found) return found;
+  }
+  return currentBgColor();
+}
+function ftCurrentAccentContrastThreshold(){
+  const v = ftThemeOverride.accentContrastThreshold;
+  return (typeof v === 'number' && v >= 0 && v <= 1) ? v : currentAccentContrastThreshold();
+}
+// Identisch zu bgSwatchesForCurrentMode() (02-state-theme.js), aber nach ftCurrentThemeMode()
+// statt dem allgemeinen currentThemeMode() gefiltert — die Hintergrund-Palette im
+// Essenstracker-Design-Akkordeon soll zum EIGENEN Hell-/Dunkelmodus passen, nicht zum
+// gerade zufällig im allgemeinen Trainingsplan aktiven.
+function ftBgSwatchesForCurrentMode(){
+  const neutrals = ftCurrentThemeMode() === 'light' ? BG_NEUTRAL_COLORS.light : BG_NEUTRAL_COLORS.dark;
+  const favs = favoriteAccentColors().map(hex => ({ id: `fav-${hex.replace('#','')}`, name: hex.toUpperCase(), hex, isFavorite: true }));
+  return [...neutrals, ...favs];
+}
+// Identisch zu contrastTextColor() (02-state-theme.js), nur mit dem essenstracker-eigenen
+// Kontrast-Schwellwert statt dem allgemeinen — kleine, bewusste Duplikation statt die
+// allgemeine Funktion mit einem Parameter zu verbiegen, der überall sonst in der App nie
+// gebraucht wird.
+function ftContrastTextColor(hex){
+  const r = parseInt(hex.slice(1,3), 16) / 255;
+  const g = parseInt(hex.slice(3,5), 16) / 255;
+  const b = parseInt(hex.slice(5,7), 16) / 255;
+  const lin = c => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  const luminance = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return luminance > ftCurrentAccentContrastThreshold() ? '#121316' : '#ffffff';
+}
+// Identisch zu syncStatusBarColor() (02-state-theme.js), nur mit ftCurrentThemeMode() statt
+// dem allgemeinen currentThemeMode() als Fallback für die Statusleisten-Farbe ohne eigenen
+// Hintergrund.
+function ftSyncStatusBarColor(resolvedBgColor){
+  const hex = (resolvedBgColor && resolvedBgColor.hex) || (ftCurrentThemeMode() === 'light' ? '#f5f4f1' : '#121316');
+  const old = document.getElementById('metaThemeColor');
+  if (!old || old.getAttribute('content') !== hex){
+    if (old) old.remove();
+    const meta = document.createElement('meta');
+    meta.setAttribute('name', 'theme-color');
+    meta.setAttribute('id', 'metaThemeColor');
+    meta.setAttribute('content', hex);
+    document.head.appendChild(meta);
+  }
+  document.documentElement.style.colorScheme = ftCurrentThemeMode() === 'light' ? 'light' : 'dark';
+}
+// Essenstracker-Pendant zu applyTheme() (02-state-theme.js) — wird von JEDEM Essenstracker-
+// Bildschirm-Renderer als allererstes aufgerufen (renderFoodTracker()/renderFoodStats()/
+// renderFtAddFood()/renderFtMonthOverview()), damit das eigene Farbschema beim Betreten IMMER
+// frisch angewendet wird, auch wenn zwischenzeitlich im allgemeinen Trainingsplan ein anderes
+// Theme aktiv war. Schriftart bleibt bewusst UNANGETASTET (Nutzerwunsch: "außer Schriftart") —
+// applyFontFamily() wird hier absichtlich nicht aufgerufen, die allgemeine Schriftart bleibt
+// also auch im Essenstracker unverändert sichtbar. Das Zurücksetzen auf das allgemeine Theme
+// beim Verlassen des Essenstrackers passiert NICHT hier, sondern zentral in
+// renderViewByState() (06-navigation.js), da jeder Rücksprung (Zurück-Pfeil) über
+// history.back() läuft und dort ankommt.
+function ftApplyTheme(){
+  document.documentElement.setAttribute('data-theme', ftCurrentThemeMode());
+  const accentHex = ftCurrentAccentColor().hex;
+  document.documentElement.style.setProperty('--accent', accentHex);
+  document.documentElement.style.setProperty('--accent-contrast', ftContrastTextColor(accentHex));
+  const bgColor = ftCurrentBgColor();
+  const root = document.documentElement.style;
+  if (bgColor){
+    root.setProperty('--bg', bgColor.hex);
+    const derived = deriveSurfaceColors(bgColor.hex);
+    root.setProperty('--surface', derived.surface);
+    root.setProperty('--surface-2', derived.surface2);
+    root.setProperty('--border', derived.border);
+  } else {
+    root.removeProperty('--bg');
+    root.removeProperty('--surface');
+    root.removeProperty('--surface-2');
+    root.removeProperty('--border');
+  }
+  ftSyncStatusBarColor(bgColor);
+}
+
 function ftPortionLabel(p){
   if(Math.abs(p-0.25)<0.001) return '1/4';
   if(Math.abs(p-0.5)<0.001) return '1/2';

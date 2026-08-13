@@ -218,6 +218,8 @@ function resetAllAccordions(){
   workoutsMonthOpen = new Set();
   workoutsYearCollapsed = new Set();
   workoutsMonthOpenInitialized = false;
+  homeVerlaufOpen = false;
+  homeMealsOpen = false;
   progressGroupOpen = new Set();
   planGroupOpen = new Set();
   statsChartOpen = new Set();
@@ -234,6 +236,16 @@ function resetAllAccordions(){
 // zum Reload-Zeitpunkt gerade offenes Popup, dessen "__overlay__"-Marker keine echte Seite
 // referenziert) fallen bewusst auf die Startseite zurück.
 function renderViewByState(state){
+  // Essenstracker-Bildschirme wenden ihr eigenes Farbschema selbst an (ftApplyTheme(), jeweils
+  // als erste Zeile in renderFoodTracker()/renderFoodStats()/renderFtAddFood()/
+  // renderFtMonthOverview()) — für ALLE anderen Views hier zentral das allgemeine Theme
+  // wiederherstellen, falls zuvor im Essenstracker ein davon abweichendes eigenes Farbschema
+  // aktiv war (jeder Rücksprung aus dem Essenstracker läuft über den Zurück-Pfeil/
+  // history.back() und landet hier). monthOverview/monthReport gehören NICHT zu den
+  // Essenstracker-eigenen Views (siehe deren Kommentar bei initFoodTracker()-Aufruf unten) —
+  // das sind Trainings-Kalenderseiten, die lediglich zusätzlich Essenstracker-Daten laden.
+  const FOOD_TRACKER_VIEWS = new Set(['foodTracker', 'foodStats', 'foodAddMeal', 'foodCalendar']);
+  if (!FOOD_TRACKER_VIEWS.has(state.view)) applyTheme();
   switch(state.view){
     case 'plan': renderPlanEditor(); break;
     case 'settings': renderSettings(); break;

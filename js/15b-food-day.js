@@ -16,6 +16,7 @@
 
 /* ============ Rendering: Hauptseite ============ */
 function renderFoodTracker(){
+  ftApplyTheme();
   if (!ftCurrentDate) ftCurrentDate = ftTodayISO();
   const day = ftGetDay(ftCurrentDate);
   const totals = ftComputeTotals(ftCurrentDate);
@@ -379,6 +380,7 @@ function appendFtMonthOverviewMonth(offset){
   }
 }
 function renderFtMonthOverview(){
+  ftApplyTheme();
   const d = ftParseISO(ftCurrentDate);
   ftMonthOverviewBase = { year: d.getFullYear(), month: d.getMonth() };
   ftMonthOverviewNextOffset = 1;
@@ -441,7 +443,15 @@ function goFoodCalendar(push){
 // 07-home.js/10-plan-settings.js — beide Screens sind komplett unabhängig voneinander).
 // "ziele" startet aufgeklappt, damit sich am bisherigen Verhalten (Tagesziele sofort
 // sichtbar) nichts ändert.
-let ftSettingsSectionOpen = new Set(['ziele']);
+// Alle Akkordeon-Abschnitte starten standardmäßig EINGEKLAPPT (auch "Tagesziele", das früher
+// eine Ausnahme war) — konsistentes Verhalten für alle vier bestehenden Abschnitte und jeden
+// künftig hinzugefügten.
+let ftSettingsSectionOpen = new Set();
+// Auf-/zugeklappt-Zustand der beiden Farbwähler-Grids im Design-Akkordeon (Akzentfarbe/
+// Hintergrund) — eigenständig von den gleichnamigen accentPickerOpen/bgPickerOpen der
+// allgemeinen Einstellungen (10-plan-settings.js).
+let ftAccentPickerOpen = false;
+let ftBgPickerOpen = false;
 // Baut Kopf+Körper eines aufklappbaren Einstellungs-Abschnitts — exakt dasselbe visuelle
 // Muster wie settingsAccordionSection() in den allgemeinen Trainingsplan-Einstellungen
 // (10-plan-settings.js): .muscle-group/.muscle-group-header/.muscle-group-body, ▾/▸-Pfeil,
@@ -500,6 +510,71 @@ function ftSettingsBodyHTML(){
       </div>
     `, goalsSetCount ? `${goalsSetCount} gesetzt` : '')}
 
+    ${ftSettingsAccordionSection('design', 'Design', `
+      <div style="padding:14px 16px;">
+        <div class="no-results" style="text-align:left; padding:0 0 14px">
+          Eigenes Design nur für den Essenstracker, unabhängig vom allgemeinen Trainingsplan —
+          ohne eigene Auswahl gilt hier automatisch das allgemeine App-Design.
+        </div>
+        <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:10px;">Farbmodus</label>
+        <div class="wizard-choice-list" style="margin-bottom:18px;">
+          <button class="wizard-choice ${!ftThemeOverride.themeMode ? 'selected' : ''}" data-ft-theme-mode="">Automatisch</button>
+          <button class="wizard-choice ${ftThemeOverride.themeMode === 'dark' ? 'selected' : ''}" data-ft-theme-mode="dark">Dunkel</button>
+          <button class="wizard-choice ${ftThemeOverride.themeMode === 'light' ? 'selected' : ''}" data-ft-theme-mode="light">Hell</button>
+        </div>
+        <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:10px;">Akzentfarbe</label>
+        <button class="muscle-group-header" id="ftAccentPickerToggle" type="button" style="margin-bottom:${ftAccentPickerOpen ? '12px' : '0'};">
+          <span class="mg-name" style="display:flex; align-items:center; gap:10px; font-family:inherit; font-size:14px; letter-spacing:normal;">
+            <span style="width:20px; height:20px; border-radius:7px; background:${ftCurrentAccentColor().hex}; display:inline-block; flex-shrink:0;"></span>
+            ${ftThemeOverride.accentColorId ? ftCurrentAccentColor().name : 'Automatisch (App)'}
+          </span>
+          <span class="mg-meta"><span class="mg-arrow">${ftAccentPickerOpen ? '▾' : '▸'}</span></span>
+        </button>
+        <div class="accent-swatch-grid" style="display:${ftAccentPickerOpen ? 'grid' : 'none'};">
+          <button class="accent-swatch ${!ftThemeOverride.accentColorId ? 'selected' : ''}" data-ft-accent-id="" style="background:var(--surface-2); border:1px dashed var(--border); display:flex; align-items:center; justify-content:center; font-size:10.5px; color:var(--muted); font-weight:700;" aria-label="Automatisch">App</button>
+          ${allAccentSwatches().map(c => `
+            <button class="accent-swatch ${ftThemeOverride.accentColorId === c.id ? 'selected' : ''}" data-ft-accent-id="${c.id}" data-ft-accent-hex="${c.hex}" data-favorite="${c.isFavorite ? '1' : ''}" style="background:${c.hex};" aria-label="${c.name}"></button>
+          `).join('')}
+        </div>
+        <div class="history-empty" id="ftAccentFavHint" style="display:${ftAccentPickerOpen && favoriteAccentColors().length ? 'block' : 'none'}; margin-top:8px; padding:8px 4px; text-align:left; background:none; border:none;">
+          <span style="font-size:11px; color:var(--muted);">Gedrückt halten, um einen Favoriten wieder zu entfernen.</span>
+        </div>
+        <button class="accent-custom-btn" id="ftAccentCustomBtn" type="button" style="display:${ftAccentPickerOpen ? 'flex' : 'none'};">
+          <img class="accent-custom-btn-icon" src="${ICON_COLORWHEEL}" alt="">
+          Eigene Farbe wählen
+        </button>
+        <label style="display:block; font-size:12px; color:var(--muted); margin:18px 0 10px;">Themes</label>
+        <button class="muscle-group-header" id="ftBgPickerToggle" type="button" style="margin-bottom:${ftBgPickerOpen ? '12px' : '0'};">
+          <span class="mg-name" style="display:flex; align-items:center; gap:10px; font-family:inherit; font-size:14px; letter-spacing:normal;">
+            <span style="width:20px; height:20px; border-radius:7px; background:${ftCurrentBgColor() ? ftCurrentBgColor().hex : 'var(--bg)'}; border:1px solid var(--border); display:inline-block; flex-shrink:0;"></span>
+            ${ftThemeOverride.bgColorId === 'default' ? 'Kein eigener Hintergrund' : ftThemeOverride.bgColorId ? ftCurrentBgColor().name : 'Automatisch (App)'}
+          </span>
+          <span class="mg-meta"><span class="mg-arrow">${ftBgPickerOpen ? '▾' : '▸'}</span></span>
+        </button>
+        <div class="accent-swatch-grid" style="display:${ftBgPickerOpen ? 'grid' : 'none'};">
+          <button class="accent-swatch ${!ftThemeOverride.bgColorId ? 'selected' : ''}" data-ft-bg-id="" style="background:var(--surface-2); border:1px dashed var(--border); display:flex; align-items:center; justify-content:center; font-size:10.5px; color:var(--muted); font-weight:700;" aria-label="Automatisch">App</button>
+          <button class="accent-swatch ${ftThemeOverride.bgColorId === 'default' ? 'selected' : ''}" data-ft-bg-id="default" style="background:var(--surface-2); border:1px dashed var(--border); display:flex; align-items:center; justify-content:center; font-size:15px; color:var(--muted);" aria-label="Standard">✕</button>
+          ${ftBgSwatchesForCurrentMode().map(c => `
+            <button class="accent-swatch ${ftThemeOverride.bgColorId === c.id ? 'selected' : ''}" data-ft-bg-id="${c.id}" data-ft-bg-hex="${c.hex}" data-favorite="${c.isFavorite ? '1' : ''}" style="background:${c.hex}; ${c.isFavorite ? '' : 'border:1px solid var(--border);'}" aria-label="${c.name}"></button>
+          `).join('')}
+        </div>
+        <div class="history-empty" id="ftBgFavHint" style="display:${ftBgPickerOpen && favoriteAccentColors().length ? 'block' : 'none'}; margin-top:8px; padding:8px 4px; text-align:left; background:none; border:none;">
+          <span style="font-size:11px; color:var(--muted);">Gedrückt halten, um einen Favoriten wieder zu entfernen.</span>
+        </div>
+        <button class="accent-custom-btn" id="ftBgCustomBtn" type="button" style="display:${ftBgPickerOpen ? 'flex' : 'none'};">
+          <img class="accent-custom-btn-icon" src="${ICON_COLORWHEEL}" alt="">
+          Eigene Farbe wählen
+        </button>
+        <label style="display:block; font-size:12px; color:var(--muted); margin:18px 0 8px;">Textfarbe auf Akzentfarbe</label>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:11px; color:var(--muted); white-space:nowrap;">Dunkler Text</span>
+          <input type="range" id="ftAccentContrastSlider" min="0" max="1" step="0.01" value="${ftCurrentAccentContrastThreshold()}" style="flex:1; accent-color: var(--accent);">
+          <span style="font-size:11px; color:var(--muted); white-space:nowrap;">Weißer Text</span>
+        </div>
+        ${Object.keys(ftThemeOverride).length ? `<button class="ft-btn-ghost" id="ftDesignResetBtn" style="margin-top:14px;">Eigenes Design zurücksetzen</button>` : ''}
+      </div>
+    `, Object.keys(ftThemeOverride).length ? 'Eigenes' : '')}
+
     ${ftSettingsAccordionSection('gespeicherteMahlzeiten', 'Gespeicherte Mahlzeiten', `
       <div style="padding:14px 16px;">
         <div class="no-results" style="text-align:left; padding:0 0 10px">
@@ -548,12 +623,12 @@ function ftOpenSettingsSheet(){
 function ftWireSettingsBody(){
   const wrap = document.getElementById('ftSettingsBodyWrap');
   if(!wrap) return;
+  const refresh = () => { wrap.innerHTML = ftSettingsBodyHTML(); ftWireSettingsBody(); };
   wrap.querySelectorAll('[data-ft-settingsgroup]').forEach(btn => {
     btn.onclick = () => {
       const key = btn.dataset.ftSettingsgroup;
       if (ftSettingsSectionOpen.has(key)) ftSettingsSectionOpen.delete(key); else ftSettingsSectionOpen.add(key);
-      wrap.innerHTML = ftSettingsBodyHTML();
-      ftWireSettingsBody();
+      refresh();
     };
   });
   const snapshotBtn = document.getElementById('ftSnapshotBtn');
@@ -597,6 +672,130 @@ function ftWireSettingsBody(){
       ftWireSettingsBody();
       ftToast('Gelöscht');
     };
+  });
+  ftWireDesignControls(wrap, refresh);
+}
+
+/* ============ Design-Akkordeon: Verkabelung ============
+   Farbmodus-Buttons, Akkordeon-Umschalter für die beiden Farbwähler-Grids, Swatch-Auswahl
+   (inkl. Long-Press zum Entfernen eines Favoriten — gleiches Muster wie
+   wireAccentSwatchInteractions()/wireBgSwatchInteractions() in 10-plan-settings.js, hier aber
+   auf ftThemeOverride statt plan geschrieben und auf den Essenstracker-eigenen Sheet-Body
+   ("wrap") statt auf #app verkabelt, da beide DOM-Bäume komplett getrennt sind), Custom-
+   Farbwähler-Buttons (öffnen den bestehenden HSV-Farbwähler aus 10-plan-settings.js im
+   ftMode='accent'/'bg', siehe openAccentColorPickerPrompt()), Kontrast-Regler,
+   Zurücksetzen-Button. */
+function ftWireDesignControls(wrap, refresh){
+  wrap.querySelectorAll('[data-ft-theme-mode]').forEach(btn => {
+    btn.onclick = async () => {
+      const mode = btn.dataset.ftThemeMode;
+      if (mode) ftThemeOverride.themeMode = mode; else delete ftThemeOverride.themeMode;
+      await ftSave('themeOverride', ftThemeOverride);
+      ftApplyTheme();
+      refresh();
+    };
+  });
+  const accentToggle = document.getElementById('ftAccentPickerToggle');
+  if(accentToggle) accentToggle.onclick = (ev) => { ev.stopPropagation(); ftAccentPickerOpen = !ftAccentPickerOpen; refresh(); };
+  const bgToggle = document.getElementById('ftBgPickerToggle');
+  if(bgToggle) bgToggle.onclick = (ev) => { ev.stopPropagation(); ftBgPickerOpen = !ftBgPickerOpen; refresh(); };
+  ftWireSwatchInteractions(wrap, '[data-ft-accent-id]', async (btn) => {
+    const id = btn.dataset.ftAccentId;
+    if (id){ ftThemeOverride.accentColorId = id; delete ftThemeOverride.accentCustomHex; }
+    else { delete ftThemeOverride.accentColorId; delete ftThemeOverride.accentCustomHex; }
+    await ftSave('themeOverride', ftThemeOverride);
+    ftApplyTheme();
+    ftAccentPickerOpen = true;
+    refresh();
+  }, async (hex) => {
+    const favs = favoriteAccentColors();
+    plan.favoriteAccentColors = favs.filter(h => h !== hex);
+    if (ftThemeOverride.accentColorId === `fav-${hex.replace('#','')}`) delete ftThemeOverride.accentColorId;
+    await saveJSON('plan', plan);
+    await ftSave('themeOverride', ftThemeOverride);
+    ftApplyTheme();
+    ftAccentPickerOpen = true;
+    refresh();
+  });
+  ftWireSwatchInteractions(wrap, '[data-ft-bg-id]', async (btn) => {
+    const id = btn.dataset.ftBgId;
+    if (id === 'default'){ ftThemeOverride.bgColorId = 'default'; delete ftThemeOverride.bgCustomHex; }
+    else if (id){ ftThemeOverride.bgColorId = id; delete ftThemeOverride.bgCustomHex; }
+    else { delete ftThemeOverride.bgColorId; delete ftThemeOverride.bgCustomHex; }
+    await ftSave('themeOverride', ftThemeOverride);
+    ftApplyTheme();
+    ftBgPickerOpen = true;
+    refresh();
+  }, async (hex) => {
+    const favs = favoriteAccentColors();
+    plan.favoriteAccentColors = favs.filter(h => h !== hex);
+    if (ftThemeOverride.bgColorId === `fav-${hex.replace('#','')}`) delete ftThemeOverride.bgColorId;
+    await saveJSON('plan', plan);
+    await ftSave('themeOverride', ftThemeOverride);
+    ftApplyTheme();
+    ftBgPickerOpen = true;
+    refresh();
+  });
+  const accentCustomBtn = document.getElementById('ftAccentCustomBtn');
+  if(accentCustomBtn) accentCustomBtn.onclick = (ev) => { ev.stopPropagation(); openAccentColorPickerPrompt(null, null, null, null, 'accent'); };
+  const bgCustomBtn = document.getElementById('ftBgCustomBtn');
+  if(bgCustomBtn) bgCustomBtn.onclick = (ev) => { ev.stopPropagation(); openAccentColorPickerPrompt(null, null, null, null, 'bg'); };
+  const contrastSlider = document.getElementById('ftAccentContrastSlider');
+  if(contrastSlider){
+    contrastSlider.oninput = () => {
+      ftThemeOverride.accentContrastThreshold = parseFloat(contrastSlider.value);
+      ftApplyTheme(); // sofortige Vorschau, während gezogen wird
+    };
+    contrastSlider.onchange = async () => {
+      ftThemeOverride.accentContrastThreshold = parseFloat(contrastSlider.value);
+      await ftSave('themeOverride', ftThemeOverride);
+    };
+  }
+  const resetBtn = document.getElementById('ftDesignResetBtn');
+  if(resetBtn) resetBtn.onclick = async () => {
+    ftThemeOverride = {};
+    await ftSave('themeOverride', ftThemeOverride);
+    ftApplyTheme();
+    refresh();
+  };
+}
+// Generischer Long-Press-zum-Favoriten-Entfernen-Helfer für ein Swatch-Grid, siehe
+// ftWireDesignControls() oben — onPick(btn) für einen normalen Tap, onRemoveFavorite(hex) für
+// den bestätigten Long-Press auf einen Favoriten-Swatch (data-favorite="1").
+function ftWireSwatchInteractions(wrap, selector, onPick, onRemoveFavorite){
+  const LONG_PRESS_MS = 450;
+  const MOVE_CANCEL_PX = 10;
+  wrap.querySelectorAll(`.accent-swatch${selector}`).forEach(btn => {
+    let pressTimer = null;
+    let startX = 0, startY = 0, longPressFired = false;
+    const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
+    const isFavorite = btn.dataset.favorite === '1';
+
+    btn.onclick = () => {
+      if (longPressFired){ longPressFired = false; return; }
+      onPick(btn);
+    };
+
+    if (!isFavorite) return;
+
+    btn.addEventListener('contextmenu', (ev) => ev.preventDefault());
+    btn.addEventListener('touchstart', (ev) => {
+      longPressFired = false;
+      const t = ev.touches[0];
+      startX = t.clientX; startY = t.clientY;
+      pressTimer = setTimeout(() => {
+        longPressFired = true;
+        if (navigator.vibrate) navigator.vibrate(15);
+        if (!confirm('Diesen Favoriten entfernen?')) { longPressFired = false; return; }
+        onRemoveFavorite(btn.dataset.ftAccentHex || btn.dataset.ftBgHex);
+      }, LONG_PRESS_MS);
+    }, { passive: true });
+    btn.addEventListener('touchmove', (ev) => {
+      const t = ev.touches[0];
+      if (Math.abs(t.clientX - startX) > MOVE_CANCEL_PX || Math.abs(t.clientY - startY) > MOVE_CANCEL_PX) cancelPress();
+    }, { passive: true });
+    btn.addEventListener('touchend', cancelPress);
+    btn.addEventListener('touchcancel', cancelPress);
   });
 }
 

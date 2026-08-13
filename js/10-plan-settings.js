@@ -379,20 +379,30 @@ function openPlanRowEditPopup(i, onSaved){
 // statt des globalen App-Akzents. Die Live-Vorschau setzt in diesem Fall bewusst NICHT die
 // globale CSS-Variable --accent (das würde die ganze App umfärben) — die kleine
 // Vorschau-Kachel im Popup selbst reicht als Rückmeldung beim Ziehen/Eintippen.
-function openAccentColorPickerPrompt(tileMode, muscleGroup, onGlobalSave, bgMode){
+// ftMode ('accent'|'bg'|null) macht diesen Picker zusätzlich vom Essenstracker-eigenen
+// Design-Akkordeon nutzbar (ftOpenSettingsSheet(), 15b-food-day.js) — schreibt dann in
+// ftThemeOverride statt in plan und wendet ftApplyTheme() statt applyTheme() an. isBg bleibt
+// bei ftMode==='bg' ebenfalls true (identische Grundlogik wie beim allgemeinen Hintergrund-
+// Picker), daher werden isFtAccent/isFtBg als eigene Flags GENAU an den Stellen abgefragt, wo
+// sich Lese-/Schreibziel unterscheiden — überall sonst (Drag-Handling, Hex-Eingabe, Favoriten-
+// Stern) ist der Code komplett identisch und bleibt unverändert.
+function openAccentColorPickerPrompt(tileMode, muscleGroup, onGlobalSave, bgMode, ftMode){
   const existing = document.getElementById('accentColorOverlay');
   if (existing) existing.remove();
 
   const isTile = !!tileMode;
   const isMuscleGroup = !!muscleGroup;
-  const isBg = !!bgMode;
+  const isFtAccent = ftMode === 'accent';
+  const isFtBg = ftMode === 'bg';
+  const isBg = !!bgMode || isFtBg;
   // previousBg: null bedeutet "kein eigener Hintergrund gesetzt" (Theme-Standard) — muss von
   // einer tatsächlich gewählten Farbe unterschieden werden, damit "Abbrechen" korrekt entweder
   // die vorherige eigene Farbe ODER wieder den Theme-Standard herstellt statt fälschlich Gelb.
-  const previousBg = isBg ? currentBgColor() : null;
+  const previousBg = isFtBg ? ftCurrentBgColor() : isBg ? currentBgColor() : null;
   const previousAccent = isMuscleGroup ? { hex: muscleGroupColor(muscleGroup) }
     : isTile ? (currentTileColor(tileMode) || ACCENT_COLORS[0])
     : isBg ? (previousBg || { hex: cssVar('--bg') })
+    : isFtAccent ? ftCurrentAccentColor()
     : currentAccentColor();
   let { h, s, v } = hexToHsv(previousAccent.hex);
 
@@ -465,7 +475,7 @@ function openAccentColorPickerPrompt(tileMode, muscleGroup, onGlobalSave, bgMode
       document.documentElement.style.setProperty('--bg', hex);
     } else if (!isTile && !isMuscleGroup){
       document.documentElement.style.setProperty('--accent', hex);
-      document.documentElement.style.setProperty('--accent-contrast', contrastTextColor(hex));
+      document.documentElement.style.setProperty('--accent-contrast', isFtAccent ? ftContrastTextColor(hex) : contrastTextColor(hex));
     }
   }
   updateVisuals();
@@ -545,7 +555,14 @@ function openAccentColorPickerPrompt(tileMode, muscleGroup, onGlobalSave, bgMode
   function cancel(fromBack){
     if (!fromBack && !isTile && !isMuscleGroup) popOverlayStateIfOpen();
     removeOverlay();
-    if (isBg){
+    if (isFtBg || isFtAccent){
+      // Essenstracker-eigenes Farbschema: ftThemeOverride wurde noch nicht verändert (erst
+      // im Save-Handler unten), ftApplyTheme() stellt also einfach wieder exakt den Zustand
+      // vor dem Öffnen des Farbwählers her — inkl. korrekt abgeleiteter Oberflächenfarben,
+      // falls previousBg gesetzt war (die manuelle Teil-Rücksetzung im allgemeinen Zweig
+      // unten deckt das für den Hintergrund bewusst nicht ab, siehe deren Kommentar).
+      ftApplyTheme();
+    } else if (isBg){
       // war vorher kein eigener Hintergrund gesetzt, Override wieder entfernen statt eine
       // Farbe zu erzwingen, sonst käme fälschlich der Startwert der Vorschau zum Tragen.
       if (previousBg) document.documentElement.style.setProperty('--bg', previousBg.hex);
@@ -593,6 +610,17 @@ function openAccentColorPickerPrompt(tileMode, muscleGroup, onGlobalSave, bgMode
       openModeSettingsPrompt(tileMode, true);
       return;
     }
+    if (isFtBg){
+      ftThemeOverride.bgColorId = 'custom';
+      ftThemeOverride.bgCustomHex = hsvToHex(h, s, v);
+      await ftSave('themeOverride', ftThemeOverride);
+      ftApplyTheme();
+      popOverlayStateIfOpen();
+      removeOverlay();
+      ftBgPickerOpen = true;
+      ftOpenSettingsSheet();
+      return;
+    }
     if (isBg){
       plan.bgColorId = 'custom';
       plan.bgCustomHex = hsvToHex(h, s, v);
@@ -602,6 +630,17 @@ function openAccentColorPickerPrompt(tileMode, muscleGroup, onGlobalSave, bgMode
       removeOverlay();
       bgPickerOpen = true;
       renderSettings();
+      return;
+    }
+    if (isFtAccent){
+      ftThemeOverride.accentColorId = 'custom';
+      ftThemeOverride.accentCustomHex = hsvToHex(h, s, v);
+      await ftSave('themeOverride', ftThemeOverride);
+      ftApplyTheme();
+      popOverlayStateIfOpen();
+      removeOverlay();
+      ftAccentPickerOpen = true;
+      ftOpenSettingsSheet();
       return;
     }
     plan.accentColorId = 'custom';

@@ -2250,6 +2250,22 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
   display:block; width:100%; text-align:center; background:none; border:none; color:var(--accent);
   font-weight:600; font-size:0.82rem; padding:10px 0 2px; cursor:pointer;
 }
+/* Kompakte Mahlzeiten-Übersicht auf der Startseite (Akkordeon "Mahlzeiten" in renderHome(),
+   07-home.js) — bewusst NICHT die vollen .food-list/.food-row-Karten aus dem Essenstracker
+   selbst (zu groß für einen Überblick auf der Startseite), sondern eine schlanke, umrandete
+   Box pro Mahlzeit mit Kopfzeile (.meal-title/.meal-add werden 1:1 wiederverwendet, siehe
+   dort) und darunter — falls vorhanden — die bereits eingetragenen Lebensmittel als EINE
+   einzeilige, sehr kleine, per Ellipsis abgeschnittene Zeile statt einzelner Zeilen.
+   Antippen der Box selbst (außerhalb des +) führt in den vollen Essenstracker-Tag. */
+.home-meal-box{
+  border:1px solid var(--border); border-radius:var(--radius); background:var(--surface);
+  padding:10px 12px; margin-bottom:8px; cursor:pointer;
+}
+.home-meal-box:last-child{ margin-bottom:0; }
+.home-meal-box-items{
+  font-size:0.72rem; color:var(--muted); margin-top:4px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
 
 /* ---- Overlay-Grundlagen ----
    overlay-backdrop ist jetzt zugleich der Flex-Wrapper, der Sheet/Modal enthält (vorher

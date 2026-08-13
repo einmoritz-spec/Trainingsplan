@@ -253,6 +253,7 @@ function ftStreakHTML(){
 }
 
 function renderFoodStats(){
+  ftApplyTheme();
   const periodDays = ftPeriodToDays(ftStatsPeriod);
   const points = ftBucketedKcalPoints(ftStatsPeriod);
   const loggedPoints = points.filter(p => p.value > 0);

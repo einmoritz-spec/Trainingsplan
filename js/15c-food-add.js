@@ -38,6 +38,7 @@ function goFtAddFood(meal, push){
 }
 
 function renderFtAddFood(meal){
+  ftApplyTheme();
   ftAddSheetMeal = meal;
   app.innerHTML = `
     <div class="back-row" style="margin-top:0;">
