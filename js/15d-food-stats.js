@@ -67,8 +67,16 @@ let ftBreakdownExpanded = false;
 // 05-calendar.js für den Trainingskalender genutzt) — hier nur noch die reine Zeitraum-
 // Filterung darüber.
 function ftDayTotalsInPeriod(periodDays){
-  const cutoffIso = ftAddDays(ftTodayISO(), -(periodDays - 1));
-  return ftAllDayTotals().filter(d => d.date >= cutoffIso);
+  const todayIso = ftTodayISO();
+  const cutoffIso = ftAddDays(todayIso, -(periodDays - 1));
+  // Obere Grenze (<= heute) ist genauso wichtig wie die untere: ohne sie rutschen künftig
+  // datierte Einträge (z. B. im Kalender vorausgeplante/verschobene Tage) in JEDEN Zeitraum
+  // mit rein, auch in "Tag" (dort ist cutoffIso = heute, ohne Obergrenze also "heute und alles
+  // danach"). Das verwässert besonders die Ø-Bildung (ftMacroKcalSegments()/actualPeriodKcal
+  // in renderFoodStats()) unbemerkt, weil ftDayTotalsInPeriod(1)[0] (sortiert aufsteigend)
+  // weiterhin korrekt den heutigen Tag als ERSTEN Treffer liefert — der Durchschnitt über ALLE
+  // Treffer aber zusätzliche, gar nicht zum Zeitraum gehörende Tage mit einrechnet.
+  return ftAllDayTotals().filter(d => d.date >= cutoffIso && d.date <= todayIso);
 }
 
 // Balkendiagramm-Punkte je nach Zeitraum: Woche/Monat zeigen JEDEN Tag einzeln (auch ohne
