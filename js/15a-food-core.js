@@ -78,6 +78,12 @@ let ftFoodUsageCount = {};
 // Ziel-Bezug, siehe renderFoodTracker()) — die Fortschrittsanzeige blendet sich erst ein,
 // sobald mindestens ein Ziel hinterlegt ist.
 let ftGoals = { kcal: null, p: null, c: null, f: null };
+// Pro Mahlzeit (breakfast/lunch/dinner/snacks) optional eine feste, gespeicherte Mahlzeit
+// (ftSavedMeals-ID) hinterlegt, die automatisch für den jeweiligen Tag eingetragen wird, sobald
+// dieser zum ersten Mal "entsteht" (siehe ftApplyAutoMealsForNewDay() weiter unten) — für Dinge
+// wie ein tägliches Standard-Frühstück (z. B. immer 250 g Skyr + 30 g Whey), die man nicht jeden
+// Tag erneut von Hand eintragen möchte. null = kein Auto-Eintrag für diese Mahlzeit.
+let ftAutoMeals = { breakfast: null, lunch: null, dinner: null, snacks: null };
 // Eigenes, vom allgemeinen Trainingsplan-Design UNABHÄNGIGES Farbschema für den Essenstracker
 // (Wunsch: "gesondert von den allgemeinen App-Einstellungen") — siehe ftOpenSettingsSheet()
 // (15b-food-day.js, Akkordeon "Design") für die Bedienoberfläche und ftApplyTheme() weiter
@@ -103,7 +109,7 @@ async function ftSaveDays(iso){ await saveFoodDayChunk(iso, ftDays); }
 
 async function initFoodTracker(){
   if (foodTrackerLoaded) return;
-  const [days, favorites, custom, meals, recent, offCache, lastAmounts, usageCount, goals, themeOverride] = await Promise.all([
+  const [days, favorites, custom, meals, recent, offCache, lastAmounts, usageCount, goals, themeOverride, autoMeals] = await Promise.all([
     loadAllFoodDays(),
     loadJSON('food:favorites', []),
     loadJSON('food:customFoods', []),
@@ -114,12 +120,19 @@ async function initFoodTracker(){
     loadJSON('food:usageCount', {}),
     loadJSON('food:goals', { kcal: null, p: null, c: null, f: null }),
     loadJSON('food:themeOverride', {}),
+    loadJSON('food:autoMeals', { breakfast: null, lunch: null, dinner: null, snacks: null }),
   ]);
   ftDays = days; ftFavorites = favorites; ftCustomFoods = custom;
   ftSavedMeals = meals; ftRecent = recent; ftOffCache = offCache; ftLastAmounts = lastAmounts;
   ftFoodUsageCount = usageCount; ftGoals = goals; ftThemeOverride = themeOverride || {};
+  ftAutoMeals = autoMeals || { breakfast: null, lunch: null, dinner: null, snacks: null };
   ftOffMemCache = {};
   foodTrackerLoaded = true;
+  // Erst NACHDEM alles geladen ist (braucht ftSavedMeals, um eine Auto-Mahlzeits-ID aufzulösen)
+  // den heutigen Tag ggf. mit den konfigurierten Auto-Mahlzeiten befüllen — greift nur, wenn
+  // "heute" noch kein Tagesobjekt hat (siehe ftApplyAutoMealsForNewDay()), passiert also pro Tag
+  // nur genau einmal, unabhängig davon, wie oft die App an diesem Tag noch geöffnet wird.
+  ftApplyAutoMealsForNewDay(ftTodayISO());
 }
 
 // Zählt einen Treffer für die Such-Reihenfolge (ftRankFoods()) hoch — aufgerufen, sobald ein

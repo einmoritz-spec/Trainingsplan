@@ -31,6 +31,14 @@
    nach einem echten Tap auf das Suchfeld selbst, wie bei jedem gewöhnlichen Eingabefeld. */
 let ftAddSheetMeal = null;
 let ftAddSheetSearchToken = 0;
+// "Eigene Lebensmittel" und "Gespeicherte Mahlzeiten" starten standardmäßig eingeklappt (siehe
+// ftRenderDefaultResults() unten) — im Gegensatz zu "Favoriten"/"Zuletzt in ..." wachsen diese
+// beiden Listen mit der Zeit potenziell stark an und sind seltener der direkte Einstieg (man
+// tippt meist ein bereits kürzlich genutztes Lebensmittel an). Nur MANUELLES Auf-/Zuklappen
+// wird hier gemerkt (kein Zeit-Default wie bei den Mahlzeiten-Akkordeons in 15b-food-day.js) —
+// bleibt für die Dauer der Sitzung erhalten, damit ein einmal geöffneter Abschnitt beim Tippen/
+// Favorisieren nicht bei jedem Re-Render wieder zuklappt.
+let ftAddSheetOpenSections = {};
 
 function goFtAddFood(meal, push){
   if (push !== false) pushView('foodAddMeal', { meal });
@@ -75,11 +83,12 @@ function ftRenderDefaultResults(){
   let html = '';
   if(favFoods.length) html += ftSection('Favoriten', favFoods);
   if(recentFoods.length) html += ftSection('Zuletzt in ' + FT_MEAL_LABELS[meal].toLowerCase(), recentFoods);
-  if(customList.length) html += ftSection('Eigene Lebensmittel', customList);
-  html += `<div class="ft-section-label">Gespeicherte Mahlzeiten</div>` + ftSavedMealsListHTML();
+  if(customList.length) html += ftAccordionSection('custom', 'Eigene Lebensmittel', customList.map(ftResultRowHTML).join(''), customList.length);
+  html += ftAccordionSection('saved', 'Gespeicherte Mahlzeiten', ftSavedMealsListHTML(), ftSavedMeals.length);
   html += `<button class="ft-btn-ghost" id="ftNewCustomFoodBtn">+ Eigenes Lebensmittel anlegen</button>`;
   box.innerHTML = html || `<div class="no-results">Noch keine Favoriten oder zuletzt genutzten Lebensmittel.</div>` + `<button class="ft-btn-ghost" id="ftNewCustomFoodBtn">+ Eigenes Lebensmittel anlegen</button>`;
   ftWireResultRows(box);
+  ftWireAccordionToggles(box);
   const newBtn = document.getElementById('ftNewCustomFoodBtn');
   // Bugfix: newBtn.onclick = ftOpenCustomFoodForm (direkte Referenz) hätte dem Handler den
   // Klick-Event als ersten Parameter übergeben — ftOpenCustomFoodForm(prefillBarcode) hätte
@@ -87,6 +96,31 @@ function ftRenderDefaultResults(){
   // Titel fälschlich "Produkt nicht gefunden" gezeigt und ein kaputter Barcode-Wert am neuen
   // Lebensmittel hinterlegt worden wäre. Wrapper-Funktion ruft stattdessen ohne Argument auf.
   if(newBtn) newBtn.onclick = () => ftOpenCustomFoodForm();
+}
+// Eingeklapptes Akkordeon für Listen, die nicht ständig offen herumstehen müssen (siehe
+// ftAddSheetOpenSections oben) — bewusst dasselbe .muscle-group-Muster wie auf der Startseite
+// (homeMealsAccordionBodyHTML() etc., 07-home.js), damit es sich stimmig ins übrige Design
+// einfügt statt eine dritte eigene Akkordeon-Optik einzuführen.
+function ftAccordionSection(key, label, bodyHTML, count){
+  const open = !!ftAddSheetOpenSections[key];
+  return `
+    <div class="muscle-group" style="margin-top:16px;" data-accordion-key="${key}">
+      <button class="muscle-group-header" type="button" data-accordion-toggle="${key}">
+        <span class="mg-name">${label}</span>
+        <span class="mg-meta">${count ? `<span>${count}</span>` : ''}<span class="mg-arrow">${open ? '▾' : '▸'}</span></span>
+      </button>
+      <div class="muscle-group-body" style="display:${open ? 'block' : 'none'};">${bodyHTML}</div>
+    </div>
+  `;
+}
+function ftWireAccordionToggles(box){
+  box.querySelectorAll('[data-accordion-toggle]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const key = btn.dataset.accordionToggle;
+      ftAddSheetOpenSections[key] = !ftAddSheetOpenSections[key];
+      ftRenderCurrentResults();
+    };
+  });
 }
 function ftSavedMealsListHTML(){
   if(!ftSavedMeals.length) return `<div class="no-results">Keine gespeicherten Mahlzeiten.</div>`;
@@ -165,6 +199,14 @@ function ftDeleteSavedMeal(id){
   if(!confirm(`Mahlzeit „${meal.name}" wirklich löschen?`)) return;
   ftSavedMeals = ftSavedMeals.filter(m=>m.id!==id);
   ftSave('savedMeals', ftSavedMeals);
+  // Zeigte diese gespeicherte Mahlzeit gerade auf einen Auto-Eintrag (Einstellungen ›
+  // "Automatisch täglich eintragen"), muss die Referenz mit weg — sonst bliebe eine verwaiste
+  // ID in ftAutoMeals hängen, die ftApplyAutoMealsForNewDay() zwar sauber ignoriert (kein
+  // Crash), aber ftSettingsBodyHTML() würde das zugehörige Dropdown dann fälschlich als "Kein
+  // Auto-Eintrag" anzeigen, obwohl im Speicher noch die alte ID steht.
+  let autoMealsChanged = false;
+  FT_MEAL_KEYS.forEach(m => { if (ftAutoMeals[m] === id) { ftAutoMeals[m] = null; autoMealsChanged = true; } });
+  if (autoMealsChanged) ftSave('autoMeals', ftAutoMeals);
   ftRenderCurrentResults();
   ftToast('Gelöscht');
 }
@@ -605,14 +647,11 @@ function ftOpenSaveMealPrompt(meal){
     ftToast('Mahlzeit gespeichert');
   };
 }
-function ftApplySavedMeal(mealId){
-  const sm = ftSavedMeals.find(m=>m.id===mealId);
-  if(!sm) return;
-  // Löst die Vorlage einmalig gegen die AKTUELLEN Lebensmitteldaten auf (analog zum
-  // bisherigen Verhalten) — das Ergebnis wird gleich als frisches Zutaten-Snapshot in den
-  // neuen gruppierten Eintrag (kind:'mealGroup') eingefroren, ändert sich also NICHT mehr
-  // rückwirkend, falls sich die Nährwerte des zugrundeliegenden Lebensmittels später ändern
-  // (gleiches Prinzip wie bei normalen Einträgen, siehe ftAddEntryToMeal()).
+// Löst eine gespeicherte Mahlzeit gegen die AKTUELLEN Lebensmitteldaten auf (Basis-Items mit
+// eingefrorenen kcal/p/c/f für die hinterlegte Menge) — gemeinsam genutzt vom interaktiven Pfad
+// (ftApplySavedMeal(), fragt danach noch nach der Portion) und vom automatischen Tages-Eintrag
+// (ftApplyAutoMealsForNewDay(), 15a-food-core.js, immer Portion 1×, keine Nachfrage möglich).
+function ftResolveSavedMealItems(sm){
   let missing = 0;
   const baseItems = [];
   sm.items.forEach(item => {
@@ -633,6 +672,17 @@ function ftApplySavedMeal(mealId){
     if (food.salt !== undefined) bi.salt = food.salt*factor;
     baseItems.push(bi);
   });
+  return { baseItems, missing };
+}
+function ftApplySavedMeal(mealId){
+  const sm = ftSavedMeals.find(m=>m.id===mealId);
+  if(!sm) return;
+  // Löst die Vorlage einmalig gegen die AKTUELLEN Lebensmitteldaten auf (analog zum
+  // bisherigen Verhalten) — das Ergebnis wird gleich als frisches Zutaten-Snapshot in den
+  // neuen gruppierten Eintrag (kind:'mealGroup') eingefroren, ändert sich also NICHT mehr
+  // rückwirkend, falls sich die Nährwerte des zugrundeliegenden Lebensmittels später ändern
+  // (gleiches Prinzip wie bei normalen Einträgen, siehe ftAddEntryToMeal()).
+  const { baseItems, missing } = ftResolveSavedMealItems(sm);
   if(!baseItems.length){ ftToast('Zutaten dieser Mahlzeit sind nicht mehr auffindbar'); return; }
   // Vor dem eigentlichen Hinzufügen erst kurz nach der Portion fragen (0,25/0,5/0,75/1×
   // Voreinstellungen oder frei), statt immer starr die volle Vorlage zu übernehmen — siehe
@@ -649,13 +699,14 @@ function ftApplySavedMeal(mealId){
     },
   });
 }
-// Legt den eigentlichen gruppierten Mahlzeiten-Eintrag an (kind:'mealGroup') — EIN Eintrag
-// in der Tagesansicht statt einer Zeile pro Zutat, siehe ftMealGroupRowHTML() (15b-food-day.js).
-// items bleiben als BASIS (Portion=1) gespeichert; kcal/p/c/f am Eintrag selbst sind das
-// eingefrorene, mit der Portion multiplizierte Endergebnis — dieselben Felder, die
-// ftComputeTotals()/ftMealTotal() (15a-food-core.js) ohnehin von jedem Eintrag lesen, daher
-// funktionieren Tagessummen etc. ohne jede Anpassung dort.
-function ftAddMealGroupEntry(name, savedMealId, baseItems, portion){
+// Baut den gruppierten Mahlzeiten-Eintrag (kind:'mealGroup') OHNE ihn irgendwo einzuhängen —
+// das übernimmt der jeweilige Aufrufer (ftAddMealGroupEntry() für den interaktiven Pfad,
+// ftApplyAutoMealsForNewDay() für den automatischen). Items bleiben als BASIS (Portion=1)
+// gespeichert; kcal/p/c/f am Eintrag selbst sind das eingefrorene, mit der Portion
+// multiplizierte Endergebnis — dieselben Felder, die ftComputeTotals()/ftMealTotal()
+// (15a-food-core.js) ohnehin von jedem Eintrag lesen, daher funktionieren Tagessummen etc.
+// ohne jede Anpassung dort.
+function ftBuildMealGroupEntry(name, savedMealId, baseItems, portion){
   const sums = ftSumItemMacros(baseItems);
   const entry = {
     id: 'g_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
@@ -674,6 +725,10 @@ function ftAddMealGroupEntry(name, savedMealId, baseItems, portion){
     const food = ftGetFoodById(bi.sourceFoodId);
     if(food){ ftPersistOffFoodIfNeeded(food); ftBumpUsageCount(food.id); }
   });
+  return entry;
+}
+function ftAddMealGroupEntry(name, savedMealId, baseItems, portion){
+  const entry = ftBuildMealGroupEntry(name, savedMealId, baseItems, portion);
   ftGetDay(ftCurrentDate)[ftAddSheetMeal].push(entry);
   ftSaveDays(ftCurrentDate);
   // Wie ftAddEntryToMeal(): bleibt auf der "Lebensmittel hinzufügen"-Seite (kein Overlay mehr
@@ -681,8 +736,25 @@ function ftAddMealGroupEntry(name, savedMealId, baseItems, portion){
   // Ergebnisliste einfach neu auf.
   ftRenderDefaultResults();
 }
-// Summiert kcal/p/c/f (+optional fiber/sugar/salt, nur wenn MINDESTENS eine Zutat sie hat) über
-// eine Zutatenliste — gemeinsam genutzt von ftApplySavedMeal() (Vorschau/Erstellen) und
+// Trägt die in den Einstellungen konfigurierten Auto-Mahlzeiten (ftAutoMeals, 15a-food-core.js)
+// für einen frisch entstandenen Tag ein — aufgerufen aus initFoodTracker() für "heute", NICHT
+// für beliebig durchgeblätterte andere Tage (siehe dortiger Kommentar). Rein additiv: bereits
+// vorhandene Einträge des Tages bleiben unangetastet, es wird nur ergänzt.
+function ftApplyAutoMealsForNewDay(iso){
+  let changed = false;
+  const day = ftGetDay(iso);
+  FT_MEAL_KEYS.forEach(meal => {
+    const savedMealId = ftAutoMeals[meal];
+    if(!savedMealId) return;
+    const sm = ftSavedMeals.find(m=>m.id===savedMealId);
+    if(!sm) return;
+    const { baseItems } = ftResolveSavedMealItems(sm);
+    if(!baseItems.length) return;
+    day[meal].push(ftBuildMealGroupEntry(sm.name, sm.id, baseItems, 1));
+    changed = true;
+  });
+  if(changed) ftSaveDays(iso);
+}
 // ftUpdateMealGroupPortion() (15b-food-day.js, Portion nachträglich ändern).
 function ftSumItemMacros(items){
   const sums = {kcal:0, p:0, c:0, f:0};

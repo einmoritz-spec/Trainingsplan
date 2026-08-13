@@ -673,6 +673,24 @@ function ftSettingsBodyHTML(){
       </div>
     `, ftSavedMeals.length ? `${ftSavedMeals.length}` : '')}
 
+    ${ftSettingsAccordionSection('autoMahlzeiten', 'Automatisch täglich eintragen', `
+      <div style="padding:14px 16px;">
+        ${!ftSavedMeals.length ? `
+          <div class="no-results" style="text-align:left; padding:0;">
+            Lege zuerst über „Als Mahlzeit speichern" bei einer Mahlzeit eine gespeicherte
+            Mahlzeit an (z. B. „Frühstück Standard" mit 250 g Skyr + 30 g Whey) — die steht dann
+            hier zur Auswahl, um sie jeden Tag automatisch einzutragen.
+          </div>
+        ` : FT_MEAL_KEYS.map((meal, i) => `
+          <div class="field-label" style="margin-top:${i===0 ? '0' : '14px'};">${FT_MEAL_LABELS[meal]}</div>
+          <select class="text-input" data-ft-automeal="${meal}">
+            <option value="">Kein Auto-Eintrag</option>
+            ${ftSavedMeals.map(m => `<option value="${m.id}" ${ftAutoMeals[meal] === m.id ? 'selected' : ''}>${ftEscapeHTML(m.name)}</option>`).join('')}
+          </select>
+        `).join('')}
+      </div>
+    `, Object.values(ftAutoMeals).filter(Boolean).length ? `${Object.values(ftAutoMeals).filter(Boolean).length}` : '')}
+
     ${ftSettingsAccordionSection('datenSichern', 'Daten sichern', `
       <div style="padding:14px 16px;">
         <div class="no-results" style="text-align:left; padding:0 0 14px">
@@ -752,10 +770,24 @@ function ftWireSettingsBody(){
       if(!confirm(`Mahlzeit „${meal.name}" wirklich löschen?`)) return;
       ftSavedMeals = ftSavedMeals.filter(m=>m.id!==btn.dataset.delMeal);
       ftSave('savedMeals', ftSavedMeals);
-      const list = document.getElementById('ftManageSavedMealsList');
-      if(list) list.innerHTML = ftSavedMealsManageListHTML();
-      ftWireSettingsBody();
+      // Siehe ftDeleteSavedMeal() (15c-food-add.js) — dieselbe Bereinigung nötig, falls die
+      // gelöschte Mahlzeit gerade als Auto-Eintrag (Abschnitt "Automatisch täglich eintragen"
+      // weiter unten) hinterlegt war.
+      let autoMealsChanged = false;
+      FT_MEAL_KEYS.forEach(m => { if (ftAutoMeals[m] === btn.dataset.delMeal) { ftAutoMeals[m] = null; autoMealsChanged = true; } });
+      if (autoMealsChanged) ftSave('autoMeals', ftAutoMeals);
+      // Ganzen Body neu aufbauen statt nur die Liste (refresh() statt manuellem innerHTML-Patch)
+      // — sonst würde das Auto-Mahlzeiten-Dropdown die entfernte Option weiterhin anzeigen, bis
+      // der Abschnitt das nächste Mal unabhängig neu gerendert wird.
+      refresh();
       ftToast('Gelöscht');
+    };
+  });
+  wrap.querySelectorAll('[data-ft-automeal]').forEach(sel => {
+    sel.onchange = () => {
+      const meal = sel.dataset.ftAutomeal;
+      ftAutoMeals[meal] = sel.value || null;
+      ftSave('autoMeals', ftAutoMeals);
     };
   });
   ftWireDesignControls(wrap, refresh);
