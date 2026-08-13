@@ -2417,6 +2417,12 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
 .result-star[data-del-food] svg, .result-star[data-del-meal] svg, .result-star[data-edit-meal] svg{width:17px; height:17px;}
 .loading-row{padding:14px 4px; color:var(--muted); font-size:0.85rem; text-align:center;}
 .no-results{padding:20px 4px; color:var(--muted); font-size:0.88rem; text-align:center;}
+/* "Eigene Lebensmittel"/"Gespeicherte Mahlzeiten" im Akkordeon (ftAccordionSection(),
+   15c-food-add.js) — .result-row hat außerhalb eines Akkordeons nur 4px seitlichen Abstand
+   (dort sitzt es bereits in der Seiten-Polsterung), innerhalb der Karte braucht es dagegen den
+   vollen Card-Innenabstand, damit die Zeilen bündig unter dem 16px-Header-Padding liegen. */
+.muscle-group > .muscle-group-body .result-row{ padding-left:16px; padding-right:16px; }
+.muscle-group > .muscle-group-body .no-results{ padding:16px; text-align:left; }
 
 .ft-btn-primary{
   width:100%; background:var(--accent); color:#fff; border:none; border-radius:12px; padding:13px;
