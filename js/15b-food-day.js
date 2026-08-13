@@ -78,7 +78,7 @@ function renderFoodTracker(){
   document.getElementById('dLabel').onclick = () => goFoodCalendar();
   document.getElementById('settingsBtn').onclick = ftOpenSettingsSheet;
   const copyPrevBtn = document.getElementById('ftCopyPrevBtn');
-  if (copyPrevBtn) copyPrevBtn.onclick = ftCopyPreviousDay;
+  if (copyPrevBtn) copyPrevBtn.onclick = ftOpenCopyPrevDayPrompt;
   FT_MEAL_KEYS.forEach(meal=>{
     document.getElementById('addBtn_'+meal).onclick = ()=>goFtAddFood(meal);
     ftGetDay(ftCurrentDate)[meal].forEach(e=>{
@@ -86,7 +86,10 @@ function renderFoodTracker(){
       if(delBtn) delBtn.onclick = (ev)=>{ ev.stopPropagation(); ftRemoveEntry(meal, e.id); };
     });
     document.querySelectorAll(`.food-row[data-meal="${meal}"]`).forEach(row=>{
-      row.onclick = ()=>ftOpenEditEntryModal(meal, row.dataset.entryId);
+      row.onclick = () => {
+        if(row.dataset.group === '1') ftOpenMealGroupDetail(meal, row.dataset.entryId);
+        else ftOpenEditEntryModal(meal, row.dataset.entryId);
+      };
     });
     const saveBtn = document.getElementById('saveMeal_'+meal);
     if(saveBtn) saveBtn.onclick = ()=>ftOpenSaveMealPrompt(meal);
@@ -138,7 +141,7 @@ function ftMealHTML(meal){
         <button class="meal-add" id="addBtn_${meal}">+</button>
       </div>
       <div class="food-list">
-        ${entries.length ? entries.slice().reverse().map(e=>ftFoodRowHTML(meal, e)).join('') : `<div class="empty-meal">Noch nichts eingetragen</div>`}
+        ${entries.length ? entries.slice().reverse().map(e=> e.kind==='mealGroup' ? ftMealGroupRowHTML(meal,e) : ftFoodRowHTML(meal, e)).join('') : `<div class="empty-meal">Noch nichts eingetragen</div>`}
       </div>
       ${entries.length ? `<button class="save-meal-btn" id="saveMeal_${meal}">Als Mahlzeit speichern</button>` : ''}
     </div>
@@ -151,6 +154,29 @@ function ftFoodRowHTML(meal, e){
       <div class="food-row-main">
         <div class="food-row-name">${ftEscapeHTML(e.name)}</div>
         <div class="food-row-sub">${qty}</div>
+      </div>
+      <div class="food-row-right">
+        <div class="food-row-kcal">${Math.round(e.kcal)}</div>
+        <button class="food-row-del" id="del_${e.id}">${ftIconX()}</button>
+      </div>
+    </div>
+  `;
+}
+// Gruppierte Mahlzeiten-Einträge (kind:'mealGroup', entstehen beim Anwenden einer
+// gespeicherten Mahlzeit über ftOpenApplySavedMealPortionPrompt()/ftAddMealGroupEntry() in
+// 15c-food-add.js) erscheinen als EIN Eintrag statt als eine Zeile pro Zutat — Antippen öffnet
+// ftOpenMealGroupDetail() (statt der normalen Mengen-Bearbeitung) mit der vollen Zutatenliste
+// und der Möglichkeit, die getrackte Portion nachträglich zu ändern. data-group="1" markiert
+// die Zeile für die Klick-Weiche in renderFoodTracker() weiter unten; das "X" zum schnellen
+// Löschen funktioniert unverändert über die generische ftRemoveEntry() (wirft den kompletten
+// Gruppen-Eintrag inkl. aller Zutaten weg, kein Sonderfall nötig).
+function ftMealGroupRowHTML(meal, e){
+  const itemCount = (e.items||[]).length;
+  return `
+    <div class="food-row" data-entry-id="${e.id}" data-meal="${meal}" data-group="1">
+      <div class="food-row-main">
+        <div class="food-row-name">${ftEscapeHTML(e.name)}</div>
+        <div class="food-row-sub">${ftPortionLabel(e.portion)} Portion · ${itemCount} Zutat${itemCount===1?'':'en'}</div>
       </div>
       <div class="food-row-right">
         <div class="food-row-kcal">${Math.round(e.kcal)}</div>
@@ -179,19 +205,59 @@ function ftRemoveEntry(meal, entryId){
   });
 }
 
-// Übernimmt alle Einträge des Tages VOR dem gerade angezeigten in den aktuellen Tag (Button
-// nur sichtbar, wenn der aktuelle Tag noch komplett leer ist, siehe renderFoodTracker()) —
-// erspart das erneute manuelle Zusammensuchen bei ähnlichem Tagesablauf. Jeder Eintrag
-// bekommt eine FRISCHE id/ts (statt die des Originaleintrags zu übernehmen), damit z. B.
-// Löschen eines kopierten Eintrags nicht versehentlich mit dem Original am Vortag kollidiert.
-function ftCopyPreviousDay(){
+// Öffnet die Detailansicht/Portions-Bearbeitung für einen bereits getrackten gruppierten
+// Mahlzeiten-Eintrag (kind:'mealGroup', angetippt in der Tagesansicht — siehe Klick-Weiche in
+// renderFoodTracker()) — nutzt denselben ftOpenPortionModal()-Dialog wie das erstmalige
+// Hinzufügen (ftApplySavedMeal(), 15c-food-add.js), nur mit dem bereits eingefrorenen items[]
+// des Eintrags als Basis statt frisch aus den aktuellen Lebensmitteldaten aufgelöst — eine
+// spätere Nährwert-Änderung am zugrundeliegenden Lebensmittel wirkt sich also NICHT rückwirkend
+// auf bereits getrackte Tage aus (gleiches Prinzip wie bei normalen Einträgen).
+function ftOpenMealGroupDetail(meal, entryId){
+  const entry = ftGetDay(ftCurrentDate)[meal].find(e=>e.id===entryId);
+  if(!entry || entry.kind !== 'mealGroup') return;
+  ftOpenPortionModal({
+    title: entry.name,
+    baseItems: entry.items,
+    initialPortion: entry.portion,
+    confirmLabel: 'Aktualisieren',
+    onConfirm: (portion) => {
+      ftUpdateMealGroupPortion(meal, entryId, portion);
+      ftCloseOverlay();
+    },
+    onDelete: () => ftRemoveEntry(meal, entryId),
+  });
+}
+function ftUpdateMealGroupPortion(meal, entryId, portion){
+  const entry = ftGetDay(ftCurrentDate)[meal].find(e=>e.id===entryId);
+  if(!entry) return;
+  const sums = ftSumItemMacros(entry.items);
+  entry.portion = portion;
+  entry.kcal = sums.kcal*portion; entry.p = sums.p*portion; entry.c = sums.c*portion; entry.f = sums.f*portion;
+  if (sums.fiber !== undefined) entry.fiber = sums.fiber*portion; else delete entry.fiber;
+  if (sums.sugar !== undefined) entry.sugar = sums.sugar*portion; else delete entry.sugar;
+  if (sums.salt !== undefined) entry.salt = sums.salt*portion; else delete entry.salt;
+  ftSaveDays(ftCurrentDate);
+  renderFoodTracker();
+  ftToast('Aktualisiert');
+}
+
+// Übernimmt Einträge des Tages VOR dem gerade angezeigten in den aktuellen Tag (Button nur
+// sichtbar, wenn der aktuelle Tag noch komplett leer ist, siehe renderFoodTracker()) — erspart
+// das erneute manuelle Zusammensuchen bei ähnlichem Tagesablauf. mealKeys grenzt ein, WELCHE
+// Mahlzeiten übernommen werden (Default: alle FT_MEAL_KEYS = "Alles"); der Klick auf den Button
+// fragt vorher per ftOpenCopyPrevDayPrompt() nach, welche es sein sollen, falls der Vortag
+// mehr als eine befüllte Mahlzeit hat. Jeder Eintrag bekommt eine FRISCHE id/ts (statt die des
+// Originaleintrags zu übernehmen), damit z. B. Löschen eines kopierten Eintrags nicht
+// versehentlich mit dem Original am Vortag kollidiert.
+function ftCopyPreviousDay(mealKeys){
+  const keys = mealKeys || FT_MEAL_KEYS;
   const dateIso = ftCurrentDate;
   const prevIso = ftAddDays(dateIso, -1);
   const prevDay = ftDays[prevIso];
   if(!prevDay) return;
   const day = ftGetDay(dateIso);
   let count = 0;
-  FT_MEAL_KEYS.forEach(meal => {
+  keys.forEach(meal => {
     (prevDay[meal]||[]).forEach(e => {
       day[meal].push({ ...e, id: 'e_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), ts: Date.now() });
       count++;
@@ -202,9 +268,43 @@ function ftCopyPreviousDay(){
   renderFoodTracker();
   ftToastWithUndo(`${count} Einträge übernommen`, ()=>{
     const d = ftGetDay(dateIso);
-    FT_MEAL_KEYS.forEach(meal => { d[meal] = []; });
+    keys.forEach(meal => { d[meal] = []; });
     ftSaveDays(dateIso);
     if(ftCurrentDate === dateIso) renderFoodTracker();
+  });
+}
+
+// Fragt vor dem Übernehmen kurz nach, welche Mahlzeit(en) vom Vortag übernommen werden sollen
+// (Button-Auswahl statt z.B. Checkboxen, da es nur um EINE schnelle Entscheidung geht) — nur
+// die Mahlzeiten des Vortags, die tatsächlich Einträge haben, stehen dabei zur Wahl, plus
+// "Alles" ganz oben, wenn mehr als eine davon befüllt ist. Ist nur GENAU eine Mahlzeit befüllt,
+// entspricht "Alles" ohnehin exakt dieser einen — die Nachfrage wird dann übersprungen und
+// direkt kopiert, damit ein trivialer Ein-Optionen-Dialog nicht unnötig im Weg steht.
+function ftOpenCopyPrevDayPrompt(){
+  const prevIso = ftAddDays(ftCurrentDate, -1);
+  const prevDay = ftDays[prevIso];
+  if(!prevDay) return;
+  const filledMeals = FT_MEAL_KEYS.filter(k => (prevDay[k]||[]).length);
+  if(filledMeals.length <= 1){ ftCopyPreviousDay(filledMeals.length ? filledMeals : undefined); return; }
+  const mealBtnsHTML = filledMeals.map(k =>
+    `<button class="ft-btn-ghost ft-copy-prev-choice" data-meal="${k}" type="button">${FT_MEAL_LABELS[k]}</button>`
+  ).join('');
+  ftOpenOverlay(`
+    <div class="modal" id="ftCopyPrevModal">
+      <div class="modal-head"><div class="modal-title">Was übernehmen?</div><button class="sheet-close" id="ftCopyPrevClose">${ftIconX()}</button></div>
+      <div class="modal-body">
+        <button class="ft-btn-primary ft-copy-prev-choice" data-meal="all" type="button" style="margin-bottom:10px;">Alles</button>
+        ${mealBtnsHTML}
+      </div>
+    </div>
+  `, {type:'modal'});
+  document.getElementById('ftCopyPrevClose').onclick = ftCloseOverlay;
+  document.querySelectorAll('.ft-copy-prev-choice').forEach(btn => {
+    btn.onclick = () => {
+      const meal = btn.dataset.meal;
+      ftCloseOverlay();
+      ftCopyPreviousDay(meal === 'all' ? filledMeals : [meal]);
+    };
   });
 }
 
@@ -368,10 +468,17 @@ function ftOpenSettingsSheet(){
         <button class="ft-btn-primary" id="ftExportBtn">Daten exportieren (JSON)</button>
         <button class="ft-btn-ghost" id="ftImportBtn">Daten importieren …</button>
         <input type="file" id="ftImportFileInput" accept="application/json" class="hidden">
+
+        <div class="ft-section-label">Tages-Snapshot</div>
+        <div class="no-results" style="text-align:left; padding:0 4px 14px">
+          PDF mit allen Mahlzeiten und Trainings von ${ftDateLabel(ftCurrentDate)} (${ftFmtDateGerman(ftCurrentDate)}) — zum Ablegen/Hochladen, z. B. in Google Health.
+        </div>
+        <button class="ft-btn-ghost" id="ftSnapshotBtn">Tages-Snapshot als PDF</button>
       </div>
     </div>
   `);
   document.getElementById('ftSettingsClose').onclick = ftCloseOverlay;
+  document.getElementById('ftSnapshotBtn').onclick = ftExportDaySnapshotPdf;
   document.getElementById('ftGoalSaveBtn').onclick = async () => {
     const readGoal = id => {
       const raw = document.getElementById(id).value.trim();
@@ -392,6 +499,166 @@ function ftOpenSettingsSheet(){
     const file = fileInput.files[0];
     if(file) ftImportData(file);
   };
+}
+
+function ftFmtDateGerman(iso){
+  return ftParseISO(iso).toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit', year:'numeric'});
+}
+
+/* ============ Tages-Snapshot als PDF ============
+   Fasst Mahlzeiten (aktuell angezeigter Tag, ftCurrentDate) UND an diesem Kalendertag
+   protokollierte Trainingseinheiten (globales sessions-Array, siehe 05-calendar.js/
+   openDayTrainingPopup() für dasselbe Filter-Muster: Vergleich über
+   getFullYear()/getMonth()/getDate(), da session.date ein voller Zeitstempel ist) in einem
+   einzigen PDF zusammen — gedacht zum manuellen Ablegen/Hochladen in andere Gesundheits-Apps
+   (z. B. Google Health), die selbst keinen direkten Zugriff auf diese App haben. Nutzt bewusst
+   dieselben jsPDF-Bauhelfer (pdfCardBox, pdfSafeText, ensureJsPdfLoaded, downloadBlob) wie die
+   bestehenden Trainings-PDFs (12-session-summary.js), damit Optik und Robustheit (WinAnsi-
+   Zeichensatz, Lazy-Load) konsistent bleiben.
+   HINWEIS: Google Health Connect selbst nimmt keine PDFs als strukturierte Messwerte an — die
+   Datei eignet sich zum Anhängen an einen Tagebucheintrag / manuellen Abgleich, nicht als
+   automatischer Datenimport. */
+function ftSessionsOnDay(iso){
+  const target = ftParseISO(iso);
+  return (typeof sessions !== 'undefined' ? sessions : []).filter(s => {
+    const sd = new Date(s.date);
+    return sd.getFullYear() === target.getFullYear() && sd.getMonth() === target.getMonth() && sd.getDate() === target.getDate();
+  });
+}
+function ftEntryQtyText(e){
+  return e.unitMode === 'piece' ? `${ftFormatNum(e.pieceCount)} × ${e.pieceLabel}` : `${e.amountG} g`;
+}
+async function ftExportDaySnapshotPdf(){
+  const iso = ftCurrentDate;
+  await ensureJsPdfLoaded();
+  if (!window.jspdf || !window.jspdf.jsPDF){ ftToast('PDF-Erstellung nicht verfügbar'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const marginX = 16;
+  const pageWidth = 210 - marginX * 2;
+  const pageBottom = 282;
+  let y = 20;
+
+  const ensureSpace = (need) => { if (y + need > pageBottom){ doc.addPage(); y = 20; } };
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(20);
+  doc.text(pdfSafeText('Tages-Snapshot'), marginX, y);
+  y += 9;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(60);
+  doc.text(pdfSafeText(`${ftDateLabel(iso)} · ${ftFmtDateGerman(iso)}`), marginX, y);
+  y += 10;
+  doc.setDrawColor(210);
+  doc.line(marginX, y, 210 - marginX, y);
+  y += 8;
+
+  // ---- Essen ----
+  const totals = ftComputeTotals(iso);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(20);
+  doc.text(pdfSafeText('Ernährung'), marginX, y);
+  y += 6;
+  const boxH = 16;
+  ensureSpace(boxH + 4);
+  pdfCardBox(doc, marginX, y, pageWidth, boxH);
+  const summaryParts = [
+    { label: 'kcal', value: totals.kcal },
+    { label: 'Protein', value: totals.p + ' g' },
+    { label: 'Kohlenhydrate', value: totals.c + ' g' },
+    { label: 'Fett', value: totals.f + ' g' },
+  ];
+  const colW = pageWidth / summaryParts.length;
+  summaryParts.forEach((p, i) => {
+    const cx = marginX + colW * i + colW/2;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(30);
+    doc.text(pdfSafeText(String(p.value)), cx, y + 8, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(130);
+    doc.text(pdfSafeText(p.label), cx, y + 12.5, { align: 'center' });
+  });
+  y += boxH + 8;
+
+  const day = ftGetDay(iso);
+  FT_MEAL_KEYS.forEach(mealKey => {
+    const entries = day[mealKey];
+    ensureSpace(10);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(20);
+    const mealKcal = entries.length ? ` · ${ftMealTotal(iso, mealKey)} kcal` : '';
+    doc.text(pdfSafeText(FT_MEAL_LABELS[mealKey] + mealKcal), marginX, y);
+    y += 5.5;
+    if (!entries.length){
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(150);
+      doc.text(pdfSafeText('Nichts eingetragen'), marginX + 2, y);
+      y += 6;
+      return;
+    }
+    entries.forEach(e => {
+      ensureSpace(6);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(50);
+      // Gruppierte Mahlzeiten-Einträge (kind:'mealGroup') haben kein amountG/unitMode wie
+      // normale Einträge (ftEntryQtyText() würde hier "undefined g" ausgeben) — stattdessen
+      // die Portion in der Kopfzeile zeigen und darunter jede Zutat einzeln, skaliert mit der
+      // getrackten Portion (analog zur Detailansicht in der App, siehe ftOpenMealGroupDetail()).
+      const qtyText = e.kind === 'mealGroup' ? ftPortionLabel(e.portion) + ' Portion' : ftEntryQtyText(e);
+      const nameLine = doc.splitTextToSize(pdfSafeText(`${e.name} — ${qtyText}`), pageWidth - 30);
+      doc.text(nameLine, marginX + 2, y);
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(30);
+      doc.text(pdfSafeText(`${Math.round(e.kcal)} kcal`), 210 - marginX, y, { align: 'right' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.8); doc.setTextColor(140);
+      const macroLine = `P ${Math.round(e.p)} g · KH ${Math.round(e.c)} g · F ${Math.round(e.f)} g`;
+      doc.text(pdfSafeText(macroLine), marginX + 2, y + (nameLine.length * 4.2));
+      y += nameLine.length * 4.2 + 4.6;
+      if(e.kind === 'mealGroup'){
+        (e.items||[]).forEach(i => {
+          ensureSpace(5);
+          const itemQty = i.unitMode === 'piece' ? `${ftFormatNum(i.pieceCount*e.portion)} × ${i.pieceLabel}` : `${Math.round(i.amountG*e.portion)} g`;
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8.3); doc.setTextColor(120);
+          const itemLine = doc.splitTextToSize(pdfSafeText(`· ${i.name} — ${itemQty} · ${Math.round(i.kcal*e.portion)} kcal`), pageWidth - 32);
+          doc.text(itemLine, marginX + 5, y);
+          y += itemLine.length * 4;
+        });
+        y += 1.5;
+      }
+    });
+    y += 2;
+  });
+
+  // ---- Training ----
+  y += 4;
+  ensureSpace(14);
+  doc.setDrawColor(210);
+  doc.line(marginX, y, 210 - marginX, y);
+  y += 8;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(20);
+  doc.text(pdfSafeText('Training'), marginX, y);
+  y += 7;
+
+  const daySessions = ftSessionsOnDay(iso);
+  if (!daySessions.length){
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(150);
+    doc.text(pdfSafeText('Kein Training an diesem Tag protokolliert.'), marginX, y);
+    y += 6;
+  } else {
+    daySessions.forEach(session => {
+      ensureSpace(12);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(20);
+      doc.text(pdfSafeText(modeDisplayLabel(session.mode)), marginX, y);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(120);
+      doc.text(pdfSafeText(`Dauer ${fmtDuration(session.durationSec)}`), 210 - marginX, y, { align: 'right' });
+      y += 5.5;
+      session.entries.forEach(e => {
+        const planEx = plan.exercises.find(x => x.id === e.exerciseId);
+        const setsText = formatSetsLine(e, planEx) || '—';
+        ensureSpace(6);
+        const lines = doc.splitTextToSize(pdfSafeText(`${e.name}: ${setsText}`), pageWidth - 4);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(70);
+        doc.text(lines, marginX + 2, y);
+        y += lines.length * 4.2 + 1.5;
+      });
+      y += 4;
+    });
+  }
+
+  const blob = doc.output('blob');
+  downloadBlob(blob, `essenstracker-snapshot-${iso}.pdf`);
+  ftToast('PDF erstellt');
 }
 
 // Essenstracker-Nutzdaten als reines Objekt (ohne Hüllen-Metadaten wie version/exportedAt) —

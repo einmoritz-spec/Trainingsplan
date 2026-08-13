@@ -573,9 +573,23 @@ function ftOpenSaveMealPrompt(meal){
     const name = document.getElementById('ftSmName').value.trim();
     if(!name){ ftToast('Bitte einen Namen eingeben'); return; }
     const entries = ftGetDay(ftCurrentDate)[meal];
-    const items = entries.map(e=>({
-      sourceFoodId: e.sourceFoodId, amountG: e.amountG, unitMode: e.unitMode, pieceCount: e.pieceCount,
-    }));
+    // Gruppierte Mahlzeiten-Einträge (kind:'mealGroup') haben kein eigenes sourceFoodId/
+    // amountG — beim Speichern als (neue) Mahlzeit werden sie stattdessen in ihre einzelnen,
+    // mit der getrackten Portion skalierten Zutaten aufgelöst, statt einen kaputten Eintrag
+    // ohne sourceFoodId zu erzeugen. Enthält der Tag z.B. "Porridge Standard" (0,5 Portion)
+    // plus eine Banane und man speichert das als neue Mahlzeit, landen beide Haferflocken-
+    // Zutaten UND die Banane als eigenständige Positionen in der neuen Mahlzeit.
+    const items = [];
+    entries.forEach(e => {
+      if(e.kind === 'mealGroup'){
+        (e.items||[]).forEach(i => items.push({
+          sourceFoodId: i.sourceFoodId, amountG: Math.round(i.amountG*e.portion), unitMode: i.unitMode,
+          pieceCount: i.pieceCount !== null && i.pieceCount !== undefined ? i.pieceCount*e.portion : i.pieceCount,
+        }));
+        return;
+      }
+      items.push({ sourceFoodId: e.sourceFoodId, amountG: e.amountG, unitMode: e.unitMode, pieceCount: e.pieceCount });
+    });
     ftSavedMeals.push({id:'m_'+Date.now(), name, items});
     ftSave('savedMeals', ftSavedMeals);
     ftCloseOverlay();
@@ -585,36 +599,162 @@ function ftOpenSaveMealPrompt(meal){
 function ftApplySavedMeal(mealId){
   const sm = ftSavedMeals.find(m=>m.id===mealId);
   if(!sm) return;
-  let added = 0;
-  for(const item of sm.items){
+  // Löst die Vorlage einmalig gegen die AKTUELLEN Lebensmitteldaten auf (analog zum
+  // bisherigen Verhalten) — das Ergebnis wird gleich als frisches Zutaten-Snapshot in den
+  // neuen gruppierten Eintrag (kind:'mealGroup') eingefroren, ändert sich also NICHT mehr
+  // rückwirkend, falls sich die Nährwerte des zugrundeliegenden Lebensmittels später ändern
+  // (gleiches Prinzip wie bei normalen Einträgen, siehe ftAddEntryToMeal()).
+  let missing = 0;
+  const baseItems = [];
+  sm.items.forEach(item => {
     const food = ftGetFoodById(item.sourceFoodId);
-    if(!food) continue;
+    if(!food){ missing++; return; }
     const factor = item.amountG/100;
-    const entry = {
-      id: 'e_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
-      name: food.brand ? `${food.name} (${food.brand})` : food.name,
+    const bi = {
       sourceFoodId: food.id,
-      kcal: food.kcal*factor, p: food.p*factor, c: food.c*factor, f: food.f*factor,
-      amountG: Math.round(item.amountG),
+      name: food.brand ? `${food.name} (${food.brand})` : food.name,
       unitMode: item.unitMode,
-      pieceLabel: food.piece ? food.piece.label.replace(/^1\s*/,'') : null,
+      amountG: Math.round(item.amountG),
       pieceCount: item.pieceCount,
-      ts: Date.now(),
+      pieceLabel: food.piece ? food.piece.label.replace(/^1\s*/,'') : null,
+      kcal: food.kcal*factor, p: food.p*factor, c: food.c*factor, f: food.f*factor,
     };
-    if (food.fiber !== undefined) entry.fiber = food.fiber*factor;
-    if (food.sugar !== undefined) entry.sugar = food.sugar*factor;
-    if (food.salt !== undefined) entry.salt = food.salt*factor;
-    ftPersistOffFoodIfNeeded(food);
-    ftGetDay(ftCurrentDate)[ftAddSheetMeal].push(entry);
-    ftBumpUsageCount(food.id);
-    added++;
-  }
+    if (food.fiber !== undefined) bi.fiber = food.fiber*factor;
+    if (food.sugar !== undefined) bi.sugar = food.sugar*factor;
+    if (food.salt !== undefined) bi.salt = food.salt*factor;
+    baseItems.push(bi);
+  });
+  if(!baseItems.length){ ftToast('Zutaten dieser Mahlzeit sind nicht mehr auffindbar'); return; }
+  // Vor dem eigentlichen Hinzufügen erst kurz nach der Portion fragen (0,25/0,5/0,75/1×
+  // Voreinstellungen oder frei), statt immer starr die volle Vorlage zu übernehmen — siehe
+  // ftOpenPortionModal() weiter unten.
+  ftOpenPortionModal({
+    title: sm.name,
+    baseItems,
+    initialPortion: 1,
+    confirmLabel: 'Hinzufügen',
+    onConfirm: (portion) => {
+      ftAddMealGroupEntry(sm.name, sm.id, baseItems, portion);
+      ftCloseOverlay();
+      ftToast(missing ? `Hinzugefügt · ${missing} Zutat${missing>1?'en':''} nicht mehr auffindbar` : 'Mahlzeit hinzugefügt');
+    },
+  });
+}
+// Legt den eigentlichen gruppierten Mahlzeiten-Eintrag an (kind:'mealGroup') — EIN Eintrag
+// in der Tagesansicht statt einer Zeile pro Zutat, siehe ftMealGroupRowHTML() (15b-food-day.js).
+// items bleiben als BASIS (Portion=1) gespeichert; kcal/p/c/f am Eintrag selbst sind das
+// eingefrorene, mit der Portion multiplizierte Endergebnis — dieselben Felder, die
+// ftComputeTotals()/ftMealTotal() (15a-food-core.js) ohnehin von jedem Eintrag lesen, daher
+// funktionieren Tagessummen etc. ohne jede Anpassung dort.
+function ftAddMealGroupEntry(name, savedMealId, baseItems, portion){
+  const sums = ftSumItemMacros(baseItems);
+  const entry = {
+    id: 'g_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    kind: 'mealGroup',
+    name,
+    savedMealId: savedMealId || null,
+    portion,
+    items: baseItems,
+    kcal: sums.kcal*portion, p: sums.p*portion, c: sums.c*portion, f: sums.f*portion,
+    ts: Date.now(),
+  };
+  if (sums.fiber !== undefined) entry.fiber = sums.fiber*portion;
+  if (sums.sugar !== undefined) entry.sugar = sums.sugar*portion;
+  if (sums.salt !== undefined) entry.salt = sums.salt*portion;
+  baseItems.forEach(bi => {
+    const food = ftGetFoodById(bi.sourceFoodId);
+    if(food){ ftPersistOffFoodIfNeeded(food); ftBumpUsageCount(food.id); }
+  });
+  ftGetDay(ftCurrentDate)[ftAddSheetMeal].push(entry);
   ftSaveDays(ftCurrentDate);
   // Wie ftAddEntryToMeal(): bleibt auf der "Lebensmittel hinzufügen"-Seite (kein Overlay mehr
   // zu schließen, seit diese Seite kein Sheet mehr ist, siehe renderFtAddFood()) und baut die
   // Ergebnisliste einfach neu auf.
   ftRenderDefaultResults();
-  ftToast(added < sm.items.length ? 'Hinzugefügt · manche Zutaten waren nicht mehr auffindbar' : 'Mahlzeit hinzugefügt');
+}
+// Summiert kcal/p/c/f (+optional fiber/sugar/salt, nur wenn MINDESTENS eine Zutat sie hat) über
+// eine Zutatenliste — gemeinsam genutzt von ftApplySavedMeal() (Vorschau/Erstellen) und
+// ftUpdateMealGroupPortion() (15b-food-day.js, Portion nachträglich ändern).
+function ftSumItemMacros(items){
+  const sums = {kcal:0, p:0, c:0, f:0};
+  items.forEach(i => {
+    sums.kcal += i.kcal; sums.p += i.p; sums.c += i.c; sums.f += i.f;
+    if(i.fiber !== undefined) sums.fiber = (sums.fiber||0) + i.fiber;
+    if(i.sugar !== undefined) sums.sugar = (sums.sugar||0) + i.sugar;
+    if(i.salt !== undefined) sums.salt = (sums.salt||0) + i.salt;
+  });
+  return sums;
+}
+// Portions-Auswahl/-Bearbeitung für gruppierte Mahlzeiten-Einträge — EIN gemeinsamer Dialog
+// für zwei Aufrufer: ftApplySavedMeal() oben (erstmaliges Hinzufügen, baseItems frisch aus den
+// aktuellen Lebensmitteldaten aufgelöst) und ftOpenMealGroupDetail() (15b-food-day.js,
+// nachträgliches Ändern eines bereits getrackten Eintrags, baseItems = dessen eingefrorenes
+// items[]). Voreingestellte Bruchteile (1/4, 1/2, 3/4, 1×, 1,5×, 2×) plus ein frei editierbares
+// Feld darunter für jeden anderen Wert — Vorschau (kcal/Makros) und Zutatenliste aktualisieren
+// sich live mit der gewählten Portion.
+const FT_PORTION_PRESETS = [0.25, 0.5, 0.75, 1, 1.5, 2];
+function ftOpenPortionModal(opts){
+  const { title, baseItems, initialPortion, confirmLabel, onConfirm, onDelete } = opts;
+  const sums = ftSumItemMacros(baseItems);
+  ftOpenOverlay(`
+    <div class="modal" id="ftPortionModal">
+      <div class="modal-head"><div class="modal-title">${ftEscapeHTML(title)}</div><button class="sheet-close" id="ftPortionClose">${ftIconX()}</button></div>
+      <div class="modal-body">
+        <div class="field-label" style="margin-top:0;">Portion</div>
+        <div class="portion-picker" id="ftPortionPicker">
+          ${FT_PORTION_PRESETS.map(p=>`<button type="button" class="portion-pill" data-portion="${p}">${ftPortionLabel(p)}</button>`).join('')}
+        </div>
+        <div class="qty-row">
+          <button class="qty-btn" id="ftPortionMinus">–</button>
+          <input class="qty-input" id="ftPortionInput" type="number" inputmode="decimal" step="0.25" value="${initialPortion}">
+          <button class="qty-btn" id="ftPortionPlus">+</button>
+        </div>
+        <div class="qty-preview" id="ftPortionPreview"></div>
+        <div class="field-label">Zutaten</div>
+        <div id="ftPortionItemsList"></div>
+        <button class="ft-btn-primary" id="ftPortionConfirmBtn" style="margin-top:16px;">${confirmLabel}</button>
+        ${onDelete ? `<button class="ft-btn-ghost" id="ftPortionDeleteBtn" style="color:var(--danger); border-color:var(--danger)">Mahlzeit löschen</button>` : ''}
+      </div>
+    </div>
+  `, {type:'modal'});
+  document.getElementById('ftPortionClose').onclick = ftCloseOverlay;
+  const input = document.getElementById('ftPortionInput');
+  function highlightPreset(portion){
+    document.querySelectorAll('.portion-pill').forEach(btn=>{
+      btn.classList.toggle('active', Math.abs(parseFloat(btn.dataset.portion)-portion) < 0.001);
+    });
+  }
+  function update(){
+    const portion = Math.max(0.05, parseFloat(input.value)||0);
+    highlightPreset(portion);
+    const kcal = Math.round(sums.kcal*portion);
+    const p = Math.round(sums.p*portion*10)/10;
+    const c = Math.round(sums.c*portion*10)/10;
+    const f = Math.round(sums.f*portion*10)/10;
+    document.getElementById('ftPortionPreview').innerHTML = `
+      <div class="qty-preview-kcal">${kcal} kcal</div>
+      <div class="qty-preview-macros"><span>P ${p}g</span><span>K ${c}g</span><span>F ${f}g</span></div>
+    `;
+    document.getElementById('ftPortionItemsList').innerHTML = baseItems.map(i=>{
+      const qty = i.unitMode==='piece' ? `${ftFormatNum(i.pieceCount*portion)} × ${i.pieceLabel}` : `${Math.round(i.amountG*portion)} g`;
+      return `<div class="food-row-sub" style="padding:5px 2px; border-bottom:1px solid var(--border);">${ftEscapeHTML(i.name)} — ${qty} · ${Math.round(i.kcal*portion)} kcal</div>`;
+    }).join('');
+  }
+  input.addEventListener('input', update);
+  ftWireClearOnFocus(input, update);
+  document.getElementById('ftPortionMinus').onclick = ()=>{ input.value = Math.max(0.05, Math.round(((parseFloat(input.value)||0)-0.25)*100)/100); update(); };
+  document.getElementById('ftPortionPlus').onclick = ()=>{ input.value = Math.round(((parseFloat(input.value)||0)+0.25)*100)/100; update(); };
+  document.querySelectorAll('.portion-pill').forEach(btn=>{
+    btn.onclick = ()=>{ input.value = btn.dataset.portion; update(); };
+  });
+  update();
+  document.getElementById('ftPortionConfirmBtn').onclick = ()=>{
+    const portion = Math.max(0.05, parseFloat(input.value)||0);
+    onConfirm(portion);
+  };
+  if(onDelete){
+    document.getElementById('ftPortionDeleteBtn').onclick = ()=>{ ftCloseOverlay(); onDelete(); };
+  }
 }
 
 /* ============ Barcode-Scanner ============ */

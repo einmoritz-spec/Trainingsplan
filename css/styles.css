@@ -1035,6 +1035,16 @@ html[data-theme="light"] .bodyweight-warning-icon{ filter: none; }
   background: var(--surface-2); border:1px solid currentColor;
   font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:700; text-align:center;
 }
+/* "+N weitere"/"Weniger anzeigen"-Zeile am Ende einer Aufschlüsselungsliste (siehe
+   ftWireMacroDonut() in 15d-food-stats.js) — technisch ein <button>, optisch aber identisch zu
+   den normalen .muscle-balance-legend-row-Zeilen darüber, nur zusätzlich antippbar (Cursor +
+   dezentes Active-Feedback) und über die volle Breite. */
+.muscle-balance-legend-row-more{
+  width:100%; background:none; border:none; border-bottom:1px solid var(--border);
+  font-family:inherit; color: var(--text); text-align:left; cursor:pointer;
+}
+.muscle-balance-legend-row-more:last-child{ border-bottom:none; }
+.muscle-balance-legend-row-more:active{ background: var(--surface-2); }
 .add-set{
   background:none; border:none; color: var(--accent); font-size:13px; font-weight:600; padding:6px 0;
 }
@@ -2383,6 +2393,17 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
 .qty-preview-kcal{font-family:'Fraunces',serif; font-weight:700; font-size:1.6rem;}
 .qty-preview-macros{display:flex; justify-content:center; gap:14px; margin-top:6px; font-size:0.8rem; color:var(--muted);}
 .qty-preview-extra{ text-align:center; margin-top:6px; font-size:0.72rem; color:var(--muted); opacity:0.8; }
+/* Portions-Auswahl für gruppierte Mahlzeiten-Einträge (ftOpenPortionModal(), 15c-food-add.js)
+   — dieselbe Pillen-Optik wie .unit-toggle button, aber als umbrechende Reihe statt starr
+   zweigeteilt, da hier mehr als zwei Optionen (1/4, 1/2, 3/4, 1×, 1,5×, 2×) nebeneinander
+   Platz finden müssen. */
+.portion-picker{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:14px; }
+.portion-pill{
+  flex:1 1 auto; min-width:52px; border:1.5px solid var(--border); background:var(--surface-2);
+  padding:8px 10px; border-radius:10px; font-weight:600; font-size:0.85rem; color:var(--muted);
+  cursor:pointer; font-family:inherit;
+}
+.portion-pill.active{ border-color:var(--accent); color:var(--accent); background:var(--surface); }
 
 /* Kalender */
 /* .cal-day/.cal-grid/.cal-dow/.cal-nav entfernt — der Essenstracker-Kalender ist jetzt

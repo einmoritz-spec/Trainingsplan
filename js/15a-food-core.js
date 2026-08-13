@@ -264,7 +264,15 @@ function ftPruneOffCache(){
   if(ids.length <= FT_OFF_CACHE_LIMIT) return;
   const protectedIds = new Set();
   Object.values(ftDays).forEach(day => {
-    FT_MEAL_KEYS.forEach(k => (day[k]||[]).forEach(e => { if(e.sourceFoodId) protectedIds.add(e.sourceFoodId); }));
+    FT_MEAL_KEYS.forEach(k => (day[k]||[]).forEach(e => {
+      if(e.sourceFoodId) protectedIds.add(e.sourceFoodId);
+      // Gruppierte Mahlzeiten-Einträge (kind:'mealGroup', siehe ftAddMealGroupEntry() in
+      // 15c-food-add.js) haben KEIN eigenes sourceFoodId, referenzieren aber über ihre
+      // items[] weiterhin einzelne Lebensmittel — ohne diesen Zweig würde ein online
+      // gefundenes Lebensmittel, das nur innerhalb einer getrackten Mahlzeit vorkommt,
+      // fälschlich als "nicht mehr benutzt" aus dem Cache geräumt werden.
+      if(e.kind === 'mealGroup') (e.items||[]).forEach(i => { if(i.sourceFoodId) protectedIds.add(i.sourceFoodId); });
+    }));
   });
   ftFavorites.forEach(id => protectedIds.add(id));
   ftSavedMeals.forEach(m => m.items.forEach(i => protectedIds.add(i.sourceFoodId)));
@@ -366,11 +374,12 @@ function ftRound1(n){ return Math.round(n*10)/10; }
 // navigator.onLine selbst false meldet, wird ehrlich "offline" statt des vorsichtigeren
 // "unreachable" gemeldet. ftHandleSearchInput() (15c-food-add.js) zeigt dafür unterschiedliche
 // Hinweise, statt jeden Fetch-Fehler pauschal als "kein Internet" darzustellen.
-async function ftOffSearchAttempt(query){
+async function ftOffSearchAttempt(query, pageSize){
+  const size = pageSize || 15;
   // Primär: Search-a-licious. Fallback: legacy search.pl.
   let requestFailed = true;
   try{
-    const url = `https://search.openfoodfacts.org/search?q=${encodeURIComponent(query)}&langs=de&page_size=15&fields=code,product_name,brands,nutriments`;
+    const url = `https://search.openfoodfacts.org/search?q=${encodeURIComponent(query)}&langs=de&page_size=${size}&fields=code,product_name,brands,nutriments`;
     const res = await fetch(url, {headers:FT_OFF_HEADERS});
     if(res.ok){
       requestFailed = false;
@@ -390,7 +399,7 @@ async function ftOffSearchAttempt(query){
     }
   }catch(e){ /* weiter zu Fallback */ }
   try{
-    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=15&fields=code,product_name,brands,nutriments`;
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=${size}&fields=code,product_name,brands,nutriments`;
     const res = await fetch(url, {headers:FT_OFF_HEADERS});
     requestFailed = false;
     const data = await res.json();
@@ -412,11 +421,75 @@ async function ftOffSearchAttempt(query){
 // Open-Food-Facts sind transient und beim zweiten Versuch (wenige hundert Millisekunden
 // später) bereits wieder da. Kostet nur auf dem Fehlschlag-Pfad zusätzliche Zeit, der
 // erfolgreiche Regelfall bleibt genauso schnell wie zuvor.
+//
+// Bei MEHRWORT-Suchen (z.B. "ESN Protein") geht das direkt an Open-Food-Facts durchgereichte
+// q= NICHT zuverlässig als UND-Verknüpfung über Marken-/Namensfeld hinweg auf — ein Wort allein
+// (z.B. nur "ESN") liefert viele Treffer, weil es z.B. nur gegen das Markenfeld matcht, aber
+// zusammen mit einem zweiten Wort ("ESN Protein") oft schlicht NICHTS mehr, weil OFF die
+// gesamte Zeichenkette als EINEN Suchbegriff gegen ein einzelnes Feld prüft und "protein" dort
+// nicht zwangsläufig im Produktnamen vorkommt (z.B. "ESN Designer Whey" enthält das Wort
+// "Protein" gar nicht, obwohl es eindeutig ein ESN-Proteinprodukt ist). Fix: bei mehr als einem
+// Wort zusätzlich zur vollen Phrase auch mit JEDEM einzelnen (ausreichend langen) Wort einzeln
+// bei OFF anfragen — nicht nur dem ersten, da die Marke genauso gut am Ende stehen kann
+// ("Whey Protein ESN") —, mit größerem page_size (breiterer Suchradius, da diese Ein-Wort-
+// Anfragen oft sehr viele Treffer haben und der gesuchte Artikel sonst außerhalb der Top 15
+// landen könnte). Die vereinigten Treffer werden anschließend LOKAL gefiltert (Name + Marke
+// müssen ALLE eingegebenen Wörter enthalten) und nach Relevanz sortiert (ftOffMatchScore) statt
+// einfach in OFF-Reihenfolge zu bleiben — auf maximal 4 Wortabfragen gedeckelt, damit auch bei
+// langen Eingaben nicht unbegrenzt viele parallele Anfragen losgeschickt werden.
+const FT_OFF_TOKEN_QUERY_CAP = 4;
+const FT_OFF_TOKEN_PAGE_SIZE = 40;
+// Analog zu ftFoodMatchScore() für lokale Treffer, aber gegen Name+Marke eines Online-Treffers
+// statt gegen einen einzelnen Namensstring — bestimmt die Sortierung der Online-Ergebnisliste,
+// damit bei mehreren Suchworten die textlich passendsten Produkte oben stehen statt einfach in
+// der von OFF gelieferten Reihenfolge (die keine Rücksicht auf Mehrwort-Queries nimmt).
+function ftOffMatchScore(food, tokensNorm){
+  const hay = ftNormalizeSearchText(`${food.name} ${food.brand||''}`);
+  const hayCompact = hay.replace(/\s+/g,'');
+  let total = 0;
+  for(const token of tokensNorm){
+    const best = ftTokenScore(hay, hayCompact, token);
+    if(!best) return 0;
+    total += best;
+  }
+  return total;
+}
 async function ftOffSearch(query){
-  const first = await ftOffSearchAttempt(query);
+  const tokens = query.trim().split(/\s+/).filter(Boolean);
+  if(tokens.length <= 1){
+    const first = await ftOffSearchAttempt(query);
+    if(!first.reason) return first;
+    await ftDelay(700);
+    return ftOffSearchAttempt(query);
+  }
+  const first = await ftOffMultiWordSearchAttempt(query, tokens);
   if(!first.reason) return first;
   await ftDelay(700);
-  return ftOffSearchAttempt(query);
+  return ftOffMultiWordSearchAttempt(query, tokens);
+}
+async function ftOffMultiWordSearchAttempt(query, tokens){
+  const tokenQueries = tokens.filter(t => t.length >= 2).slice(0, FT_OFF_TOKEN_QUERY_CAP);
+  const queries = [query, ...tokenQueries].filter((q, i, arr) =>
+    arr.findIndex(x => x.toLowerCase() === q.toLowerCase()) === i // Dubletten raus (z.B. Ein-Wort-Rest)
+  );
+  const attempts = await Promise.all(queries.map(q =>
+    ftOffSearchAttempt(q, q === query ? 15 : FT_OFF_TOKEN_PAGE_SIZE)
+  ));
+  const merged = new Map();
+  attempts.forEach(a => a.results.forEach(f => merged.set(f.id, f)));
+  const tokensNorm = tokens.map(ftNormalizeSearchText);
+  const filtered = [...merged.values()]
+    .map(f => ({f, s: ftOffMatchScore(f, tokensNorm)}))
+    .filter(x => x.s > 0)
+    .sort((a,b) => b.s - a.s)
+    .map(x => x.f);
+  // reason nur melden, wenn wirklich NICHTS zustande kam — sind gefilterte Treffer da, ist die
+  // Suche als Ganzes erfolgreich, auch wenn z.B. der Phrasen-Versuch für sich allein
+  // fehlgeschlagen war und nur ein Ein-Wort-Versuch etwas geliefert hat.
+  if(filtered.length) return {results: filtered, reason: null};
+  const reasons = attempts.map(a => a.reason);
+  const reason = reasons.includes('offline') ? 'offline' : (reasons.includes('unreachable') ? 'unreachable' : null);
+  return {results: [], reason};
 }
 
 /* ============ Tagessummen ============ */
@@ -426,6 +499,19 @@ async function ftOffSearch(query){
 // vorher aussehen (nur die reine Zahl), nicht wie ein Fortschritt zu einem nicht vorhandenen
 // Ziel. Bei Überschreiten des Ziels bleibt der Balken bei 100% stehen (kein Überlaufen über
 // den Rand hinaus) — die Zahl daneben zeigt den tatsächlichen Wert ja ohnehin weiterhin an.
+// Kurzes Label für eine Portionsangabe bei gruppierten Mahlzeiten-Einträgen (kind:'mealGroup',
+// siehe ftAddMealGroupEntry() in 15c-food-add.js) — gängige Bruchteile als Bruch statt Dezimal
+// ("1/2" statt "0,5"), alles andere als Faktor ("1,5×"). Von der Portionsauswahl (ftOpenPortion-
+// Modal(), 15c) UND vom Tages-Snapshot-PDF (ftExportDaySnapshotPdf(), hier in 15b) genutzt —
+// deshalb hier in 15a statt in einer der beiden Dateien, damit beide es ohne Ladereihenfolge-
+// Probleme aufrufen können.
+function ftPortionLabel(p){
+  if(Math.abs(p-0.25)<0.001) return '1/4';
+  if(Math.abs(p-0.5)<0.001) return '1/2';
+  if(Math.abs(p-0.75)<0.001) return '3/4';
+  if(Math.abs(p-1)<0.001) return '1×';
+  return ftFormatNum(p)+'×';
+}
 function ftGoalBarHTML(value, goal, color, small){
   if (!goal) return '';
   const pct = Math.min(100, Math.round(value / goal * 100));

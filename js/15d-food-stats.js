@@ -56,6 +56,11 @@ const FT_PERIOD_LABELS = { week: 'Woche', month: 'Monat', quarter: 'Quartal', ye
 let ftStatsPeriod = 'week';
 let ftMacroDrilldown = null;
 let ftMacroOutsideClickHandler = null;
+// Ob die "+N weitere"-Sammelzeile in der Makro-Aufschlüsselung (ftWireMacroDonut()) gerade
+// zur vollen Liste aufgeklappt ist — bei jedem neu angetippten Makro-Segment (toggle()) wieder
+// zurückgesetzt, damit man nicht versehentlich mit einer bereits aufgeklappten Liste in ein
+// anderes Makro wechselt.
+let ftBreakdownExpanded = false;
 
 // ftDayTotalsForISO()/ftAllDayTotals() sind nach 15a-food-core.js gewandert (dort auch von
 // 05-calendar.js für den Trainingskalender genutzt) — hier nur noch die reine Zeitraum-
@@ -122,16 +127,24 @@ function ftMacroKcalSegments(periodDays){
   ];
 }
 // Welche Lebensmittel im Zeitraum am meisten zu einem Makro beigetragen haben (in Gramm) —
-// Grundlage für die Aufschlüsselung, wenn ein Donut-Segment angetippt wird.
+// Grundlage für die Aufschlüsselung, wenn ein Donut-Segment angetippt wird. Gruppierte
+// Mahlzeiten-Einträge (kind:'mealGroup', siehe ftAddMealGroupEntry() in 15c-food-add.js)
+// tragen NICHT als ein Klumpen unter ihrem Mahlzeit-Namen bei, sondern werden in ihre
+// einzelnen Zutaten aufgelöst (mit der zum Trackzeitpunkt gewählten Portion multipliziert) —
+// sonst würde z.B. "Porridge Standard" als ein einziger riesiger Posten erscheinen, obwohl
+// die Aufschlüsselung ja gerade zeigen soll, WELCHE Lebensmittel wie viel beitragen.
 function ftFoodMacroBreakdown(macroKey, periodDays){
   const cutoffIso = ftAddDays(ftTodayISO(), -(periodDays - 1));
   const map = {};
+  const add = (name, val) => { if(val) map[name] = (map[name] || 0) + val; };
   Object.keys(ftDays).forEach(iso => {
     if (iso < cutoffIso) return;
     FT_MEAL_KEYS.forEach(k => (ftDays[iso][k]||[]).forEach(e => {
-      const val = e[macroKey] || 0;
-      if (!val) return;
-      map[e.name] = (map[e.name] || 0) + val;
+      if(e.kind === 'mealGroup'){
+        (e.items||[]).forEach(i => add(i.name, (i[macroKey] || 0) * (e.portion ?? 1)));
+        return;
+      }
+      add(e.name, e[macroKey] || 0);
     }));
   });
   return Object.entries(map).map(([name,val]) => ({ name, val }))
@@ -364,6 +377,7 @@ function ftWireMacroDonut(segments, periodDays){
 
   function toggle(macroKey){
     ftMacroDrilldown = (ftMacroDrilldown === macroKey) ? null : macroKey;
+    ftBreakdownExpanded = false;
     apply();
   }
 
@@ -415,8 +429,11 @@ function ftWireMacroDonut(segments, periodDays){
     // aus der jeweils aktuellen Liste ermittelt statt fest vorausgewählt, da sich die
     // häufigsten Quellen je nach Zeitraum (Woche/Monat/Jahr) stark unterscheiden können.
     const significant = fullBreakdown.filter(e => e.val >= 1.5 && (subTotal ? Math.round(e.val / subTotal * 100) : 0) > 0);
-    const shown = significant.slice(0, 7);
-    const restVal = significant.slice(7).reduce((a,e) => a+e.val, 0);
+    // Antippen der "+N weitere"-Zeile klappt auf die volle significant-Liste auf (kein
+    // Lebensmittel bleibt dabei verborgen) — ftBreakdownExpanded macht daraus einfach eine
+    // Anzeige ohne Deckelung/Rest-Sammelposten.
+    const shown = ftBreakdownExpanded ? significant : significant.slice(0, 7);
+    const restVal = ftBreakdownExpanded ? 0 : significant.slice(7).reduce((a,e) => a+e.val, 0);
     const restCount = significant.length - shown.length;
 
     if (selectedRange && subTotal){
@@ -465,15 +482,28 @@ function ftWireMacroDonut(segments, periodDays){
         </div>
       `;
     }).join('');
+    // "+N weitere" ist jetzt ein <button> statt eines <div> — optisch identisch zu den
+    // normalen Zeilen (.muscle-balance-legend-row-more in styles.css), aber antippbar: klappt
+    // die Liste auf ftBreakdownExpanded=true um und rendert neu. Nach dem Aufklappen ersetzt
+    // eine "Weniger anzeigen"-Zeile diese Sammelzeile, um wieder einzuklappen.
     const restRowHTML = restVal > 0 ? `
-      <div class="muscle-balance-legend-row">
+      <button class="muscle-balance-legend-row muscle-balance-legend-row-more" id="ftBreakdownMoreBtn" type="button">
         <span class="muscle-balance-swatch-static" style="color:var(--muted);">${subTotal ? Math.round(restVal / subTotal * 100) : 0}%</span>
         <span class="muscle-balance-legend-label">+${restCount} weitere</span>
         <span class="muscle-balance-legend-value">${Math.round(restVal)} g</span>
-      </div>
+      </button>
+    ` : '';
+    const lessRowHTML = (ftBreakdownExpanded && significant.length > 7) ? `
+      <button class="muscle-balance-legend-row muscle-balance-legend-row-more" id="ftBreakdownLessBtn" type="button">
+        <span class="muscle-balance-legend-label" style="margin-left:0;">Weniger anzeigen</span>
+      </button>
     ` : '';
     document.getElementById('ftBreakdownTitle').textContent = `${seg.label} – nach Lebensmittel`;
-    document.getElementById('ftBreakdownList').innerHTML = (rows + restRowHTML) || '<div class="history-empty">Keine Daten.</div>';
+    document.getElementById('ftBreakdownList').innerHTML = (rows + restRowHTML + lessRowHTML) || '<div class="history-empty">Keine Daten.</div>';
+    const moreBtn = document.getElementById('ftBreakdownMoreBtn');
+    if (moreBtn) moreBtn.onclick = () => { ftBreakdownExpanded = true; apply(); };
+    const lessBtn = document.getElementById('ftBreakdownLessBtn');
+    if (lessBtn) lessBtn.onclick = () => { ftBreakdownExpanded = false; apply(); };
     if (panel){
       panel.style.display = 'block';
       requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add('open')));
