@@ -47,12 +47,13 @@
    - weekBucket()/monthShortLabel() (08a) für die Quartal-/Jahres-Bucketing
 --------------------------------------------------- */
 function ftPeriodToDays(period){
+  if (period === 'day') return 1;
   if (period === 'week') return 7;
   if (period === 'month') return 30;
   if (period === 'quarter') return 90;
   return 365; // 'year'
 }
-const FT_PERIOD_LABELS = { week: 'Woche', month: 'Monat', quarter: 'Quartal', year: 'Jahr' };
+const FT_PERIOD_LABELS = { day: 'Tag', week: 'Woche', month: 'Monat', quarter: 'Quartal', year: 'Jahr' };
 let ftStatsPeriod = 'week';
 let ftMacroDrilldown = null;
 let ftMacroOutsideClickHandler = null;
@@ -179,7 +180,7 @@ function ftGoalComparisonHTML(periodDays){
     </div>
   `).join('');
   return `
-    <div class="section-label" style="margin-top:22px;">Ziel-Erreichung · Ø pro Tag</div>
+    <div class="section-label" style="margin-top:22px;">${periodDays <= 1 ? 'Ziel-Erreichung' : 'Ziel-Erreichung · Ø pro Tag'}</div>
     <div class="month-report-card">${rowsHTML}</div>
   `;
 }
@@ -190,6 +191,7 @@ function ftGoalComparisonHTML(periodDays){
 // protokolliert wurde) statt eine Mindestanzahl zu verlangen — bei kurzen Zeiträumen (Woche)
 // wäre sonst fast nie genug Datenbasis vorhanden.
 function ftWeekdayAverageHTML(periodDays){
+  if (periodDays <= 1) return ''; // "Ø nach Wochentag" braucht mehrere Tage, um überhaupt einen Durchschnitt zu bilden
   const days = ftDayTotalsInPeriod(periodDays);
   if (!days.length) return '';
   const labels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
@@ -255,9 +257,13 @@ function ftStreakHTML(){
 function renderFoodStats(){
   ftApplyTheme();
   const periodDays = ftPeriodToDays(ftStatsPeriod);
-  const points = ftBucketedKcalPoints(ftStatsPeriod);
+  const isDay = ftStatsPeriod === 'day';
+  // Für "Tag" gibt es nur einen einzigen Wert, kein Balkendiagramm über mehrere Punkte —
+  // ftBucketedKcalPoints() erst gar nicht aufrufen, sondern direkt den Tageswert nehmen.
+  const points = isDay ? [] : ftBucketedKcalPoints(ftStatsPeriod);
   const loggedPoints = points.filter(p => p.value > 0);
-  const avgKcal = loggedPoints.length ? Math.round(loggedPoints.reduce((a,p) => a+p.value, 0) / loggedPoints.length) : 0;
+  const todayKcal = isDay ? Math.round(ftDayTotalsInPeriod(1)[0]?.kcal || 0) : 0;
+  const avgKcal = isDay ? todayKcal : (loggedPoints.length ? Math.round(loggedPoints.reduce((a,p) => a+p.value, 0) / loggedPoints.length) : 0);
   const accent = cssVar('--accent');
 
   const segments = ftMacroKcalSegments(periodDays);
@@ -280,9 +286,9 @@ function renderFoodStats(){
   // stattdessen eigene, passende Hinweise statt der (Trainings-)Bausteine, wenn im gewählten
   // Zeitraum noch nichts eingetragen wurde.
   const hasDataInPeriod = points.some(p => p.value > 0);
-  const chartHTML = hasDataInPeriod
+  const chartHTML = isDay ? '' : (hasDataInPeriod
     ? buildBarChart(points, accent, true, 160)
-    : '<div class="chart-empty">Noch keine Einträge in diesem Zeitraum.</div>';
+    : '<div class="chart-empty">Noch keine Einträge in diesem Zeitraum.</div>');
   const donutSectionHTML = totalMacroKcal ? `
     <div class="section-label" style="margin-top:22px;">Makro-Verteilung</div>
     <div class="muscle-balance-charts-row">
@@ -345,7 +351,7 @@ function renderFoodStats(){
       `).join('')}
     </div>
     <div class="progress-summary">
-      <span>Ø ${avgKcal} kcal/Tag</span>
+      <span>${isDay ? `${avgKcal} kcal heute` : `Ø ${avgKcal} kcal/Tag`}</span>
     </div>
     ${chartHTML}
     ${donutSectionHTML}
