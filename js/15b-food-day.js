@@ -135,6 +135,12 @@ function ftWireDateSwipe(){
 
 function ftMealHTML(meal){
   const entries = ftGetDay(ftCurrentDate)[meal];
+  // "Als Mahlzeit speichern" nur, solange die Mahlzeit ausschließlich aus einzelnen
+  // Lebensmitteln besteht. Steckt bereits ein gruppierter Eintrag (kind:'mealGroup', also eine
+  // zuvor gespeicherte Mahlzeit) darin, wäre das Ergebnis eine Mahlzeit aus einer Mahlzeit —
+  // der Speichern-Dialog (ftOpenSaveMealSheet(), 15c-food-add.js) arbeitet auf einzelnen
+  // Zutaten, und eine erneute Sicherung eines schon gespeicherten Blocks bringt nichts.
+  const hasMealGroup = entries.some(e => e.kind === 'mealGroup');
   return `
     <div class="meal-section">
       <div class="meal-head">
@@ -144,7 +150,7 @@ function ftMealHTML(meal){
       <div class="food-list">
         ${entries.length ? entries.slice().reverse().map(e=> e.kind==='mealGroup' ? ftMealGroupRowHTML(meal,e) : ftFoodRowHTML(meal, e)).join('') : `<div class="empty-meal">Noch nichts eingetragen</div>`}
       </div>
-      ${entries.length ? `<button class="save-meal-btn" id="saveMeal_${meal}">Als Mahlzeit speichern</button>` : ''}
+      ${entries.length && !hasMealGroup ? `<button class="save-meal-btn" id="saveMeal_${meal}">Als Mahlzeit speichern</button>` : ''}
     </div>
   `;
 }
@@ -494,10 +500,6 @@ function ftSettingsBodyHTML(){
   return `
     ${ftSettingsAccordionSection('ziele', 'Tagesziele', `
       <div style="padding:14px 16px;">
-        <div class="no-results" style="text-align:left; padding:0 0 14px">
-          Leer lassen, wenn kein Ziel gewünscht ist — die App zeigt dann wie gewohnt nur die
-          reinen Tageswerte ohne Bezug zu einem Ziel.
-        </div>
         <div class="field-label" style="margin-top:0;">kcal pro Tag</div>
         <input class="text-input" id="ftGoalKcal" type="number" inputmode="decimal" placeholder="z. B. 2200" value="${ftGoals.kcal ?? ''}">
         <div class="field-label">Protein (g)</div>
@@ -512,10 +514,6 @@ function ftSettingsBodyHTML(){
 
     ${ftSettingsAccordionSection('design', 'Design', `
       <div style="padding:14px 16px;">
-        <div class="no-results" style="text-align:left; padding:0 0 14px">
-          Eigenes Design nur für den Essenstracker, unabhängig vom allgemeinen Trainingsplan —
-          ohne eigene Auswahl gilt hier automatisch das allgemeine App-Design.
-        </div>
         <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:10px;">Farbmodus</label>
         <div class="wizard-choice-list" style="margin-bottom:18px;">
           <button class="wizard-choice ${!ftThemeOverride.themeMode ? 'selected' : ''}" data-ft-theme-mode="">Automatisch</button>
@@ -536,9 +534,6 @@ function ftSettingsBodyHTML(){
             <button class="accent-swatch ${ftThemeOverride.accentColorId === c.id ? 'selected' : ''}" data-ft-accent-id="${c.id}" data-ft-accent-hex="${c.hex}" data-favorite="${c.isFavorite ? '1' : ''}" style="background:${c.hex};" aria-label="${c.name}"></button>
           `).join('')}
         </div>
-        <div class="history-empty" id="ftAccentFavHint" style="display:${ftAccentPickerOpen && favoriteAccentColors().length ? 'block' : 'none'}; margin-top:8px; padding:8px 4px; text-align:left; background:none; border:none;">
-          <span style="font-size:11px; color:var(--muted);">Gedrückt halten, um einen Favoriten wieder zu entfernen.</span>
-        </div>
         <button class="accent-custom-btn" id="ftAccentCustomBtn" type="button" style="display:${ftAccentPickerOpen ? 'flex' : 'none'};">
           <img class="accent-custom-btn-icon" src="${ICON_COLORWHEEL}" alt="">
           Eigene Farbe wählen
@@ -558,9 +553,6 @@ function ftSettingsBodyHTML(){
             <button class="accent-swatch ${ftThemeOverride.bgColorId === c.id ? 'selected' : ''}" data-ft-bg-id="${c.id}" data-ft-bg-hex="${c.hex}" data-favorite="${c.isFavorite ? '1' : ''}" style="background:${c.hex}; ${c.isFavorite ? '' : 'border:1px solid var(--border);'}" aria-label="${c.name}"></button>
           `).join('')}
         </div>
-        <div class="history-empty" id="ftBgFavHint" style="display:${ftBgPickerOpen && favoriteAccentColors().length ? 'block' : 'none'}; margin-top:8px; padding:8px 4px; text-align:left; background:none; border:none;">
-          <span style="font-size:11px; color:var(--muted);">Gedrückt halten, um einen Favoriten wieder zu entfernen.</span>
-        </div>
         <button class="accent-custom-btn" id="ftBgCustomBtn" type="button" style="display:${ftBgPickerOpen ? 'flex' : 'none'};">
           <img class="accent-custom-btn-icon" src="${ICON_COLORWHEEL}" alt="">
           Eigene Farbe wählen
@@ -577,10 +569,6 @@ function ftSettingsBodyHTML(){
 
     ${ftSettingsAccordionSection('gespeicherteMahlzeiten', 'Gespeicherte Mahlzeiten', `
       <div style="padding:14px 16px;">
-        <div class="no-results" style="text-align:left; padding:0 0 10px">
-          Zutaten hinzufügen, ändern oder entfernen — Änderungen wirken sich nur auf künftig
-          getrackte Portionen aus, nicht auf bereits eingetragene Tage.
-        </div>
         <div id="ftManageSavedMealsList">${ftSavedMealsManageListHTML()}</div>
       </div>
     `, ftSavedMeals.length ? `${ftSavedMeals.length}` : '')}
@@ -598,10 +586,7 @@ function ftSettingsBodyHTML(){
 
     ${ftSettingsAccordionSection('snapshot', 'Tages-Snapshot', `
       <div style="padding:14px 16px;">
-        <div class="no-results" style="text-align:left; padding:0 0 14px">
-          PDF mit allen Mahlzeiten und Trainings von ${ftDateLabel(ftCurrentDate)} (${ftFmtDateGerman(ftCurrentDate)}) — zum Ablegen/Hochladen, z. B. in Google Health.
-        </div>
-        <button class="ft-btn-ghost" id="ftSnapshotBtn">Tages-Snapshot als PDF</button>
+        <button class="ft-btn-ghost" id="ftSnapshotBtn">Tages-Snapshot als PDF · ${ftFmtDateGerman(ftCurrentDate)}</button>
       </div>
     `)}
   `;
