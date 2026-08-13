@@ -253,8 +253,14 @@ function ftWireClearOnFocus(input, onRestore){
 }
 
 let ftQtyContext = null; // {food}
-function ftOpenQuantityModal(food, editCtx){
+// opts (optional) erlaubt die Wiederverwendung dieses Dialogs außerhalb des normalen
+// Tages-Eintrags-Flows — z.B. beim Bearbeiten der ZUTATEN einer gespeicherten Mahlzeit-
+// Vorlage (siehe ftOpenEditSavedMealSheet(), 15b-food-day.js): opts.onSave(amountG, mode,
+// pieceCount) ersetzt dann das Standard-ftAddEntryToMeal()/ftUpdateEntryInMeal(), opts.onDelete
+// ersetzt das Standard-ftRemoveEntry(). Ohne opts verhält sich alles exakt wie zuvor.
+function ftOpenQuantityModal(food, editCtx, opts){
   if(!food) return;
+  const { onSave, onDelete } = opts || {};
   ftQtyContext = {food};
   const hasPiece = !!food.piece;
   const isEdit = !!editCtx;
@@ -356,7 +362,9 @@ function ftOpenQuantityModal(food, editCtx){
     const amountG = mode==='g' ? (parseFloat(gInput.value)||0) : (parseFloat(pInput.value)||0) * food.piece.g;
     if(amountG<=0){ ftToast('Bitte eine Menge angeben'); return; }
     const pieceCount = mode==='piece' ? (parseFloat(pInput.value)||0) : null;
-    if(isEdit){
+    if(onSave){
+      onSave(amountG, mode, pieceCount);
+    } else if(isEdit){
       ftUpdateEntryInMeal(editCtx.meal, editCtx.entryId, food, amountG, mode, pieceCount);
     } else {
       ftAddEntryToMeal(food, amountG, mode, pieceCount);
@@ -366,7 +374,7 @@ function ftOpenQuantityModal(food, editCtx){
   if(isEdit){
     document.getElementById('ftQtyDeleteBtn').onclick = ()=>{
       ftCloseOverlay();
-      ftRemoveEntry(editCtx.meal, editCtx.entryId);
+      if(onDelete) onDelete(); else ftRemoveEntry(editCtx.meal, editCtx.entryId);
     };
   }
 }
@@ -692,7 +700,7 @@ function ftSumItemMacros(items){
 // items[]). Voreingestellte Bruchteile (1/4, 1/2, 3/4, 1×, 1,5×, 2×) plus ein frei editierbares
 // Feld darunter für jeden anderen Wert — Vorschau (kcal/Makros) und Zutatenliste aktualisieren
 // sich live mit der gewählten Portion.
-const FT_PORTION_PRESETS = [0.25, 0.5, 0.75, 1, 1.5, 2];
+const FT_PORTION_PRESETS = [0.25, 0.5, 0.75, 1];
 function ftOpenPortionModal(opts){
   const { title, baseItems, initialPortion, confirmLabel, onConfirm, onDelete } = opts;
   const sums = ftSumItemMacros(baseItems);

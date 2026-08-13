@@ -436,22 +436,59 @@ function goFoodCalendar(push){
    Hinweis am Dateikopf). Die frühere Design-Sektion (Farbmodus/Akzent-/
    Hintergrundfarbe) ist entfallen, das läuft jetzt über die normalen
    Trainingsplan-Einstellungen. */
-function ftOpenSettingsSheet(){
-  const dayCount = Object.keys(ftDays).length;
-  ftOpenOverlay(`
-    <div class="sheet" id="ftSettingsSheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-head">
-        <div class="sheet-title">Einstellungen</div>
-        <button class="sheet-close" id="ftSettingsClose">${ftIconX()}</button>
+// Offene Akkordeon-Abschnitte im Essenstracker-Einstellungs-Sheet (eigenständig von der
+// gleichnamigen settingsSectionOpen der allgemeinen Trainingsplan-Einstellungen, siehe
+// 07-home.js/10-plan-settings.js — beide Screens sind komplett unabhängig voneinander).
+// "ziele" startet aufgeklappt, damit sich am bisherigen Verhalten (Tagesziele sofort
+// sichtbar) nichts ändert.
+let ftSettingsSectionOpen = new Set(['ziele']);
+// Baut Kopf+Körper eines aufklappbaren Einstellungs-Abschnitts — exakt dasselbe visuelle
+// Muster wie settingsAccordionSection() in den allgemeinen Trainingsplan-Einstellungen
+// (10-plan-settings.js): .muscle-group/.muscle-group-header/.muscle-group-body, ▾/▸-Pfeil,
+// optionales Badge rechts neben dem Titel. Eigene Kopie statt Aufruf der dortigen Funktion,
+// da beide Screens unabhängige Zustände (ftSettingsSectionOpen vs. settingsSectionOpen) und
+// unterschiedliche data-Attribute zum Verkabeln brauchen.
+function ftSettingsAccordionSection(key, title, bodyHTML, badge){
+  const isOpen = ftSettingsSectionOpen.has(key);
+  return `
+    <div class="muscle-group" style="margin-top:10px;">
+      <button class="muscle-group-header" data-ft-settingsgroup="${key}" type="button">
+        <span class="mg-name">${title}</span>
+        <span class="mg-meta">${badge ? `<span>${badge}</span>` : ''}<span class="mg-arrow">${isOpen ? '▾' : '▸'}</span></span>
+      </button>
+      <div class="muscle-group-body" style="display:${isOpen ? 'block' : 'none'}">
+        ${bodyHTML}
       </div>
-      <div class="sheet-body">
-        <div class="ft-section-label" style="margin-top:0;">Tagesziele</div>
-        <div class="no-results" style="text-align:left; padding:0 4px 14px">
+    </div>
+  `;
+}
+function ftSavedMealsManageListHTML(){
+  if(!ftSavedMeals.length) return `<div class="no-results" style="padding:14px 4px;">Keine gespeicherten Mahlzeiten.</div>`;
+  return ftSavedMeals.map(m=>`
+    <div class="result-row">
+      <div class="result-main"><div class="result-name">${ftEscapeHTML(m.name)}</div><div class="result-sub">${m.items.length} Zutat${m.items.length===1?'':'en'}</div></div>
+      <button class="result-star" data-edit-meal="${m.id}" title="Bearbeiten">${ftIconPencil()}</button>
+      <button class="result-star" data-del-meal="${m.id}" title="Löschen">${ftIconTrash()}</button>
+    </div>
+  `).join('');
+}
+// Baut nur den INHALT des Settings-Sheets (die vier Akkordeon-Abschnitte) — beim Auf-/
+// Zuklappen eines Abschnitts wird NUR dieser Container neu gerendert (siehe ftWireSettingsBody()
+// unten), nicht das gesamte Overlay über ftOpenOverlay() neu aufgebaut. Ein kompletter
+// Overlay-Neuaufbau würde die Sheet-Öffnen-Animation (siehe ftOpenOverlay()) bei jedem Klick
+// auf einen Akkordeon-Kopf erneut abspielen — sichtbares Aufblitzen/Nachfedern des ganzen
+// Sheets nur wegen eines aufgeklappten Abschnitts.
+function ftSettingsBodyHTML(){
+  const dayCount = Object.keys(ftDays).length;
+  const goalsSetCount = ['kcal','p','c','f'].filter(k => ftGoals[k]).length;
+  return `
+    ${ftSettingsAccordionSection('ziele', 'Tagesziele', `
+      <div style="padding:14px 16px;">
+        <div class="no-results" style="text-align:left; padding:0 0 14px">
           Leer lassen, wenn kein Ziel gewünscht ist — die App zeigt dann wie gewohnt nur die
           reinen Tageswerte ohne Bezug zu einem Ziel.
         </div>
-        <div class="field-label">kcal pro Tag</div>
+        <div class="field-label" style="margin-top:0;">kcal pro Tag</div>
         <input class="text-input" id="ftGoalKcal" type="number" inputmode="decimal" placeholder="z. B. 2200" value="${ftGoals.kcal ?? ''}">
         <div class="field-label">Protein (g)</div>
         <input class="text-input" id="ftGoalP" type="number" inputmode="decimal" placeholder="z. B. 150" value="${ftGoals.p ?? ''}">
@@ -460,26 +497,69 @@ function ftOpenSettingsSheet(){
         <div class="field-label">Fett (g)</div>
         <input class="text-input" id="ftGoalF" type="number" inputmode="decimal" placeholder="optional" value="${ftGoals.f ?? ''}">
         <button class="ft-btn-primary" id="ftGoalSaveBtn" style="margin-top:6px;">Ziele speichern</button>
+      </div>
+    `, goalsSetCount ? `${goalsSetCount} gesetzt` : '')}
 
-        <div class="ft-section-label">Daten sichern</div>
-        <div class="no-results" style="text-align:left; padding:0 4px 14px">
+    ${ftSettingsAccordionSection('gespeicherteMahlzeiten', 'Gespeicherte Mahlzeiten', `
+      <div style="padding:14px 16px;">
+        <div class="no-results" style="text-align:left; padding:0 0 10px">
+          Zutaten hinzufügen, ändern oder entfernen — Änderungen wirken sich nur auf künftig
+          getrackte Portionen aus, nicht auf bereits eingetragene Tage.
+        </div>
+        <div id="ftManageSavedMealsList">${ftSavedMealsManageListHTML()}</div>
+      </div>
+    `, ftSavedMeals.length ? `${ftSavedMeals.length}` : '')}
+
+    ${ftSettingsAccordionSection('datenSichern', 'Daten sichern', `
+      <div style="padding:14px 16px;">
+        <div class="no-results" style="text-align:left; padding:0 0 14px">
           ${dayCount} Tage · ${ftCustomFoods.length} eigene Lebensmittel · ${ftSavedMeals.length} gespeicherte Mahlzeiten · ${ftFavorites.length} Favoriten
         </div>
         <button class="ft-btn-primary" id="ftExportBtn">Daten exportieren (JSON)</button>
         <button class="ft-btn-ghost" id="ftImportBtn">Daten importieren …</button>
         <input type="file" id="ftImportFileInput" accept="application/json" class="hidden">
+      </div>
+    `)}
 
-        <div class="ft-section-label">Tages-Snapshot</div>
-        <div class="no-results" style="text-align:left; padding:0 4px 14px">
+    ${ftSettingsAccordionSection('snapshot', 'Tages-Snapshot', `
+      <div style="padding:14px 16px;">
+        <div class="no-results" style="text-align:left; padding:0 0 14px">
           PDF mit allen Mahlzeiten und Trainings von ${ftDateLabel(ftCurrentDate)} (${ftFmtDateGerman(ftCurrentDate)}) — zum Ablegen/Hochladen, z. B. in Google Health.
         </div>
         <button class="ft-btn-ghost" id="ftSnapshotBtn">Tages-Snapshot als PDF</button>
       </div>
+    `)}
+  `;
+}
+function ftOpenSettingsSheet(){
+  ftOpenOverlay(`
+    <div class="sheet" id="ftSettingsSheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <div class="sheet-title">Einstellungen</div>
+        <button class="sheet-close" id="ftSettingsClose">${ftIconX()}</button>
+      </div>
+      <div class="sheet-body" id="ftSettingsBodyWrap">${ftSettingsBodyHTML()}</div>
     </div>
   `);
   document.getElementById('ftSettingsClose').onclick = ftCloseOverlay;
-  document.getElementById('ftSnapshotBtn').onclick = ftExportDaySnapshotPdf;
-  document.getElementById('ftGoalSaveBtn').onclick = async () => {
+  ftWireSettingsBody();
+}
+function ftWireSettingsBody(){
+  const wrap = document.getElementById('ftSettingsBodyWrap');
+  if(!wrap) return;
+  wrap.querySelectorAll('[data-ft-settingsgroup]').forEach(btn => {
+    btn.onclick = () => {
+      const key = btn.dataset.ftSettingsgroup;
+      if (ftSettingsSectionOpen.has(key)) ftSettingsSectionOpen.delete(key); else ftSettingsSectionOpen.add(key);
+      wrap.innerHTML = ftSettingsBodyHTML();
+      ftWireSettingsBody();
+    };
+  });
+  const snapshotBtn = document.getElementById('ftSnapshotBtn');
+  if(snapshotBtn) snapshotBtn.onclick = ftExportDaySnapshotPdf;
+  const goalSaveBtn = document.getElementById('ftGoalSaveBtn');
+  if(goalSaveBtn) goalSaveBtn.onclick = async () => {
     const readGoal = id => {
       const raw = document.getElementById(id).value.trim();
       if (!raw) return null;
@@ -492,13 +572,228 @@ function ftOpenSettingsSheet(){
     renderFoodTracker();
     ftToast('Ziele gespeichert');
   };
-  document.getElementById('ftExportBtn').onclick = ftExportData;
+  const exportBtn = document.getElementById('ftExportBtn');
+  if(exportBtn) exportBtn.onclick = ftExportData;
   const fileInput = document.getElementById('ftImportFileInput');
-  document.getElementById('ftImportBtn').onclick = ()=>fileInput.click();
-  fileInput.onchange = ()=>{
+  const importBtn = document.getElementById('ftImportBtn');
+  if(importBtn) importBtn.onclick = ()=>fileInput.click();
+  if(fileInput) fileInput.onchange = ()=>{
     const file = fileInput.files[0];
     if(file) ftImportData(file);
   };
+  wrap.querySelectorAll('[data-edit-meal]').forEach(btn => {
+    btn.onclick = (ev) => { ev.stopPropagation(); ftOpenEditSavedMealSheet(btn.dataset.editMeal); };
+  });
+  wrap.querySelectorAll('[data-del-meal]').forEach(btn => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      const meal = ftSavedMeals.find(m=>m.id===btn.dataset.delMeal);
+      if(!meal) return;
+      if(!confirm(`Mahlzeit „${meal.name}" wirklich löschen?`)) return;
+      ftSavedMeals = ftSavedMeals.filter(m=>m.id!==btn.dataset.delMeal);
+      ftSave('savedMeals', ftSavedMeals);
+      const list = document.getElementById('ftManageSavedMealsList');
+      if(list) list.innerHTML = ftSavedMealsManageListHTML();
+      ftWireSettingsBody();
+      ftToast('Gelöscht');
+    };
+  });
+}
+
+/* ============ Gespeicherte Mahlzeit bearbeiten ============
+   Eigenständige Detailansicht (Modal) zum Bearbeiten einer Mahlzeit-VORLAGE (nicht eines
+   bereits getrackten Tageseintrags — dafür siehe ftOpenMealGroupDetail() oben, das nur die
+   Portion eines bereits eingetragenen Gruppen-Eintrags ändert). Name, Zutatenliste (Menge pro
+   Zutat änderbar, Zutat entfernbar) und "+ Zutat hinzufügen" — jede Änderung wird sofort in
+   ftSavedMeals gespeichert (kein Entwurf-/Abbrechen-Zustand, gleiche Sofort-Speichern-Philosophie
+   wie beim Rest der App, z.B. Favoriten-Stern oder Zieleingabe). */
+function ftOpenEditSavedMealSheet(mealId){
+  const sm = ftSavedMeals.find(m=>m.id===mealId);
+  if(!sm) return;
+  ftOpenOverlay(`
+    <div class="modal" id="ftEditSavedMealModal">
+      <div class="modal-head"><div class="modal-title">Mahlzeit bearbeiten</div><button class="sheet-close" id="ftEsmClose">${ftIconX()}</button></div>
+      <div class="modal-body">
+        <div class="field-label" style="margin-top:0;">Name</div>
+        <input class="text-input" id="ftEsmName" value="${ftEscapeHTML(sm.name)}">
+        <div class="field-label">Zutaten</div>
+        <div id="ftEsmItemsList"></div>
+        <button class="ft-btn-ghost" id="ftEsmAddIngredientBtn" style="margin-top:10px;">+ Zutat hinzufügen</button>
+      </div>
+    </div>
+  `, {type:'modal'});
+  // "X" führt zurück zum Einstellungen-Sheet (dort geöffnet, "gespeicherte Mahlzeiten"
+  // bleibt aufgeklappt, siehe ftSettingsSectionOpen) statt den kompletten Overlay-Stack zu
+  // schließen — dasselbe einlagige-Overlay-Prinzip wie beim Picker-Close oben.
+  document.getElementById('ftEsmClose').onclick = ftOpenSettingsSheet;
+  const nameInput = document.getElementById('ftEsmName');
+  nameInput.addEventListener('change', () => {
+    const name = nameInput.value.trim();
+    if(!name) { nameInput.value = sm.name; return; }
+    sm.name = name;
+    ftSave('savedMeals', ftSavedMeals);
+  });
+  ftRenderEsmItemsList(mealId);
+  document.getElementById('ftEsmAddIngredientBtn').onclick = () => ftOpenAddIngredientToSavedMeal(mealId);
+}
+function ftEsmItemQtyText(item, food){
+  if(item.unitMode === 'piece'){
+    const label = food && food.piece ? food.piece.label.replace(/^1\s*/,'') : 'Stück';
+    return `${ftFormatNum(item.pieceCount)} × ${label}`;
+  }
+  return `${item.amountG} g`;
+}
+function ftRenderEsmItemsList(mealId){
+  const sm = ftSavedMeals.find(m=>m.id===mealId);
+  const list = document.getElementById('ftEsmItemsList');
+  if(!sm || !list) return;
+  if(!sm.items.length){
+    list.innerHTML = `<div class="no-results" style="padding:10px 4px;">Noch keine Zutaten.</div>`;
+  } else {
+    list.innerHTML = sm.items.map((item, idx) => {
+      const food = ftGetFoodById(item.sourceFoodId);
+      const name = food ? (food.brand ? `${food.name} (${food.brand})` : food.name) : 'Lebensmittel nicht mehr verfügbar';
+      const qty = food ? ftEsmItemQtyText(item, food) : '—';
+      return `
+        <div class="food-row" data-esm-idx="${idx}">
+          <div class="food-row-main">
+            <div class="food-row-name">${ftEscapeHTML(name)}</div>
+            <div class="food-row-sub">${qty}</div>
+          </div>
+          <div class="food-row-right">
+            <button class="food-row-del" data-esm-del="${idx}">${ftIconX()}</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+  list.querySelectorAll('[data-esm-del]').forEach(btn => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      const idx = parseInt(btn.dataset.esmDel, 10);
+      sm.items.splice(idx, 1);
+      ftSave('savedMeals', ftSavedMeals);
+      ftRenderEsmItemsList(mealId);
+    };
+  });
+  list.querySelectorAll('[data-esm-idx]').forEach(row => {
+    row.onclick = (ev) => {
+      if(ev.target.closest('[data-esm-del]')) return;
+      const idx = parseInt(row.dataset.esmIdx, 10);
+      const item = sm.items[idx];
+      const food = ftGetFoodById(item.sourceFoodId);
+      if(!food){ ftToast('Lebensmittel nicht mehr verfügbar — nur Entfernen möglich'); return; }
+      ftOpenQuantityModal(food, { amountG: item.amountG, unitMode: item.unitMode, pieceCount: item.pieceCount }, {
+        onSave: (amountG, mode, pieceCount) => {
+          item.amountG = Math.round(amountG);
+          item.unitMode = mode;
+          item.pieceCount = pieceCount;
+          ftSave('savedMeals', ftSavedMeals);
+        },
+        onDelete: () => {
+          sm.items.splice(idx, 1);
+          ftSave('savedMeals', ftSavedMeals);
+        },
+      });
+      // ftOpenOverlay() ist einlagig (ersetzt den kompletten Overlay-Inhalt statt zu stapeln,
+      // siehe ftOpenOverlay()/15a-food-core.js) — das Mengen-Modal hat die Zutaten-Ansicht beim
+      // Öffnen also komplett aus dem DOM entfernt, nicht nur überlagert. Nach dem Schließen
+      // (egal ob gespeichert/gelöscht/abgebrochen) daher die GANZE Zutaten-Ansicht neu öffnen
+      // statt nur ihre Liste zu aktualisieren — ein einfacher Poll statt eines eigenen
+      // Callback-Hooks im Overlay-System, da ftCloseOverlay() keinen "danach"-Zeitpunkt nach
+      // außen meldet.
+      const check = setInterval(() => {
+        if(!document.getElementById('ftQtyModal')){ clearInterval(check); ftOpenEditSavedMealSheet(mealId); }
+      }, 150);
+    };
+  });
+}
+// Sucht ein Lebensmittel (lokal + online, wie beim normalen Hinzufügen) und fügt es beim
+// Antippen NICHT einem Tageseintrag hinzu, sondern als neue Zutat zur Mahlzeit-VORLAGE —
+// deutlich schlankere Ergebniszeilen als ftResultRowHTML() (kein Favoriten-Stern/Löschen-
+// Button nötig, das ist hier fehl am Platz), sonst dieselbe Such-Infrastruktur
+// (ftSearchLocal()/ftOffSearch()) wie auf der normalen "Lebensmittel hinzufügen"-Seite.
+function ftEsmPickerRowHTML(food){
+  let context = '';
+  if(food.brand) context = food.brand;
+  else if(food.cat && FOOD_CATEGORIES[food.cat]) context = FOOD_CATEGORIES[food.cat];
+  const sub = context ? `${context} · ${food.kcal} kcal/100g` : `${food.kcal} kcal/100g`;
+  return `
+    <div class="result-row" data-esm-pick-id="${food.id}">
+      <div class="result-main"><div class="result-name">${ftEscapeHTML(food.name)}</div><div class="result-sub">${sub}</div></div>
+    </div>
+  `;
+}
+function ftOpenAddIngredientToSavedMeal(mealId){
+  ftOpenOverlay(`
+    <div class="modal" id="ftEsmPickerModal">
+      <div class="modal-head"><div class="modal-title">Zutat hinzufügen</div><button class="sheet-close" id="ftEsmPickerClose">${ftIconX()}</button></div>
+      <div class="modal-body">
+        <div class="search-wrap">
+          <input class="search-input" id="ftEsmPickerInput" placeholder="Lebensmittel suchen …" autocomplete="off">
+        </div>
+        <div id="ftEsmPickerResults"></div>
+      </div>
+    </div>
+  `, {type:'modal'});
+  // "X" führt zurück zur Zutatenliste statt das komplette Sheet zu schließen — das
+  // einlagige Overlay-System (siehe Kommentar in ftRenderEsmItemsList()) hat die
+  // Zutaten-Ansicht beim Öffnen des Pickers bereits ersetzt, ftCloseOverlay() allein würde
+  // also den gesamten Bearbeiten-Dialog verlassen statt nur den Picker.
+  document.getElementById('ftEsmPickerClose').onclick = () => ftOpenEditSavedMealSheet(mealId);
+  const input = document.getElementById('ftEsmPickerInput');
+  const resultsBox = document.getElementById('ftEsmPickerResults');
+  function wirePicker(){
+    resultsBox.querySelectorAll('[data-esm-pick-id]').forEach(row => {
+      row.onclick = () => {
+        const food = ftGetFoodById(row.dataset.esmPickId);
+        if(!food) return;
+        ftOpenQuantityModal(food, null, {
+          onSave: (amountG, mode, pieceCount) => {
+            const sm = ftSavedMeals.find(m=>m.id===mealId);
+            if(!sm) return;
+            ftPersistOffFoodIfNeeded(food);
+            sm.items.push({ sourceFoodId: food.id, amountG: Math.round(amountG), unitMode: mode, pieceCount });
+            ftSave('savedMeals', ftSavedMeals);
+          },
+        });
+        const check = setInterval(() => {
+          if(!document.getElementById('ftQtyModal')){
+            clearInterval(check);
+            ftOpenEditSavedMealSheet(mealId); // ersetzt den Picker direkt durch die aktualisierte Zutatenliste
+          }
+        }, 150);
+      };
+    });
+  }
+  let debounceTimer = null;
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = input.value;
+    if(!q.trim()){ resultsBox.innerHTML = ''; return; }
+    const { custom, base } = ftSearchLocal(q);
+    let html = '';
+    if(custom.length) html += `<div class="ft-section-label">Eigene Lebensmittel</div>` + custom.map(ftEsmPickerRowHTML).join('');
+    if(base.length) html += `<div class="ft-section-label">Basisliste</div>` + base.map(ftEsmPickerRowHTML).join('');
+    resultsBox.innerHTML = html + `<div class="ft-section-label">Online-Datenbank</div><div class="loading-row">Tippe weiter oder warte kurz …</div>`;
+    wirePicker();
+    debounceTimer = setTimeout(async () => {
+      const { results: offResults, reason } = await ftOffSearch(q);
+      if(input.value !== q) return; // veraltete Antwort
+      const loadingRow = resultsBox.querySelector('.loading-row');
+      if(!loadingRow) return;
+      if(offResults.length){
+        loadingRow.outerHTML = offResults.map(ftEsmPickerRowHTML).join('');
+      } else if(reason === 'offline'){
+        loadingRow.outerHTML = `<div class="no-results">Offline — nur lokale Treffer verfügbar.</div>`;
+      } else if(reason === 'unreachable'){
+        loadingRow.outerHTML = `<div class="no-results">Online-Datenbank gerade nicht erreichbar.</div>`;
+      } else {
+        loadingRow.outerHTML = `<div class="no-results">Keine Online-Treffer.</div>`;
+      }
+      wirePicker();
+    }, 350);
+  });
 }
 
 function ftFmtDateGerman(iso){

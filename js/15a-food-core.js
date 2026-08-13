@@ -510,7 +510,12 @@ function ftPortionLabel(p){
   if(Math.abs(p-0.5)<0.001) return '1/2';
   if(Math.abs(p-0.75)<0.001) return '3/4';
   if(Math.abs(p-1)<0.001) return '1×';
-  return ftFormatNum(p)+'×';
+  // NICHT ftFormatNum() (rundet auf die nächsten 0,5 — gedacht für Gramm-/Stückangaben, siehe
+  // dort) — das würde z.B. 0,3 fälschlich als "0,5×" anzeigen, obwohl intern korrekt mit 0,3
+  // weitergerechnet wird (Bug: Anzeige und tatsächlich berechnete kcal liefen auseinander).
+  // Stattdessen auf 2 Nachkommastellen runden und überflüssige Nullen abschneiden.
+  const rounded = Math.round(p*100)/100;
+  return rounded.toString().replace('.', ',')+'×';
 }
 function ftGoalBarHTML(value, goal, color, small){
   if (!goal) return '';
@@ -549,6 +554,11 @@ function ftIconBarcode(){
 }
 function ftIconTrash(){
   return `<svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V4.5a1 1 0 011-1h4a1 1 0 011 1V7m-9 0l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+// Stift-Icon fürs Bearbeiten einer gespeicherten Mahlzeit-Vorlage (ftOpenEditSavedMealSheet(),
+// 15b-food-day.js) — neben dem bestehenden Löschen-Symbol (ftIconTrash) auf derselben Zeile.
+function ftIconPencil(){
+  return `<svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 function ftIconRepeat(){
   return `<svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M17 2l4 4-4 4M3 11V9a4 4 0 014-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 01-4 4H3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;

@@ -2338,8 +2338,8 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
   display:flex; align-items:center; justify-content:center;
 }
 .result-star svg{width:18px; height:18px;}
-.result-star[data-del-food], .result-star[data-del-meal]{color:var(--muted);}
-.result-star[data-del-food] svg, .result-star[data-del-meal] svg{width:17px; height:17px;}
+.result-star[data-del-food], .result-star[data-del-meal], .result-star[data-edit-meal]{color:var(--muted);}
+.result-star[data-del-food] svg, .result-star[data-del-meal] svg, .result-star[data-edit-meal] svg{width:17px; height:17px;}
 .loading-row{padding:14px 4px; color:var(--muted); font-size:0.85rem; text-align:center;}
 .no-results{padding:20px 4px; color:var(--muted); font-size:0.88rem; text-align:center;}
 
