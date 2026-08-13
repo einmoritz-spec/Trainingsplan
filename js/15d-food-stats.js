@@ -117,10 +117,18 @@ function ftBucketedKcalPoints(period){
 // Aggregierte Kalorien je Makro (Protein ×4, Kohlenhydrate ×4, Fett ×9) über den Zeitraum —
 // Grundlage für den Donut. Als Verhältnis ist es egal, ob über Summen oder Durchschnitte
 // gerechnet wird, deshalb hier einfach über alle Tage im Zeitraum aufsummiert.
+// Bewusst der DURCHSCHNITT pro geloggtem Tag im Zeitraum (nicht die Summe) — soll dieselbe
+// Frage beantworten wie "Ø X kcal/Tag" oben: "woraus setzt sich ein durchschnittlicher Tag in
+// diesem Zeitraum zusammen". Eine reine Summe wäre über Woche/Monat/Jahr hinweg nicht
+// vergleichbar (skaliert einfach mit der Anzahl geloggter Tage) und würde bei Nicht-"Tag"-
+// Zeiträumen auch nicht zur direkt darüberstehenden kcal-Durchschnittszahl passen. Bei "Tag"
+// (ein einzelner, evtl. bereits abgeschlossener Tag) ist Ø über 1 Tag identisch mit der Summe.
 function ftMacroKcalSegments(periodDays){
   const days = ftDayTotalsInPeriod(periodDays);
+  const n = days.length || 1;
   let p=0,c=0,f=0;
   days.forEach(d => { p+=d.p; c+=d.c; f+=d.f; });
+  p/=n; c/=n; f/=n;
   return [
     { key:'p', label:'Protein', grams: Math.round(p), value: Math.round(p*4), color: cssVar('--protein') },
     { key:'c', label:'Kohlenhydrate', grams: Math.round(c), value: Math.round(c*4), color: cssVar('--carbs') },
@@ -268,6 +276,18 @@ function renderFoodStats(){
 
   const segments = ftMacroKcalSegments(periodDays);
   const totalMacroKcal = segments.reduce((a,s) => a+s.value, 0);
+  // Center-Anzeige des Donuts bewusst NICHT aus den (gerundeten) Ø-Makro-Gramm zurückgerechnet
+  // (p*4 + c*4 + f*9, siehe totalMacroKcal oben) — das kann leicht vom tatsächlich getrackten
+  // Ø-kcal-Wert abweichen (Rundung je Eintrag/Tag). totalMacroKcal bleibt für die Segment-
+  // Winkel und Prozentangaben in der Legende (die MÜSSEN sich zu den Makros addieren), die
+  // große Zahl in der Mitte zeigt stattdessen den echten Ø-kcal-Wert pro geloggtem Tag — exakt
+  // dieselbe Rechnung wie bei "Ø X kcal/Tag" oben, nur direkt aus den Tagessummen statt den
+  // (ggf. lückenhaften) Balkendiagramm-Punkten, damit sie bei "Tag" exakt mit "X kcal heute"
+  // übereinstimmt.
+  const macroPeriodDays = ftDayTotalsInPeriod(periodDays);
+  const actualPeriodKcal = macroPeriodDays.length
+    ? Math.round(macroPeriodDays.reduce((a,d) => a+d.kcal, 0) / macroPeriodDays.length)
+    : 0;
   const macroLegendHTML = segments.map(s => {
     const pct = totalMacroKcal ? Math.round(s.value / totalMacroKcal * 100) : 0;
     return `
@@ -275,7 +295,7 @@ function renderFoodStats(){
         <button class="muscle-balance-swatch" data-macro="${s.key}" style="color:${s.color};" aria-label="${s.label}: ${pct}%">${pct}%</button>
         <span class="muscle-balance-legend-label">${s.label}</span>
         <div class="muscle-balance-legend-values">
-          <span class="muscle-balance-legend-value">${s.grams} g</span>
+          <span class="muscle-balance-legend-value">${isDay ? '' : 'Ø '}${s.grams} g</span>
         </div>
       </div>
     `;
@@ -293,7 +313,7 @@ function renderFoodStats(){
     <div class="section-label" style="margin-top:22px;">Makro-Verteilung</div>
     <div class="muscle-balance-charts-row">
       <div class="muscle-balance-chart-col" style="margin:0 auto;">
-        <div class="muscle-balance-chart-wrap">${buildInteractiveDonut(segments, 190, 'food', totalMacroKcal.toLocaleString('de-DE'), 'kcal')}</div>
+        <div class="muscle-balance-chart-wrap">${buildInteractiveDonut(segments, 190, 'food', actualPeriodKcal.toLocaleString('de-DE'), 'kcal')}</div>
       </div>
     </div>
     <div class="muscle-balance-breakdown" id="ftMacroBreakdown" style="display:none;">
