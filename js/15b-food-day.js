@@ -216,8 +216,27 @@ function ftMealHTML(meal){
     // Lösch-/Bearbeiten-Zugriff mehr auf einzelne Einträge (dafür erst aufklappen) und kein
     // "Als Mahlzeit speichern"-Button — beides wäre in dieser platzsparenden Zeile ohnehin kaum
     // bedienbar.
-    const previewNames = entries.slice().reverse().slice(0, 3).map(e => e.name);
-    const previewText = previewNames.join(' · ') + (entries.length > 3 ? ' …' : '');
+    // Vorher: die ersten 3 Namen einfach zusammengehängt und den Rest per CSS text-overflow:
+    // ellipsis abgeschnitten — bei längeren Namen (z. B. "ESN Designer Whey") landete der Schnitt
+    // dadurch mitten im Wort ("ESN Designer Wh..."), was unsauber wirkt. Stattdessen hier in JS
+    // nur so viele VOLLSTÄNDIGE Namen aneinanderreihen, wie in ein grobes Zeichen-Budget passen
+    // (MAX_CHARS, an der verfügbaren Kartenbreite bei dieser Schriftgröße orientiert), und den
+    // Rest als expliziten "+N weitere"-Hinweis anhängen statt eines rohen "…" — bleibt in jedem
+    // Fall an einer Wortgrenze. Der erste Name wird immer gezeigt, auch wenn er allein schon das
+    // Budget sprengt (sonst bliebe die Vorschau leer) — CSS text-overflow bleibt als Sicherheitsnetz
+    // für genau diesen Ausnahmefall bestehen.
+    const previewAllNames = entries.slice().reverse().map(e => e.name);
+    const PREVIEW_MAX_CHARS = 34;
+    const shownNames = [];
+    let usedChars = 0;
+    for (const name of previewAllNames){
+      const sepChars = shownNames.length ? 3 : 0; // " · "
+      if (shownNames.length && usedChars + sepChars + name.length > PREVIEW_MAX_CHARS) break;
+      shownNames.push(name);
+      usedChars += sepChars + name.length;
+    }
+    const remainingCount = previewAllNames.length - shownNames.length;
+    const previewText = shownNames.join(' · ') + (remainingCount > 0 ? ` +${remainingCount} weitere` : '');
     return `
       <div class="meal-section${isCurrent ? ' current' : ''}${entries.length ? ' has-body' : ''}" data-meal="${meal}">
         ${headHTML}
