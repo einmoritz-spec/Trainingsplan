@@ -2300,7 +2300,7 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
 /* Eingeklappte Vorschauzeile — ersetzt die volle .food-list im eingeklappten Zustand
    (ftMealHTML()), bleibt innerhalb derselben Karte, kein eigener Rahmen. */
 .meal-collapsed-items{
-  font-size:0.78rem; color:var(--muted); padding:0 14px 12px;
+  font-size:0.78rem; color:var(--muted); padding:10px 14px 12px; line-height:1.4;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 /* Farbige Hervorhebung der gerade "aktuellen" Mahlzeit (ftCurrentMeal(), 15b-food-day.js) —
