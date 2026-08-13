@@ -141,6 +141,10 @@ function ftMealHTML(meal){
   // der Speichern-Dialog (ftOpenSaveMealSheet(), 15c-food-add.js) arbeitet auf einzelnen
   // Zutaten, und eine erneute Sicherung eines schon gespeicherten Blocks bringt nichts.
   const hasMealGroup = entries.some(e => e.kind === 'mealGroup');
+  // Snacks sind bewusst die Sammelstelle für einzelne, lose Kleinigkeiten zwischendurch —
+  // "Als Mahlzeit speichern" passt konzeptionell nicht dazu (keine feste Kombination, die man
+  // wiederholt genau so essen würde) und entfällt hier daher unabhängig vom Inhalt.
+  const canSaveAsMeal = meal !== 'snacks';
   return `
     <div class="meal-section">
       <div class="meal-head">
@@ -150,7 +154,7 @@ function ftMealHTML(meal){
       <div class="food-list">
         ${entries.length ? entries.slice().reverse().map(e=> e.kind==='mealGroup' ? ftMealGroupRowHTML(meal,e) : ftFoodRowHTML(meal, e)).join('') : `<div class="empty-meal">Noch nichts eingetragen</div>`}
       </div>
-      ${entries.length && !hasMealGroup ? `<button class="save-meal-btn" id="saveMeal_${meal}">Als Mahlzeit speichern</button>` : ''}
+      ${entries.length && !hasMealGroup && canSaveAsMeal ? `<button class="save-meal-btn" id="saveMeal_${meal}">Als Mahlzeit speichern</button>` : ''}
     </div>
   `;
 }
