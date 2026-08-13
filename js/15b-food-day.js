@@ -81,7 +81,13 @@ function renderFoodTracker(){
   const copyPrevBtn = document.getElementById('ftCopyPrevBtn');
   if (copyPrevBtn) copyPrevBtn.onclick = ftOpenCopyPrevDayPrompt;
   FT_MEAL_KEYS.forEach(meal=>{
-    document.getElementById('addBtn_'+meal).onclick = ()=>goFtAddFood(meal);
+    document.getElementById('addBtn_'+meal).onclick = (ev)=>{ ev.stopPropagation(); goFtAddFood(meal); };
+    const headEl = document.getElementById('mealHead_'+meal);
+    if (headEl) headEl.onclick = ()=>{
+      const key = ftCurrentDate + '_' + meal;
+      ftMealCollapseOverride[key] = !ftMealIsCollapsed(meal, ftCurrentDate);
+      renderFoodTracker();
+    };
     ftGetDay(ftCurrentDate)[meal].forEach(e=>{
       const delBtn = document.getElementById('del_'+e.id);
       if(delBtn) delBtn.onclick = (ev)=>{ ev.stopPropagation(); ftRemoveEntry(meal, e.id); };
@@ -133,6 +139,43 @@ function ftWireDateSwipe(){
   app.addEventListener('touchend', ftSwipeTouchEndHandler, { passive: true });
 }
 
+/* ============ Vergangene Mahlzeiten automatisch einklappen + aktuelle hervorheben ============
+   Rein zeitbasiert (Wanduhrzeit), nur für den HEUTIGEN Tag relevant — beim Blättern zu einem
+   anderen Tag über die Pfeile/den Kalender ergibt "welche Mahlzeit ist gerade dran" keinen
+   Sinn, dort bleibt daher alles wie bisher aufgeklappt und ohne Hervorhebung.
+   ftMealCollapseOverride hält ausschließlich MANUELLE Auf-/Zuklapp-Aktionen fest (Tap auf den
+   Mahlzeiten-Kopf) und übersteuert damit den Zeit-Default für den Rest der Sitzung — tippt man
+   z. B. das bereits automatisch eingeklappte Frühstück wieder auf, bleibt es trotz "nach 10
+   Uhr" so lange offen, bis man es selbst wieder zuklappt. Key ist "datum_mahlzeit", damit beim
+   Zurückblättern zu einem Tag, an dem man vorher manuell etwas umgeschaltet hat, dieser Zustand
+   erhalten bleibt, ohne dass sich das mit anderen Tagen überschneidet. */
+let ftMealCollapseOverride = {};
+const FT_MEAL_COLLAPSE_FROM_HOUR = { breakfast: 10, lunch: 14, dinner: 19 };
+function ftMealDefaultCollapsed(meal, dateIso){
+  if (meal === 'snacks') return true; // Snacks: immer eingeklappter Sammeltopf, nie "die aktuelle Mahlzeit"
+  if (dateIso !== ftTodayISO()) return false;
+  const now = new Date();
+  const hour = now.getHours() + now.getMinutes() / 60;
+  return hour >= FT_MEAL_COLLAPSE_FROM_HOUR[meal];
+}
+function ftMealIsCollapsed(meal, dateIso){
+  const key = dateIso + '_' + meal;
+  return key in ftMealCollapseOverride ? ftMealCollapseOverride[key] : ftMealDefaultCollapsed(meal, dateIso);
+}
+// Welche Mahlzeit gerade "dran" ist (für die farbige Hervorhebung) — dieselben Zeitgrenzen wie
+// oben: vor 10 Uhr Frühstück, 10–14 Uhr Mittag, 14–19 Uhr Abendessen, ab 19 Uhr keine mehr (der
+// Tag ist im Wesentlichen gelaufen, nichts wird mehr als "aktuell" hervorgehoben). Snacks
+// werden hier bewusst nie zurückgegeben — die sind kein fester Zeitpunkt im Tag.
+function ftCurrentMeal(dateIso){
+  if (dateIso !== ftTodayISO()) return null;
+  const now = new Date();
+  const hour = now.getHours() + now.getMinutes() / 60;
+  if (hour < FT_MEAL_COLLAPSE_FROM_HOUR.breakfast) return 'breakfast';
+  if (hour < FT_MEAL_COLLAPSE_FROM_HOUR.lunch) return 'lunch';
+  if (hour < FT_MEAL_COLLAPSE_FROM_HOUR.dinner) return 'dinner';
+  return null;
+}
+
 function ftMealHTML(meal){
   const entries = ftGetDay(ftCurrentDate)[meal];
   // "Als Mahlzeit speichern" nur, solange die Mahlzeit ausschließlich aus einzelnen
@@ -145,12 +188,37 @@ function ftMealHTML(meal){
   // "Als Mahlzeit speichern" passt konzeptionell nicht dazu (keine feste Kombination, die man
   // wiederholt genau so essen würde) und entfällt hier daher unabhängig vom Inhalt.
   const canSaveAsMeal = meal !== 'snacks';
-  return `
-    <div class="meal-section">
-      <div class="meal-head">
-        <div class="meal-title">${FT_MEAL_LABELS[meal]} ${entries.length? `<span class="meal-kcal">· ${ftMealTotal(ftCurrentDate, meal)} kcal</span>`:''}</div>
-        <button class="meal-add" id="addBtn_${meal}">+</button>
+  const collapsed = ftMealIsCollapsed(meal, ftCurrentDate);
+  const isCurrent = ftCurrentMeal(ftCurrentDate) === meal;
+  const kcalBadgeHTML = entries.length ? `<span class="meal-kcal">· ${ftMealTotal(ftCurrentDate, meal)} kcal</span>` : '';
+  const headHTML = `
+    <div class="meal-head" id="mealHead_${meal}">
+      <div class="meal-title">${FT_MEAL_LABELS[meal]} ${kcalBadgeHTML}</div>
+      <div class="meal-head-actions">
+        <button class="meal-add" id="addBtn_${meal}" aria-label="${FT_MEAL_LABELS[meal]} hinzufügen">+</button>
+        <span class="mg-arrow" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
       </div>
+    </div>
+  `;
+  if (collapsed){
+    // Kompakte Vorschau statt der vollen Zutatenliste — dasselbe Muster wie das "Mahlzeiten"-
+    // Akkordeon auf der Startseite (homeMealsAccordionBodyHTML(), 07-home.js): nur die ersten
+    // paar Lebensmittelnamen als eine einzeilige, per Ellipsis abgeschnittene Zeile, kein
+    // Lösch-/Bearbeiten-Zugriff mehr auf einzelne Einträge (dafür erst aufklappen) und kein
+    // "Als Mahlzeit speichern"-Button — beides wäre in dieser platzsparenden Zeile ohnehin kaum
+    // bedienbar.
+    const previewNames = entries.slice().reverse().slice(0, 3).map(e => e.name);
+    const previewText = previewNames.join(' · ') + (entries.length > 3 ? ' …' : '');
+    return `
+      <div class="meal-section collapsed${isCurrent ? ' current' : ''}" data-meal="${meal}">
+        ${headHTML}
+        ${entries.length ? `<div class="meal-collapsed-items">${ftEscapeHTML(previewText)}</div>` : ''}
+      </div>
+    `;
+  }
+  return `
+    <div class="meal-section${isCurrent ? ' current' : ''}" data-meal="${meal}">
+      ${headHTML}
       <div class="food-list">
         ${entries.length ? entries.slice().reverse().map(e=> e.kind==='mealGroup' ? ftMealGroupRowHTML(meal,e) : ftFoodRowHTML(meal, e)).join('') : `<div class="empty-meal">Noch nichts eingetragen</div>`}
       </div>
