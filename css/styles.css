@@ -1740,6 +1740,36 @@ html[data-theme="light"] .progress-stat-editbtn img{ filter: none; }
 .muscle-group > .muscle-group-body{
   margin-top:0; padding-top:0; padding-bottom:0; border-top:1px solid var(--border);
 }
+/* Inhalte, die AUSSERHALB eines Akkordeons als eigene, umrandete Karte auftreten (die
+   Verlaufsliste .history und die Mahlzeiten-Boxen .home-meal-box auf der Startseite), bringen
+   INNERHALB einer .muscle-group-Karte ihren Rahmen ein zweites Mal mit: Karten-Rahmen +
+   Trennlinie zum Kopf + eigener Rahmen der Innenkarte + Zeilentrenner ergaben dicht
+   nebeneinander liegende Doppellinien. Deshalb hier dasselbe Muster wie bei #pastExList: die
+   Innenkarte verliert Rahmen, Ecken und Außenabstand und wird zu flächenbündigen Zeilen, die
+   nur noch durch je eine dünne Linie getrennt sind — die letzte Zeile ohne Linie, da der
+   Karten-Rand selbst schon abschließt. */
+.muscle-group > .muscle-group-body > .history{ border:none; border-radius:0; overflow:visible; }
+.muscle-group > .muscle-group-body > .history > .history-row:last-child{
+  border-bottom:1px solid var(--border);
+}
+.muscle-group > .muscle-group-body > .history:last-child > .history-row:last-child{
+  border-bottom:none;
+}
+/* "N weitere Einheiten anzeigen": als gestrichelte Box mit eigenem Abstand war es innerhalb
+   der Karte ein weiterer Kasten im Kasten — als flächenbündige Fußzeile mit nur einer
+   Trennlinie nach oben bleibt die Karte ein einziges zusammenhängendes Element. */
+.muscle-group > .muscle-group-body > .history-toggle{
+  border:none; border-radius:0; margin-top:0; padding:13px 16px;
+}
+/* Mahlzeiten-Übersicht (siehe .home-meal-box weiter unten): dieselbe Behandlung — statt drei
+   einzeln umrandeter Boxen in der Karte nur noch drei durch dünne Linien getrennte Zeilen. */
+.muscle-group > .muscle-group-body > .home-meal-box{
+  border:none; border-radius:0; border-bottom:1px solid var(--border);
+  margin-bottom:0; padding:12px 16px;
+}
+.muscle-group > .muscle-group-body > .home-meal-box:last-child{ border-bottom:none; }
+.muscle-group > .muscle-group-body > .loading-row{ padding:14px 16px; }
+.muscle-group > .muscle-group-body .history-empty{ border:none; border-radius:0; }
 /* "Training nachtragen"-Wizard, Schritt "Welche Übungen?" (#pastExList): die Übungs-Checkbox-
    Zeilen stecken hier in einer .muscle-group-Akkordeon-Karte — dort soll jede Zeile nur eine
    dünne Trennlinie zur nächsten haben (wie .plan-row im Übungen-Editor), statt der normalen
