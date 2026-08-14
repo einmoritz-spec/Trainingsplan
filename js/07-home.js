@@ -193,17 +193,6 @@ function isFoodTrackerEnabled(){
 // statt als Bild eingebunden — dadurch lässt es sich wie die anderen SVG-Icons der App per
 // fill="currentColor" einfärben (hier bewusst in der Akzentfarbe, siehe Verwendung unten in
 // renderHome()).
-function iconForkKnifeSVG(){
-  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-    <rect x="6.3" y="1" width="1.15" height="7.2" rx="0.55"/>
-    <rect x="7.9" y="1" width="1.15" height="7.2" rx="0.55"/>
-    <rect x="9.5" y="1" width="1.15" height="7.2" rx="0.55"/>
-    <path d="M6.15 7.4v.5c0 1.7 1.4 3.1 3.1 3.1s3.1-1.4 3.1-3.1v-.5H6.15z"/>
-    <path d="M8.45 10.85c-.55 0-1 .42-1.04.96l-.66 10.9c-.05.78.62 1.44 1.42 1.44h1.66c.8 0 1.47-.66 1.42-1.44l-.66-10.9c-.04-.54-.49-.96-1.04-.96h-1.1z"/>
-    <path d="M17.9 1.05c-2.05.28-3.65 2.2-3.65 4.55v5.9c0 1.25.72 2.32 2.05 2.68l.65.18v8.3c0 .85.7 1.34 1.55 1.34s1.55-.5 1.55-1.34V1.7c0-.4-.33-.7-.72-.66-.45.05-1.03.01-1.43.01z"/>
-  </svg>`;
-}
-
 // Ab wie vielen Tagen seit dem letzten Export (siehe lastExportAt, 02-state-theme.js / 10-plan-
 // settings.js) die Backup-Erinnerung auf der Startseite erscheint.
 const BACKUP_REMINDER_DAYS = 30;
@@ -283,7 +272,8 @@ function renderHome(){
   const historyHTML = foodOn ? `
     <div class="muscle-group" style="margin-top:0;">
       <button class="muscle-group-header" id="btnHomeHistoryToggle" type="button">
-        <span class="mg-name" style="display:flex; align-items:center; gap:8px;"><img class="section-label-icon" src="${ICON_HISTORY}" alt="" style="width:14px; height:14px;">Verlauf</span>
+        <img class="section-label-icon" src="${ICON_HISTORY}" alt="" style="width:14px; height:14px; margin-right:8px; flex-shrink:0;">
+        <span class="mg-name">Verlauf</span>
         <span class="mg-meta"><span class="mg-arrow">${homeVerlaufOpen ? '▾' : '▸'}</span></span>
       </button>
       <div class="muscle-group-body" style="display:${homeVerlaufOpen ? 'block' : 'none'};">
@@ -333,7 +323,7 @@ function renderHome(){
   ` : '';
 
   const foodTrackerBtnHTML = foodOn ? `
-    <button class="brand-food-btn" id="btnFoodTracker" aria-label="Essenstracker" title="Essenstracker">${iconForkKnifeSVG()}</button>
+    <button class="brand-food-btn" id="btnFoodTracker" aria-label="Essenstracker" title="Essenstracker"></button>
   ` : '';
 
   app.innerHTML = `

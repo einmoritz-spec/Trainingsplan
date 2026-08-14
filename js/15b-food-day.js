@@ -15,7 +15,7 @@
 --------------------------------------------------- */
 
 /* ============ Rendering: Hauptseite ============ */
-function renderFoodTracker(){
+function renderFoodTracker(navDirection){
   ftApplyTheme();
   if (!ftCurrentDate) ftCurrentDate = ftTodayISO();
   const day = ftGetDay(ftCurrentDate);
@@ -49,43 +49,48 @@ function renderFoodTracker(){
   app.innerHTML = `
     <div class="back-row" style="margin-top:0;">
       <button class="back-btn-icon" id="ftBackBtn" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button>
+      <button class="gear settings-btn" id="settingsBtn" aria-label="Einstellungen">⚙</button>
     </div>
     <div class="date-row">
       <button class="date-arrow" id="dArrowBack">${ftIconChevron('left')}</button>
       <button class="date-label" id="dLabel">${ftDateLabel(ftCurrentDate)}</button>
       <button class="date-arrow" id="dArrowFwd">${ftIconChevron('right')}</button>
-      <button class="gear settings-btn" id="settingsBtn" aria-label="Einstellungen">⚙</button>
     </div>
-    <div class="summary-card">
-      <button class="kcal-summary-btn" id="ftStatsBtn" type="button" aria-label="Statistiken">
-        <div class="kcal-value">${totals.kcal}${ftGoals.kcal ? `<span class="ft-goal-of"> / ${ftGoals.kcal}</span>` : ''}</div>
-        <div class="kcal-label">kcal heute</div>
-        ${ftGoalBarHTML(totals.kcal, ftGoals.kcal, 'var(--accent)')}
-      </button>
-      <div class="macro-row">
-        <div class="macro"><div><span class="macro-dot" style="background:var(--protein)"></span><span class="macro-val">${totals.p} g${ftGoals.p ? `<span class="ft-goal-of"> / ${ftGoals.p}</span>` : ''}</span></div><div class="macro-label">Protein</div>${ftGoalBarHTML(totals.p, ftGoals.p, 'var(--protein)', true)}</div>
-        <div class="macro"><div><span class="macro-dot" style="background:var(--carbs)"></span><span class="macro-val">${totals.c} g${ftGoals.c ? `<span class="ft-goal-of"> / ${ftGoals.c}</span>` : ''}</span></div><div class="macro-label">Kohlenhydrate</div>${ftGoalBarHTML(totals.c, ftGoals.c, 'var(--carbs)', true)}</div>
-        <div class="macro"><div><span class="macro-dot" style="background:var(--fat)"></span><span class="macro-val">${totals.f} g${ftGoals.f ? `<span class="ft-goal-of"> / ${ftGoals.f}</span>` : ''}</span></div><div class="macro-label">Fett</div>${ftGoalBarHTML(totals.f, ftGoals.f, 'var(--fat)', true)}</div>
+    <div class="ft-day-content${navDirection === 'next' ? ' ft-slide-next' : navDirection === 'prev' ? ' ft-slide-prev' : ''}">
+      <div class="summary-card">
+        <button class="kcal-summary-btn" id="ftStatsBtn" type="button" aria-label="Statistiken">
+          <div class="kcal-value">${totals.kcal}${ftGoals.kcal ? `<span class="ft-goal-of"> / ${ftGoals.kcal}</span>` : ''}</div>
+          <div class="kcal-label">kcal heute</div>
+          ${ftGoalBarHTML(totals.kcal, ftGoals.kcal, 'var(--accent)')}
+        </button>
+        <div class="macro-row">
+          <div class="macro"><div><span class="macro-dot" style="background:var(--protein)"></span><span class="macro-val">${totals.p} g${ftGoals.p ? `<span class="ft-goal-of"> / ${ftGoals.p}</span>` : ''}</span></div><div class="macro-label">Protein</div>${ftGoalBarHTML(totals.p, ftGoals.p, 'var(--protein)', true)}</div>
+          <div class="macro"><div><span class="macro-dot" style="background:var(--carbs)"></span><span class="macro-val">${totals.c} g${ftGoals.c ? `<span class="ft-goal-of"> / ${ftGoals.c}</span>` : ''}</span></div><div class="macro-label">Kohlenhydrate</div>${ftGoalBarHTML(totals.c, ftGoals.c, 'var(--carbs)', true)}</div>
+          <div class="macro"><div><span class="macro-dot" style="background:var(--fat)"></span><span class="macro-val">${totals.f} g${ftGoals.f ? `<span class="ft-goal-of"> / ${ftGoals.f}</span>` : ''}</span></div><div class="macro-label">Fett</div>${ftGoalBarHTML(totals.f, ftGoals.f, 'var(--fat)', true)}</div>
+        </div>
       </div>
+      ${copyPrevBtnHTML}
+      ${FT_MEAL_KEYS.map(ftMealHTML).join('')}
+      ${extraNutrientsHTML}
     </div>
-    ${copyPrevBtnHTML}
-    ${FT_MEAL_KEYS.map(ftMealHTML).join('')}
-    ${extraNutrientsHTML}
   `;
   document.getElementById('ftBackBtn').onclick = () => history.back();
   document.getElementById('ftStatsBtn').onclick = () => goFoodStats();
-  document.getElementById('dArrowBack').onclick = ()=>{ ftCurrentDate = ftAddDays(ftCurrentDate,-1); renderFoodTracker(); };
-  document.getElementById('dArrowFwd').onclick = ()=>{ ftCurrentDate = ftAddDays(ftCurrentDate,1); renderFoodTracker(); };
+  document.getElementById('dArrowBack').onclick = ()=>{ ftCurrentDate = ftAddDays(ftCurrentDate,-1); renderFoodTracker('prev'); };
+  document.getElementById('dArrowFwd').onclick = ()=>{ ftCurrentDate = ftAddDays(ftCurrentDate,1); renderFoodTracker('next'); };
   document.getElementById('dLabel').onclick = () => goFoodCalendar();
   document.getElementById('settingsBtn').onclick = ftOpenSettingsSheet;
   const copyPrevBtn = document.getElementById('ftCopyPrevBtn');
   if (copyPrevBtn) copyPrevBtn.onclick = ftOpenCopyPrevDayPrompt;
   FT_MEAL_KEYS.forEach(meal=>{
     document.getElementById('addBtn_'+meal).onclick = (ev)=>{ ev.stopPropagation(); goFtAddFood(meal); };
+    const splitBtn = document.getElementById('splitBtn_'+meal);
+    if (splitBtn) splitBtn.onclick = (ev)=>{ ev.stopPropagation(); ftOpenSplitMealPrompt(meal); };
     const headEl = document.getElementById('mealHead_'+meal);
     if (headEl) headEl.onclick = ()=>{
       const key = ftCurrentDate + '_' + meal;
       ftMealCollapseOverride[key] = !ftMealIsCollapsed(meal, ftCurrentDate);
+      saveJSON('food:mealCollapse', ftMealCollapseOverride).catch(() => {});
       renderFoodTracker();
     };
     ftGetDay(ftCurrentDate)[meal].forEach(e=>{
@@ -133,7 +138,7 @@ function ftWireDateSwipe(){
     const dx = t.clientX - startX, dy = t.clientY - startY;
     if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
     ftCurrentDate = ftAddDays(ftCurrentDate, dx < 0 ? 1 : -1);
-    renderFoodTracker();
+    renderFoodTracker(dx < 0 ? 'next' : 'prev');
   };
   app.addEventListener('touchstart', ftSwipeTouchStartHandler, { passive: true });
   app.addEventListener('touchend', ftSwipeTouchEndHandler, { passive: true });
@@ -144,11 +149,13 @@ function ftWireDateSwipe(){
    anderen Tag über die Pfeile/den Kalender ergibt "welche Mahlzeit ist gerade dran" keinen
    Sinn, dort bleibt daher alles standardmäßig eingeklappt, ohne Hervorhebung.
    ftMealCollapseOverride hält ausschließlich MANUELLE Auf-/Zuklapp-Aktionen fest (Tap auf den
-   Mahlzeiten-Kopf) und übersteuert damit den Zeit-Default für den Rest der Sitzung — tippt man
-   z. B. das automatisch eingeklappte Frühstück auf, bleibt es so lange offen, bis man es selbst
-   wieder zuklappt, auch wenn man das Zeitfenster längst verlassen hat. Key ist
-   "datum_mahlzeit", damit beim Zurückblättern zu einem Tag, an dem man vorher manuell etwas
-   umgeschaltet hat, dieser Zustand erhalten bleibt, ohne sich mit anderen Tagen zu überschneiden. */
+   Mahlzeiten-Kopf) und übersteuert damit den Zeit-Default dauerhaft — tippt man z. B. das
+   automatisch eingeklappte Frühstück auf, bleibt es offen, bis man es selbst wieder zuklappt,
+   auch wenn man das Zeitfenster längst verlassen hat, den Tag wechselt oder die App komplett
+   neu startet (siehe food:mealCollapse-Storage-Key, geladen in initFoodTracker()/15a-food-
+   core.js, gespeichert bei jedem Tap auf den Mahlzeiten-Kopf unten). Key ist "datum_mahlzeit",
+   damit beim Zurückblättern zu einem Tag, an dem man vorher manuell etwas umgeschaltet hat,
+   dieser Zustand erhalten bleibt, ohne sich mit anderen Tagen zu überschneiden. */
 let ftMealCollapseOverride = {};
 // [von, bis] in Stunden (inklusive) — NUR innerhalb dieses Fensters ist eine Mahlzeit am
 // heutigen Tag automatisch aufgeklappt UND als "aktuell" hervorgehoben. Außerhalb (auch in den
@@ -200,10 +207,18 @@ function ftMealHTML(meal){
   const collapsed = ftMealIsCollapsed(meal, ftCurrentDate);
   const isCurrent = ftCurrentMeal(ftCurrentDate) === meal;
   const kcalBadgeHTML = entries.length ? `<span class="meal-kcal">· ${ftMealTotal(ftCurrentDate, meal)} kcal</span>` : '';
+  // Aufteilen-Button nur ab 1000 kcal (siehe ftOpenSplitMealPrompt oben) — bei kleineren
+  // Mahlzeiten selten nötig, würde den Kopf nur unnötig zustellen.
+  const splitBtnHTML = ftMealTotal(ftCurrentDate, meal) > 1000 ? `
+    <button class="meal-split-btn" id="splitBtn_${meal}" type="button" aria-label="${FT_MEAL_LABELS[meal]} aufteilen">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3L18 21"></path><path d="M18 3L14 8"></path><path d="M6 21l4-5"></path></svg>
+    </button>
+  ` : '';
   const headHTML = `
     <div class="meal-head" id="mealHead_${meal}">
-      <div class="meal-title">${FT_MEAL_LABELS[meal]} ${kcalBadgeHTML}</div>
+      <div class="meal-title"><span>${FT_MEAL_LABELS[meal]}</span> ${kcalBadgeHTML}</div>
       <div class="meal-head-actions">
+        ${splitBtnHTML}
         <button class="meal-add" id="addBtn_${meal}" aria-label="${FT_MEAL_LABELS[meal]} hinzufügen">+</button>
         <span class="mg-arrow" aria-hidden="true">${collapsed ? '▸' : '▾'}</span>
       </div>
@@ -392,7 +407,78 @@ function ftCopyPreviousDay(mealKeys){
   });
 }
 
-// Fragt vor dem Übernehmen kurz nach, welche Mahlzeit(en) vom Vortag übernommen werden sollen
+// Teilt eine Mahlzeit auf zwei Mahlzeiten desselben Tages auf (z. B. wenn beim Nachtragen alles
+// versehentlich unter "Mittagessen" gelandet ist, obwohl ein Teil eigentlich zum Abendessen
+// gehört) — Checkbox-Auswahl, welche Einträge verschoben werden sollen, plus Zielmahlzeit.
+// Button dafür erscheint nur bei Mahlzeiten über 1000 kcal (siehe splitMealBtnHTML in
+// ftMealHTML()) — bei kleineren Mahlzeiten ist ein Aufteilen selten nötig und der Button würde
+// nur unnötig Platz im Kopf jeder Mahlzeit beanspruchen.
+function ftOpenSplitMealPrompt(meal){
+  const entries = ftGetDay(ftCurrentDate)[meal];
+  if (!entries.length) return;
+  const otherMeals = FT_MEAL_KEYS.filter(k => k !== meal);
+  let selectedIds = new Set();
+  let targetMeal = otherMeals[0];
+
+  function bodyHTML(){
+    const rowsHTML = ftSortedByKcal(entries).map(e => `
+      <button class="stat-toggle-row ${selectedIds.has(e.id) ? 'checked' : ''}" data-split-entry="${e.id}" type="button">
+        <span class="stat-toggle-check">${selectedIds.has(e.id) ? '✓' : ''}</span>
+        <span style="flex:1; min-width:0; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${ftEscapeHTML(e.name)}</span>
+        <span style="color:var(--muted); font-size:12.5px; flex-shrink:0;">${Math.round(e.kcal)} kcal</span>
+      </button>
+    `).join('');
+    const targetBtnsHTML = otherMeals.map(k => `
+      <button class="wizard-choice ft-split-target ${targetMeal === k ? 'selected' : ''}" data-target-meal="${k}" type="button" style="flex:1;">${FT_MEAL_LABELS[k]}</button>
+    `).join('');
+    return `
+      <div class="field-label" style="margin-top:0;">Was verschieben?</div>
+      ${rowsHTML}
+      <div class="field-label" style="margin-top:16px;">Wohin verschieben?</div>
+      <div style="display:flex; gap:8px;">${targetBtnsHTML}</div>
+      <button class="ft-btn-primary" id="ftSplitConfirmBtn" style="margin-top:18px;" ${selectedIds.size ? '' : 'disabled'}>Verschieben</button>
+    `;
+  }
+
+  ftOpenOverlay(`
+    <div class="modal" id="ftSplitMealModal">
+      <div class="modal-head"><div class="modal-title">${FT_MEAL_LABELS[meal]} aufteilen</div><button class="sheet-close" id="ftSplitMealClose">${ftIconX()}</button></div>
+      <div class="modal-body" id="ftSplitMealBody">${bodyHTML()}</div>
+    </div>
+  `, {type:'modal'});
+
+  function wire(){
+    document.querySelectorAll('.ft-split-target').forEach(btn => {
+      btn.onclick = () => { targetMeal = btn.dataset.targetMeal; refresh(); };
+    });
+    document.querySelectorAll('[data-split-entry]').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.splitEntry;
+        if (selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
+        refresh();
+      };
+    });
+    const confirmBtn = document.getElementById('ftSplitConfirmBtn');
+    if (confirmBtn) confirmBtn.onclick = async () => {
+      if (!selectedIds.size) return;
+      const day = ftGetDay(ftCurrentDate);
+      const moving = day[meal].filter(e => selectedIds.has(e.id));
+      day[meal] = day[meal].filter(e => !selectedIds.has(e.id));
+      day[targetMeal] = [...day[targetMeal], ...moving];
+      await ftSaveDays(ftCurrentDate);
+      ftCloseOverlay();
+      renderFoodTracker();
+    };
+  }
+  function refresh(){
+    document.getElementById('ftSplitMealBody').innerHTML = bodyHTML();
+    wire();
+  }
+  document.getElementById('ftSplitMealClose').onclick = ftCloseOverlay;
+  wire();
+}
+
+
 // (Button-Auswahl statt z.B. Checkboxen, da es nur um EINE schnelle Entscheidung geht) — nur
 // die Mahlzeiten des Vortags, die tatsächlich Einträge haben, stehen dabei zur Wahl, plus
 // "Alles" ganz oben, wenn mehr als eine davon befüllt ist. Ist nur GENAU eine Mahlzeit befüllt,

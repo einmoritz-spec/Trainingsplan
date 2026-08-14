@@ -132,10 +132,21 @@ input{ font-family: inherit; }
 }
 /* Button zum Essenstracker-Feature (siehe 15-food-tracker.js), nur sichtbar wenn das Feature
    in den Einstellungen aktiviert ist (isFoodTrackerEnabled(), 07-home.js). Piktogramm vom
-   Nutzer bereitgestellt (siehe messer-und-gabel.png), als Inline-SVG in Akzentfarbe. */
+   Nutzer bereitgestellt (assets/icons/fork-knife.png) — als CSS-Maske eingebunden statt als
+   nachgezeichnetes Inline-SVG (das sah der Vorlage nicht ähnlich genug), dadurch exakt die
+   Original-Form UND weiterhin frei in der aktuellen Akzentfarbe einfärbbar (die Maske
+   übernimmt nur die Silhouette aus dem PNG — Alphakanal des Bildes bestimmt die Form, die
+   Füllfarbe kommt normal aus background-color). */
 .brand-food-btn{
   flex-shrink:0; width:40px; height:40px; border-radius:50%; border:none; background:none;
-  color: var(--accent); display:flex; align-items:center; justify-content:center; padding:0;
+  padding:0; position:relative;
+}
+.brand-food-btn::after{
+  content:''; position:absolute; inset:8px; background-color: var(--accent);
+  -webkit-mask-image: url('../assets/icons/fork-knife.png'); mask-image: url('../assets/icons/fork-knife.png');
+  -webkit-mask-size: contain; mask-size: contain;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
 }
 .brand-food-btn:active{ opacity:0.7; }
 .gear{
@@ -143,7 +154,7 @@ input{ font-family: inherit; }
   border-radius: 8px; padding:8px 12px; font-size:13px;
 }
 .gear:hover{ color: var(--text); border-color: var(--muted); }
-.back-row{ margin-bottom: 18px; }
+.back-row{ margin-bottom: 18px; display:flex; align-items:center; justify-content:space-between; }
 .back-btn-icon{
   background:none; border:none; padding:6px; margin:-6px 0 0 -6px;
   display:inline-flex; align-items:center; justify-content:center;
@@ -459,15 +470,15 @@ button.month-overview-day-num{ cursor:pointer; -webkit-tap-highlight-color:trans
 #dayTrainingPopupOverlay .new-exercise-modal-body{ padding:14px 16px 18px; }
 .day-popup-block{ padding:0; }
 .day-popup-tile-name{ font-size:14px; font-weight:600; margin-bottom:12px; text-align:center; }
-/* Grid statt flex: bei 5 Kennzahlen (z. B. Übungen/Sätze/Rekorde/Verbessert/Ø Intensität)
-   quetschte eine 5-spaltige Flex-Reihe die zweizeilige Beschriftung "Ø Intensität" auf eine
-   viel zu schmale Spalte, wodurch die Zeilen der Nachbarspalten optisch ineinander verrutschten.
-   3 Spalten geben jedem Feld spürbar mehr Platz; bei mehr als 3 Kennzahlen rutschen die
-   überzähligen automatisch in eine zweite Zeile (row-gap sorgt dort für Abstand). */
-.day-popup-stats{ display:grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap:14px 4px; }
-.day-popup-stat{ display:flex; flex-direction:column; align-items:center; min-width:0; }
-.day-popup-stat-value{ font-family:'JetBrains Mono', monospace; font-size:18px; font-weight:700; color:var(--text); }
-.day-popup-stat-label{ font-size:10.5px; color:var(--muted); margin-top:3px; }
+/* Eine Reihe, gleichmäßig verteilt (flex:1), unabhängig davon ob 2 (nur Übungen/Sätze) oder
+   5 Kennzahlen (mit Rekorde/Verbessert/Ø Intensität) angezeigt werden — bewusst kleinere Schrift
+   als früher, damit auch 5 Spalten nebeneinander passen, statt in eine zweite Zeile umzubrechen.
+   white-space:nowrap + ellipsis als Sicherheitsnetz für sehr schmale Bildschirme/lange Labels
+   (z. B. "Kohlenhydrate") — bricht dann sauber mit "…" ab statt die Zeile zu sprengen. */
+.day-popup-stats{ display:flex; align-items:flex-start; gap:2px; }
+.day-popup-stat{ display:flex; flex-direction:column; align-items:center; flex:1; min-width:0; }
+.day-popup-stat-value{ font-family:'JetBrains Mono', monospace; font-size:15px; font-weight:700; color:var(--text); white-space:nowrap; }
+.day-popup-stat-label{ font-size:9px; color:var(--muted); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 .day-popup-divider{ height:1px; background:var(--border); margin:10px 0; }
 .week-strip-day{ display:flex; flex-direction:column; align-items:center; gap:6px; flex:1; }
 .week-strip-label{ font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
@@ -2187,17 +2198,17 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
    Grid-Spalte übernimmt align-items:center dieselbe Zentrierung wie bei den Pfeilen — garantiert
    pixelgenau gleiche Höhe, unabhängig von der tatsächlichen Zeilenhöhe. */
 .date-row{
-  display:grid; grid-template-columns: 38px 1fr 38px 38px; align-items:center; gap:6px;
+  display:flex; align-items:center; justify-content:center; gap:16px;
   padding:6px 0 18px;
 }
-.settings-btn{
-  width:38px; height:38px; padding:0;
-  display:flex; align-items:center; justify-content:center; font-size:16px;
-}
+/* Flach statt Kreis-Button (Nutzerwunsch) — reine Icon-Buttons ohne Hintergrund/Rahmen,
+   Tap-Fläche bleibt über das Padding trotzdem großzügig genug. */
 .date-arrow{
-  width:38px; height:38px; border-radius:50%; border:none; background:var(--surface-2);
-  color:var(--text); display:flex; align-items:center; justify-content:center; cursor:pointer;
+  width:32px; height:32px; border:none; background:none;
+  color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer;
+  padding:0;
 }
+.date-arrow:active{ color:var(--text); }
 .date-arrow svg{width:18px; height:18px;}
 .date-label{
   font-family:'Fraunces',serif; font-weight:600; font-size:1.05rem;
@@ -2205,6 +2216,18 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
   padding:6px 14px; border-radius:20px; min-width:150px; text-align:center;
 }
 .date-label:active{background:var(--surface-2);}
+
+/* Beim Tageswechsel per Wisch oder Pfeil-Buttons (siehe navDirection-Parameter von
+   renderFoodTracker(), 15b-food-day.js) rutscht der neu aufgebaute Inhalt sanft aus der
+   Richtung ein, aus der man "gedanklich kommt" — nach vorn gewischt/geblättert (nächster Tag)
+   kommt er von rechts, nach hinten (voriger Tag) von links. Selbe Distanz/Dauer/Timing wie der
+   bestehende Undo-Toast (siehe undoToastIn), nur horizontal statt vertikal, damit sich das
+   Tempo konsistent zum Rest der App anfühlt. Bei jedem anderen Rendern OHNE navDirection (z. B.
+   nach dem Hinzufügen eines Lebensmittels) bleibt es bewusst animationslos wie bisher.*/
+@keyframes ftDaySlideNext{ from{ opacity:0; transform:translateX(18px); } to{ opacity:1; transform:translateX(0); } }
+@keyframes ftDaySlidePrev{ from{ opacity:0; transform:translateX(-18px); } to{ opacity:1; transform:translateX(0); } }
+.ft-day-content.ft-slide-next{ animation: ftDaySlideNext .2s ease; }
+.ft-day-content.ft-slide-prev{ animation: ftDaySlidePrev .2s ease; }
 
 /* ---- Kopf: kcal + Makros ---- */
 .summary-card{
@@ -2276,8 +2299,19 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
 .meal-section > .meal-head{ padding:13px 14px; cursor:pointer; }
 .meal-section.has-body > .meal-head{ border-bottom:1px solid var(--border); }
 .meal-head-actions{display:flex; align-items:center; gap:8px;}
-.meal-title{font-family:'Fraunces',serif; font-weight:600; font-size:1.15rem; display:flex; align-items:center; gap:8px;}
+/* align-items:baseline statt center (vorher): bei "Mittagessen · 1221 kcal" saß der kleinere
+   kcal-Text mit center-Ausrichtung sichtbar höher als die Grundlinie des Mahlzeiten-Namens,
+   weil unterschiedlich große Schrift bei align-items:center an der MITTE statt an der
+   gemeinsamen Textgrundlinie ausgerichtet wird. baseline richtet beide exakt an derselben
+   Linie aus, wie bei normalem Fließtext. */
+.meal-title{font-family:'Fraunces',serif; font-weight:600; font-size:1.15rem; display:flex; align-items:baseline; gap:8px;}
 .meal-kcal{color:var(--muted); font-size:0.9rem; font-weight:500;}
+.meal-split-btn{
+  display:flex; align-items:center; justify-content:center; width:28px; height:28px;
+  background:none; border:1px solid var(--border); border-radius:8px; color:var(--muted);
+  flex-shrink:0;
+}
+.meal-split-btn:active{ background: var(--surface-2); }
 .meal-add{
   width:32px; height:32px; border-radius:50%; border:none; background:var(--accent); color:#fff;
   font-size:1.3rem; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer;

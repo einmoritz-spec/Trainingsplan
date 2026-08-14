@@ -360,7 +360,7 @@ function openDayTrainingPopup(year, month, day){
     // passt: eine fehlende RPE-Erfassung ist kein "Wert ist 0", sondern schlicht nicht
     // vorhanden (sessionAvgRpe bereits null in dem Fall).
     if (sessionAvgRpe != null){
-      stats.push({ value: fmtRpe(sessionAvgRpe), label: 'Ø Intensität', color: intensityBandForRpe(sessionAvgRpe).color });
+      stats.push({ value: `Ø ${fmtRpe(sessionAvgRpe)}`, label: 'Intensität', color: intensityBandForRpe(sessionAvgRpe).color });
     }
     const statsHTML = stats.map(s => `
       <div class="day-popup-stat">

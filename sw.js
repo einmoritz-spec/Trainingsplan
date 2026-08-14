@@ -124,7 +124,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v42';
+const CACHE_NAME = 'trainingsplan-cache-v43';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
@@ -164,6 +164,7 @@ const APP_SHELL = [
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
   './assets/icons/icon-512-maskable.png',
+  './assets/icons/fork-knife.png',
   './assets/exercises/e1.webp',
   './assets/exercises/e2.webp',
   './assets/exercises/e3.webp',

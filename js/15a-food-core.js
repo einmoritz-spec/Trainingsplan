@@ -109,7 +109,7 @@ async function ftSaveDays(iso){ await saveFoodDayChunk(iso, ftDays); }
 
 async function initFoodTracker(){
   if (foodTrackerLoaded) return;
-  const [days, favorites, custom, meals, recent, offCache, lastAmounts, usageCount, goals, themeOverride, autoMeals] = await Promise.all([
+  const [days, favorites, custom, meals, recent, offCache, lastAmounts, usageCount, goals, themeOverride, autoMeals, mealCollapse] = await Promise.all([
     loadAllFoodDays(),
     loadJSON('food:favorites', []),
     loadJSON('food:customFoods', []),
@@ -121,11 +121,13 @@ async function initFoodTracker(){
     loadJSON('food:goals', { kcal: null, p: null, c: null, f: null }),
     loadJSON('food:themeOverride', {}),
     loadJSON('food:autoMeals', { breakfast: null, lunch: null, dinner: null, snacks: null }),
+    loadJSON('food:mealCollapse', {}),
   ]);
   ftDays = days; ftFavorites = favorites; ftCustomFoods = custom;
   ftSavedMeals = meals; ftRecent = recent; ftOffCache = offCache; ftLastAmounts = lastAmounts;
   ftFoodUsageCount = usageCount; ftGoals = goals; ftThemeOverride = themeOverride || {};
   ftAutoMeals = autoMeals || { breakfast: null, lunch: null, dinner: null, snacks: null };
+  ftMealCollapseOverride = mealCollapse || {};
   ftOffMemCache = {};
   foodTrackerLoaded = true;
   // Erst NACHDEM alles geladen ist (braucht ftSavedMeals, um eine Auto-Mahlzeits-ID aufzulösen)
