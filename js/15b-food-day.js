@@ -686,10 +686,6 @@ function ftSettingsBodyHTML(){
 
     ${ftSettingsAccordionSection('autoMahlzeiten', 'Automatisch täglich eintragen', `
       <div style="padding:14px 16px;">
-        <div class="no-results" style="text-align:left; padding:0 0 12px;">
-          Trägt sich nur ein, solange die jeweilige Mahlzeit an dem Tag noch komplett leer ist —
-          eigene Einträge werden nie überschrieben.
-        </div>
         ${FT_MEAL_KEYS.map((meal, i) => `
           <div class="field-label" style="margin-top:${i===0 ? '0' : '16px'};">${FT_MEAL_LABELS[meal]}</div>
           <select class="text-input" data-ft-automeal="${meal}">

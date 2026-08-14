@@ -192,11 +192,6 @@ function renderExerciseEditFieldsHTML(ex, i){
       <div>
         <label>Anteil Körpergewicht (%)</label>
         <input type="number" min="1" max="100" step="5" value="${Math.round((ex.bodyWeightFactor != null ? ex.bodyWeightFactor : 1) * 100)}" data-field="bodyWeightFactorPercent">
-        <div style="font-size:11px; color:var(--muted); margin-top:4px; line-height:1.4;">
-          Bei Klimmzügen/Dips wird fast das volle Körpergewicht bewegt (100 %). Bei Situps/
-          Rückenstrecker hebt sich nur der Rumpf — realistischer sind ca. 50 %. Ein eingetragenes
-          Zusatzgewicht zählt davon unabhängig immer voll.
-        </div>
       </div>
     </div>
     ` : ''}` : ''}
@@ -849,9 +844,6 @@ function renderSettings(){
             <button class="accent-swatch ${currentAccentColor().id === c.id ? 'selected' : ''}" data-accent-id="${c.id}" data-accent-hex="${c.hex}" data-favorite="${c.isFavorite ? '1' : ''}" style="background:${c.hex};" aria-label="${c.name}"></button>
           `).join('')}
         </div>
-        <div class="history-empty" id="accentFavHint" style="display:${accentPickerOpen && favoriteAccentColors().length ? 'block' : 'none'}; margin-top:8px; padding:8px 4px; text-align:left; background:none; border:none;">
-          <span style="font-size:11px; color:var(--muted);">Gedrückt halten, um einen Favoriten wieder zu entfernen.</span>
-        </div>
         <button class="accent-custom-btn" id="accentCustomBtn" type="button" style="display:${accentPickerOpen ? 'flex' : 'none'};">
           <img class="accent-custom-btn-icon" src="${ICON_COLORWHEEL}" alt="">
           Eigene Farbe wählen
@@ -870,9 +862,6 @@ function renderSettings(){
             <button class="accent-swatch ${currentBgColor() && currentBgColor().id === c.id ? 'selected' : ''}" data-bg-id="${c.id}" data-bg-hex="${c.hex}" data-favorite="${c.isFavorite ? '1' : ''}" style="background:${c.hex}; ${c.isFavorite ? '' : 'border:1px solid var(--border);'}" aria-label="${c.name}"></button>
           `).join('')}
         </div>
-        <div class="history-empty" id="bgFavHint" style="display:${bgPickerOpen && favoriteAccentColors().length ? 'block' : 'none'}; margin-top:8px; padding:8px 4px; text-align:left; background:none; border:none;">
-          <span style="font-size:11px; color:var(--muted);">Gedrückt halten, um einen Favoriten wieder zu entfernen.</span>
-        </div>
         <button class="accent-custom-btn" id="bgCustomBtn" type="button" style="display:${bgPickerOpen ? 'flex' : 'none'};">
           <img class="accent-custom-btn-icon" src="${ICON_COLORWHEEL}" alt="">
           Eigene Farbe wählen
@@ -882,9 +871,6 @@ function renderSettings(){
           <span style="font-size:11px; color:var(--muted); white-space:nowrap;">Dunkler Text</span>
           <input type="range" id="accentContrastSlider" min="0" max="1" step="0.01" value="${currentAccentContrastThreshold()}" style="flex:1; accent-color: var(--accent);">
           <span style="font-size:11px; color:var(--muted); white-space:nowrap;">Weißer Text</span>
-        </div>
-        <div class="history-empty" style="margin-top:8px; padding:8px 4px; text-align:left; background:none; border:none;">
-          <span style="font-size:11px; color:var(--muted);">Bestimmt, ab welcher Helligkeit der Akzentfarbe auf Buttons dunkler statt weißer Text verwendet wird. Weiter rechts = Text wird schon bei helleren Farben weiß.</span>
         </div>
       </div>
     `, darstellungBadge)}
@@ -912,9 +898,6 @@ function renderSettings(){
             Eigene Schriftart hochladen
           </button>
           <input type="file" id="fontUploadInput" accept=".ttf,.otf,.woff,.woff2" multiple style="display:none;">
-          <div class="history-empty" style="margin-top:8px; padding:8px 4px; text-align:left; background:none; border:none;">
-            <span style="font-size:11px; color:var(--muted);">Unterstützt werden .ttf-, .otf-, .woff- und .woff2-Dateien. Hochgeladene Schriften erscheinen danach im Schriftart-Rad oben.</span>
-          </div>
         </div>
       </div>
     `, currentFontOption().id === 'default' ? '' : currentFontOption().name)}
@@ -991,19 +974,13 @@ function renderSettings(){
         </button>
       </div>
       <div class="muscle-group-body" style="display:${perfModeOn ? 'block' : 'none'}">
-        <div class="history-empty" style="margin:0 16px 10px; padding:8px 4px; text-align:left; background:none; border:none;">
-          <span style="font-size:11px; color:var(--muted);">Bei Kraftübungen: Steigerung wird automatisch vorgeschlagen, sobald in der letzten Einheit ALLE Sätze den oberen Rand des Wdh.-Zielbereichs der Übung (Wdh von/bis, siehe Übungen-Editor) erreicht haben — danach ein Gewichtsschritt, Wdh.-Ziel zurück auf den unteren Rand (doppelte Progression).</span>
-        </div>
-        <div style="padding:0 16px 14px; text-align:left; font-size:14px; line-height:1.6;">
+        <div style="padding:14px 16px 14px; text-align:left; font-size:14px; line-height:1.6;">
           Bei Kardio-Übungen: Steigerung vorschlagen ab <input type="number" inputmode="numeric" min="2" max="20" step="1" class="inline-plain-input" id="perfThresholdInput" enterkeyhint="done" value="${perfThreshold}"> mal gleicher Dauer.
         </div>
         <div style="padding:0 16px 14px;">
           <div style="display:flex; align-items:center; gap:10px;">
             <input type="range" id="perfPercentageSlider" min="10" max="100" step="10" value="${perfPercentage}" style="flex:1; accent-color: var(--accent);">
             <span style="font-size:13px; color:var(--text); min-width:38px; text-align:right;" id="perfPercentageValue">${perfPercentage}%</span>
-          </div>
-          <div class="history-empty" style="margin-top:8px; padding:8px 4px; text-align:left; background:none; border:none;">
-            <span style="font-size:11px; color:var(--muted);">Bei wie viel Prozent der Übungen im Training soll eine Verbesserung vorgeschlagen werden.</span>
           </div>
         </div>
       </div>
@@ -1014,9 +991,6 @@ function renderSettings(){
       <button class="toggle-switch ${rpeOn ? 'on' : ''}" id="rpeToggle" type="button" role="switch" aria-checked="${rpeOn}" aria-label="RPE-Erfassung pro Satz">
         <span class="toggle-knob"></span>
       </button>
-    </div>
-    <div class="history-empty" style="margin:8px 0 0; padding:8px 4px; text-align:left; background:none; border:none; display:${rpeOn ? 'none' : 'block'};">
-      <span style="font-size:11px; color:var(--muted);">Optionale Anstrengungs-Einschätzung (RPE, 6–10) pro Satz. Standardmäßig aus. Fließt in den Performancemodus mit ein: bei hoher RPE wird eine Steigerung seltener vorgeschlagen.</span>
     </div>
 
     <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
@@ -1032,18 +1006,12 @@ function renderSettings(){
         <span class="toggle-knob"></span>
       </button>
     </div>
-    <div class="history-empty" style="margin:8px 0 0; padding:8px 4px; text-align:left; background:none; border:none; display:${plan.wakeLockEnabled === true ? 'none' : 'block'};">
-      <span style="font-size:11px; color:var(--muted);">Verhindert, dass sich der Bildschirm bei laufendem Training abschaltet. Standardmäßig aus.</span>
-    </div>
 
     <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
       <span class="mg-name">Geschätzter Kalorienverbrauch</span>
       <button class="toggle-switch ${plan.kcalEstimateEnabled !== false ? 'on' : ''}" id="kcalEstimateToggle" type="button" role="switch" aria-checked="${plan.kcalEstimateEnabled !== false}" aria-label="Geschätzten Kalorienverbrauch anzeigen">
         <span class="toggle-knob"></span>
       </button>
-    </div>
-    <div class="history-empty" style="margin:8px 0 0; padding:8px 4px; text-align:left; background:none; border:none; display:${plan.kcalEstimateEnabled !== false ? 'none' : 'block'};">
-      <span style="font-size:11px; color:var(--muted);">Grobe Schätzung (Trainingsdetail, Zusammenfassung, Essenstracker-Snapshot) auf Basis von Übungsart, Dauer und Körpergewicht. Standardmäßig an. Ist zusätzlich die RPE-Erfassung aktiv, fließt die eingetragene Anstrengung mit ein — RPE 10 verbraucht bei gleicher Dauer etwas mehr als RPE 6.</span>
     </div>
 
     <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
@@ -1052,7 +1020,6 @@ function renderSettings(){
     </div>
 
     <div class="section-label">Körperdaten</div>
-    <p class="settings-hint">Alles optional außer Körpergewicht (für die Vorschläge im Performancemodus und die Statistiken nötig). Geschlecht und Größe fließen nur als kleiner, gedeckelter Korrekturfaktor in den geschätzten Kalorienverbrauch ein — Körpergewicht bleibt dabei der mit Abstand größte Faktor, ohne die beiden anderen Angaben wird einfach weitergerechnet wie bisher.</p>
     <div class="muscle-group-header settings-static-row" style="margin-top:0;">
       <span class="mg-name">Körpergewicht</span>
       <div class="settings-row-btns">
@@ -1074,7 +1041,6 @@ function renderSettings(){
     </div>
 
     <div class="section-label">Daten</div>
-    <p class="settings-hint">Enthält Übungen, Trainingsverlauf und Essenstracker-Daten (Ernährung lässt sich zusätzlich separat exportieren, siehe Einstellungen im Essenstracker).</p>
     <div class="muscle-group-header settings-static-row" style="margin-top:0;">
       <div class="settings-row-btns" style="width:100%;">
         <button class="btn btn-ghost btn-small" id="btnExport" style="flex:1;">Exportieren</button>

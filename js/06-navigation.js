@@ -107,6 +107,10 @@ function goIntensityStats(push){
   if (push !== false) pushView('intensityStats');
   renderIntensityStats();
 }
+function goKcalStats(push){
+  if (push !== false) pushView('kcalStats');
+  renderKcalStats();
+}
 function goProgressDetail(name, push){
   if (push !== false) pushView('progressDetail', { name });
   renderExerciseProgress(name);
@@ -258,6 +262,7 @@ function renderViewByState(state){
     case 'progressList': renderProgressList(); break;
     case 'muscleBalance': renderMuscleBalance(); break;
     case 'intensityStats': renderIntensityStats(); break;
+    case 'kcalStats': renderKcalStats(); break;
     case 'progressDetail': renderExerciseProgress(state.params.name); break;
     case 'sessionDetail': renderSessionDetail(state.params.id); break;
     case 'sessionSummary': {

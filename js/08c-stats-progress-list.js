@@ -76,6 +76,11 @@ function renderProgressList(){
       <span>Trainingsintensität (RPE)</span><span class="progress-chevron">›</span>
     </button>
     ` : ''}
+    ${kcalEstimateEnabled() ? `
+    <button class="btn btn-ghost" id="cardKcalStats" style="margin-bottom:18px; text-align:left; display:flex; align-items:center; justify-content:space-between;">
+      <span>Kalorienverbrauch</span><span class="progress-chevron">›</span>
+    </button>
+    ` : ''}
     ${rows || '<div class="history-empty">Noch keine Übung mit protokollierten Daten.</div>'}
     <button class="btn btn-ghost btn-icon-label" id="btnProgressExportPdf" style="margin-top:18px;">
       <svg class="btn-icon-label-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"></path><path d="M5 13v-8a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2h-6.5"></path><path d="M3 19h9"></path><path d="M9 16l3 3l-3 3"></path></svg>
@@ -89,6 +94,8 @@ function renderProgressList(){
   document.getElementById('cardMuscleBalance').onclick = () => goMuscleBalance();
   const cardIntensityStatsEl = document.getElementById('cardIntensityStats');
   if (cardIntensityStatsEl) cardIntensityStatsEl.onclick = () => goIntensityStats();
+  const cardKcalStatsEl = document.getElementById('cardKcalStats');
+  if (cardKcalStatsEl) cardKcalStatsEl.onclick = () => goKcalStats();
   document.getElementById('btnProgressExportPdf').onclick = async () => {
     await ensureJsPdfLoaded();
     let blob = null;
@@ -584,6 +591,75 @@ function renderIntensityStats(){
       const key = btn.dataset.chartacc;
       if (intensityChartOpen.has(key)) intensityChartOpen.delete(key); else intensityChartOpen.add(key);
       renderIntensityStats();
+    };
+  });
+  wireLineCharts(app);
+}
+
+/* ---------------------------------------------------
+   KALORIENVERBRAUCH — eigener Statistik-Screen
+   ---------------------------------------------------
+   Erreichbar von der Statistik-Übersicht aus, direkt neben "Trainingsintensität (RPE)" — nur
+   sichtbar, wenn "Geschätzter Kalorienverbrauch" in den Einstellungen aktiv ist
+   (kcalEstimateEnabled()), unabhängig davon ob schon konkrete Daten vorliegen (gleiches Prinzip
+   wie beim RPE-Screen: hängt rein am Einstellungs-Schalter, nicht an "gibt es schon Werte").
+   Anders als bei der Intensität wird hier NICHT gemittelt, sondern aufsummiert (kcal sind eine
+   verbrauchte Menge, kein Zustand) — Gesamt- und Durchschnittswert im Kopf, Verlauf je Einheit
+   im Diagramm darunter. estimateSessionKcal() liefert pro Einheit bereits null zurück, wenn kein
+   Körpergewicht hinterlegt ist — solche Einheiten fallen hier einfach aus dem Diagramm/der
+   Summe raus, statt mit einem Fehlerwert reinzurechnen.
+--------------------------------------------------- */
+let kcalStatsPeriod = 'month';
+const KCAL_PERIOD_LABELS = { week: 'Woche', month: 'Monat', quarter: 'Quartal', year: 'Jahr', total: 'Insgesamt' };
+let kcalChartOpen = new Set();
+
+function renderKcalStats(){
+  if (!kcalEstimateEnabled()) return goProgressList(false); // Sicherheitsnetz, falls über Zurück/Vorwärts erreicht, während die Funktion inzwischen deaktiviert wurde
+  const days = statsPeriodToDays(kcalStatsPeriod);
+  const cutoff = days ? Date.now() - days * 86400000 : null;
+  const periodSessions = sessions.filter(s => !cutoff || new Date(s.date).getTime() >= cutoff);
+  const color = '#e08b3a'; // warmer Farbton (Energie/Feuer-Assoziation), bewusst weder --accent-3 (Gewicht) noch --accent-2 (RPE) noch die frei wählbare --accent (Zeit), damit sich die drei "neuen" Statistik-Screens optisch unterscheiden
+
+  const chartPoints = periodSessions
+    .slice()
+    .sort((a,b) => new Date(a.date) - new Date(b.date))
+    .map(s => {
+      const v = estimateSessionKcal(s);
+      return v == null ? null : { label: shortDate(s.date), value: Math.round(v), date: s.date };
+    })
+    .filter(Boolean);
+
+  const totalKcal = chartPoints.reduce((a,p) => a + p.value, 0);
+  const avgKcal = chartPoints.length ? Math.round(totalKcal / chartPoints.length) : null;
+  const kcalFormatter = v => Math.round(v).toLocaleString('de-DE');
+
+  app.innerHTML = `
+    <div class="back-row" style="margin-top:0;"><button class="back-btn-icon" id="btnBack" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button></div>
+    <div class="progress-summary" style="margin-top:18px;">
+      <span>${chartPoints.length ? chartPoints.length + ' Einheit' + (chartPoints.length === 1 ? '' : 'en') + ' mit Schätzung' : 'Noch keine Schätzung möglich'}</span>
+      ${chartPoints.length ? `<span>Gesamt: ${kcalFormatter(totalKcal)} kcal${avgKcal != null ? ` · Ø ${kcalFormatter(avgKcal)}` : ''}</span>` : ''}
+    </div>
+    <div class="period-row">
+      ${Object.keys(KCAL_PERIOD_LABELS).map(p => `
+        <button class="period-btn ${kcalStatsPeriod === p ? 'active' : ''}" data-period="${p}">${KCAL_PERIOD_LABELS[p]}</button>
+      `).join('')}
+    </div>
+    ${chartAccordionHTML(kcalChartOpen, 'main', 'Verlauf je Einheit', chartPoints, color, v => kcalFormatter(v) + ' kcal', buildLineChart(chartPoints, color, kcalFormatter))}
+    ${!chartPoints.length ? `<div class="history-empty" style="margin-top:14px;">Für diesen Zeitraum liegt noch keine Schätzung vor — dafür muss unter Einstellungen → Körperdaten ein Körpergewicht hinterlegt sein.</div>` : ''}
+  `;
+
+  document.getElementById('btnBack').onclick = () => history.back();
+  app.querySelectorAll('.period-btn').forEach(btn => {
+    btn.onclick = () => {
+      kcalStatsPeriod = btn.dataset.period;
+      renderKcalStats();
+    };
+  });
+  app.querySelectorAll('[data-chartacc]').forEach(btn => {
+    btn.onclick = () => {
+      const key = btn.dataset.chartacc;
+      if (kcalChartOpen.has(key)) kcalChartOpen.delete(key); else kcalChartOpen.add(key);
+      renderKcalStats();
     };
   });
   wireLineCharts(app);

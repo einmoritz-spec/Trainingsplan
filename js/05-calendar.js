@@ -235,10 +235,12 @@ function monthOverviewBlockHTML(year, month){
   const monthWarmupCount = monthSessions.reduce((sum, s) => sum + (s.entries || []).reduce((esum, e) => esum + (e.sets || []).filter(st => st.warmup).length, 0), 0);
   const monthDeloadCount = monthSessions.filter(s => s.deloadUsed).length;
   const monthAvgRpe = rpeEnabled() ? avgRpeForSessions(monthSessions) : null;
+  const monthTotalKcal = kcalEstimateEnabled() ? Math.round(monthSessions.reduce((sum, s) => sum + (estimateSessionKcal(s) || 0), 0)) : 0;
   const trackingParts = [];
   if (monthWarmupCount > 0) trackingParts.push(`${monthWarmupCount} Warm-up${monthWarmupCount === 1 ? '' : 's'}`);
   if (monthDeloadCount > 0) trackingParts.push(`${monthDeloadCount} Deload${monthDeloadCount === 1 ? '' : 's'}`);
   if (monthAvgRpe != null) trackingParts.push(`Ø ${fmtRpe(monthAvgRpe)} Intensität`);
+  if (monthTotalKcal > 0) trackingParts.push(`≈ ${monthTotalKcal.toLocaleString('de-DE')} kcal`);
   const trackingSubtitle = trackingParts.length ? `<p class="month-overview-subtitle month-overview-tracking-subtitle">${trackingParts.join(' · ')}</p>` : '';
 
   const now = new Date();
@@ -346,12 +348,20 @@ function openDayTrainingPopup(year, month, day){
     const { exercises, sets, starCount, improvedCount } = sessionDayStats(session);
     // Nur Kennzahlen >0 anzeigen (flex:1 auf .day-popup-stat verteilt die verbleibenden
     // dadurch automatisch gleichmäßig über die Zeilenbreite).
+    const sessionAvgRpe = rpeEnabled() ? avgRpeForSessions([session]) : null;
     const stats = [
       { value: exercises, label: 'Übungen', color: null },
       { value: sets, label: 'Sätze', color: null },
       { value: starCount, label: 'Rekorde', color: '#d9c74a' },
       { value: improvedCount, label: 'Verbessert', color: '#7cc576' },
     ].filter(s => s.value > 0);
+    // RPE separat angehängt statt mit ins obige Array + filter() — deren Filter prüft "> 0",
+    // was für einen (immer positiven) RPE-Wert zwar unschädlich wäre, aber inhaltlich nicht
+    // passt: eine fehlende RPE-Erfassung ist kein "Wert ist 0", sondern schlicht nicht
+    // vorhanden (sessionAvgRpe bereits null in dem Fall).
+    if (sessionAvgRpe != null){
+      stats.push({ value: fmtRpe(sessionAvgRpe), label: 'Ø Intensität', color: intensityBandForRpe(sessionAvgRpe).color });
+    }
     const statsHTML = stats.map(s => `
       <div class="day-popup-stat">
         <div class="day-popup-stat-value"${s.color ? ` style="color:${s.color};"` : ''}>${s.value}</div>
@@ -688,7 +698,8 @@ function computeMonthReportData(year, month){
     countDelta, volumeDelta, hasPrevData,
     longestStreak, topExercise, topMuscleGroup: muscleGroupTop[0] || null,
     cardioSeconds, cardioDistanceTotal,
-    avgRpe: rpeEnabled() ? avgRpeForSessions(monthSessions) : null
+    avgRpe: rpeEnabled() ? avgRpeForSessions(monthSessions) : null,
+    totalKcal: kcalEstimateEnabled() ? Math.round(monthSessions.reduce((sum, s) => sum + (estimateSessionKcal(s) || 0), 0)) : 0
   };
 }
 
@@ -699,7 +710,7 @@ function renderMonthReport(year, month){
     muscleGroupTotal, muscleGroupTop,
     countDelta, volumeDelta, hasPrevData,
     longestStreak, topExercise, topMuscleGroup,
-    cardioSeconds, cardioDistanceTotal, avgRpe
+    cardioSeconds, cardioDistanceTotal, avgRpe, totalKcal
   } = computeMonthReportData(year, month);
   const now = new Date();
   const titleYear = year !== now.getFullYear() ? ` ${year}` : '';
@@ -763,6 +774,9 @@ function renderMonthReport(year, month){
   if (avgRpe != null){
     const band = intensityBandForRpe(avgRpe);
     highlightRows.push({ label: 'Ø Trainingsintensität', value: `${fmtRpe(avgRpe)} RPE · ${band.label}`, valueColor: band.color });
+  }
+  if (totalKcal > 0){
+    highlightRows.push({ label: 'Geschätzter Verbrauch', value: `≈ ${totalKcal.toLocaleString('de-DE')} kcal` });
   }
   const highlightsHTML = highlightRows.map(r => `
     <div class="month-report-highlight-row">

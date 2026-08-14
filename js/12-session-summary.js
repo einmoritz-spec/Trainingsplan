@@ -94,6 +94,7 @@ function renderSessionSummary(session){
   const streak = computeWeekStreak();
   const { highlights: exerciseHighlights, starCount, improvedCount } = computeExerciseHighlights(session);
   const sessionAvgRpe = rpeEnabled() ? avgRpeForSessions([session]) : null;
+  const sessionKcal = estimateSessionKcal(session);
   const durationDisplay = fmtDuration(session.durationSec);
   // Ab 1h wird aus "MM:SS" ein "H:MM:SS" — spürbar breiter, daher kleinere Schrift in der Pill
   // (siehe .summary-pill-value-long), damit die Ziffern nicht über die Trennlinie laufen.
@@ -158,6 +159,12 @@ function renderSessionSummary(session){
       <div class="summary-pill-item">
         <div class="summary-pill-top"><span class="summary-pill-value" style="color:${intensityBandForRpe(sessionAvgRpe).color};">${fmtRpe(sessionAvgRpe)}</span></div>
         <div class="summary-pill-label">Ø Intensität</div>
+      </div>` : ''}
+      ${sessionKcal != null ? `
+      <div class="summary-pill-divider"></div>
+      <div class="summary-pill-item">
+        <div class="summary-pill-top"><span class="summary-pill-value">${sessionKcal.toLocaleString('de-DE')}</span></div>
+        <div class="summary-pill-label">≈ kcal</div>
       </div>` : ''}
     </div>
     ${rowsHTML ? `
