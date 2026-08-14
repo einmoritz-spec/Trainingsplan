@@ -176,6 +176,15 @@ function ftCurrentMeal(dateIso){
   return null;
 }
 
+// Sortiert die Einträge einer Mahlzeit nach kcal absteigend (größter Kalorienbeitrag zuerst) —
+// gemeinsam genutzt von der aufgeklappten Zutatenliste UND der eingeklappten Vorschauzeile in
+// ftMealHTML(), damit beide dieselbe Reihenfolge zeigen. Ties (gleiche kcal) behalten ihre
+// bisherige Reihenfolge (Array.sort in modernen JS-Engines ist stabil), .slice() zuerst, damit
+// das Original-Array (die eigentlichen Tagesdaten) nicht verändert wird.
+function ftSortedByKcal(entries){
+  return entries.slice().sort((a, b) => (b.kcal || 0) - (a.kcal || 0));
+}
+
 function ftMealHTML(meal){
   const entries = ftGetDay(ftCurrentDate)[meal];
   // "Als Mahlzeit speichern" nur, solange die Mahlzeit ausschließlich aus einzelnen
@@ -225,7 +234,9 @@ function ftMealHTML(meal){
     // Fall an einer Wortgrenze. Der erste Name wird immer gezeigt, auch wenn er allein schon das
     // Budget sprengt (sonst bliebe die Vorschau leer) — CSS text-overflow bleibt als Sicherheitsnetz
     // für genau diesen Ausnahmefall bestehen.
-    const previewAllNames = entries.slice().reverse().map(e => e.name);
+    // Sortiert nach kcal absteigend (größter Beitrag zuerst) statt wie vorher neueste zuerst —
+    // sowohl hier in der Vorschau als auch unten in der vollen Liste (ftSortedByKcal()).
+    const previewAllNames = ftSortedByKcal(entries).map(e => e.name);
     const PREVIEW_MAX_CHARS = 34;
     const shownNames = [];
     let usedChars = 0;
@@ -248,7 +259,7 @@ function ftMealHTML(meal){
     <div class="meal-section${isCurrent ? ' current' : ''} has-body" data-meal="${meal}">
       ${headHTML}
       <div class="food-list">
-        ${entries.length ? entries.slice().reverse().map(e=> e.kind==='mealGroup' ? ftMealGroupRowHTML(meal,e) : ftFoodRowHTML(meal, e)).join('') : `<div class="empty-meal">Noch nichts eingetragen</div>`}
+        ${entries.length ? ftSortedByKcal(entries).map(e=> e.kind==='mealGroup' ? ftMealGroupRowHTML(meal,e) : ftFoodRowHTML(meal, e)).join('') : `<div class="empty-meal">Noch nichts eingetragen</div>`}
       </div>
       ${entries.length && !hasMealGroup && canSaveAsMeal ? `<button class="save-meal-btn" id="saveMeal_${meal}">Als Mahlzeit speichern</button>` : ''}
     </div>
