@@ -6,8 +6,159 @@
 // (sw.js, Cache-First) nach einem Update oft noch mehrere Starts lang die ALTE Fassung —
 // ohne diesen Stempel ist "der Fix wirkt nicht" nicht von "der Fix ist nie angekommen" zu
 // unterscheiden. Bei jeder Änderung zusammen mit CACHE_NAME in sw.js erhöhen.
-const BUILD_STAMP = '34';
-// Berechnet das tatsächlich bewegte Gewicht für einen Satz unter Berücksichtigung
+const BUILD_STAMP = '35';
+/* ---------------------------------------------------
+   Wake Lock (Bildschirm bei laufendem Training nicht abschalten)
+   ---------------------------------------------------
+   Die Screen-Wake-Lock-API gibt den Lock automatisch frei, sobald das Dokument nicht mehr
+   sichtbar ist (App in den Hintergrund, Bildschirm sperrt sich) — bei bloßem Wechsel auf eine
+   ANDERE Ansicht INNERHALB der App (z. B. übers Mini-Banner zur Startseite) bleibt er dagegen
+   bestehen, da das Dokument sichtbar bleibt. Ein `visibilitychange`-Listener fordert ihn beim
+   Zurückkehren in den Vordergrund automatisch erneut an, falls noch/wieder ein Training läuft
+   (aktiv gehalten unabhängig vom Pausenstatus — auch während der Trainingspause soll der
+   Bildschirm nicht einschlafen). Nicht unterstützende Browser/Geräte (kein `navigator.wakeLock`)
+   scheitern still, ohne die App zu beeinträchtigen.
+--------------------------------------------------- */
+async function requestTrainingWakeLock(){
+  if (!('wakeLock' in navigator)) return;
+  if (!plan || plan.wakeLockEnabled !== true) return; // Standard aus, siehe Einstellungen → Training
+  try{
+    trainingWakeLock = await navigator.wakeLock.request('screen');
+    trainingWakeLock.addEventListener('release', () => { trainingWakeLock = null; });
+  }catch(err){
+    trainingWakeLock = null; // z. B. Akkusparmodus oder Tab im Hintergrund — kein harter Fehler
+  }
+}
+function releaseTrainingWakeLock(){
+  if (trainingWakeLock){
+    trainingWakeLock.release().catch(() => {});
+    trainingWakeLock = null;
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && active && !trainingWakeLock){
+    requestTrainingWakeLock();
+  }
+});
+/* ---------------------------------------------------
+   Geschätzter Kalorienverbrauch (MET-basiert)
+   ---------------------------------------------------
+   Grobe Schätzung nach der Standardformel kcal/min = MET × 3,5 × Körpergewicht(kg) / 200 (siehe
+   z. B. Compendium of Physical Activities). MET-Werte sind bewusst konservative Mittelwerte für
+   "typisches" Training MIT Satzpausen (nicht Dauerbelastung) — eine echte Schätzung bräuchte
+   Herzfrequenz-/Aktivitätstracking, das diese App nicht hat. Verstanden als grobe Orientierung,
+   nicht als medizinisch/sportwissenschaftlich exakter Wert. Über plan.kcalEstimateEnabled in den
+   Einstellungen ein-/ausschaltbar (Standard AN, damit sich am bisherigen Verhalten nichts
+   ändert) — bei AUS liefert estimateSessionKcal() überall konsequent null zurück, an ALLEN
+   Anzeigestellen (Trainingsdetail, Zusammenfassungs-PDF, Essenstracker-Snapshot) verschwindet
+   die Anzeige dann einfach, ganz ohne eigene Prüfung an jeder einzelnen Stelle.
+   Als Trainingsdauer je Übung wird e.timeSpentSec verwendet (siehe accrueExerciseTime(), zählt
+   die Zeit, die die Übungskarte im aktiven Training geöffnet war — inkl. Satzpausen dieser
+   Übung, was für eine Durchschnittsbetrachtung über die ganze Übung hinweg passt). Ältere, vor
+   Einführung dieses Trackings gespeicherte Einheiten haben kein timeSpentSec (0/undefined) —
+   für solche Einträge wird ersatzweise die Gesamtdauer der Einheit gleichmäßig auf alle Übungen
+   ohne eigenen Zeitwert verteilt, damit auch alte Trainings eine (gröbere) Schätzung bekommen.
+   Ist die RPE-Erfassung aktiv (rpeEnabled()) UND für eine Übung ein RPE-Wert eingetragen, fließt
+   die tatsächlich empfundene Anstrengung zusätzlich als kleiner Auf-/Abschlag auf den MET-Wert
+   dieser Übung ein (siehe rpeIntensityFactor()) — bei gleicher Dauer verbraucht ein als RPE 10
+   (Muskelversagen) empfundener Satz mehr als derselbe Satz bei RPE 6 (noch deutlich Reserve).
+   Ohne eingetragenen RPE-Wert (oder RPE-Erfassung aus) bleibt der MET-Wert unverändert wie
+   bisher — reiner Bonus bei vorhandenen Daten, kein geschätzter Ersatzwert.
+   Optional außerdem Geschlecht und Körpergröße (siehe bodyCompositionKcalFactor()) — beides
+   nur ein kleiner, gedeckelter Korrekturfaktor obendrauf, kein dominierender Bestandteil der
+   Formel (Körpergewicht bleibt der mit Abstand größte Faktor).
+--------------------------------------------------- */
+function kcalEstimateEnabled(){
+  return !(plan && plan.kcalEstimateEnabled === false);
+}
+const MET_STRENGTH = 5.0;       // Krafttraining allgemein (freie Gewichte/Maschinen), Mittelwert moderat–intensiv inkl. Satzpausen
+const MET_BODYWEIGHT = 4.0;     // Eigengewichtsübungen (Liegestütze, Klimmzüge etc.), moderat inkl. Satzpausen
+const MET_CARDIO_MACHINE = {
+  stepper: 5.0,       // Crosstrainer, moderat
+  fahrrad: 6.0,        // Fahrradergometer, moderat (Widerstandsstufe wird bewusst nicht mit einberechnet — zu grobe Datenlage)
+  rudern: 7.0,          // Rudergerät, moderat
+  stairmaster: 9.0      // Stairmaster, intensiv
+};
+// Laufband: MET anhand des eingetragenen Tempos (km/h) — grobe Stufen angelehnt an die
+// gängigen Compendium-Werte für Gehen/Laufen auf dem Laufband. Ohne eingetragenes Tempo (z. B.
+// nur Zeit erfasst) Rückfall auf einen mittleren Jogging-Wert.
+function estimateLaufbandMET(speedKmh){
+  if (speedKmh == null || speedKmh <= 0) return 7.0;
+  if (speedKmh < 4) return 2.0;
+  if (speedKmh < 5.5) return 3.0;
+  if (speedKmh < 6.5) return 3.5;
+  if (speedKmh < 8) return 6.0;
+  if (speedKmh < 9.5) return 8.0;
+  if (speedKmh < 11) return 9.8;
+  if (speedKmh < 12.5) return 11.0;
+  if (speedKmh < 14.5) return 11.8;
+  return 12.8;
+}
+function metForEntry(entry, planEx){
+  if (planEx && planEx.cardioMachine){
+    if (planEx.cardioMachine === 'laufband'){
+      const speed = entry.sets && entry.sets[0] ? entry.sets[0].speed : null;
+      return estimateLaufbandMET(speed);
+    }
+    return MET_CARDIO_MACHINE[planEx.cardioMachine] ?? 6.0;
+  }
+  if (planEx && (planEx.bodyweightExercise || planEx.noWeight)) return MET_BODYWEIGHT;
+  return MET_STRENGTH;
+}
+// Faktor zwischen 0,85 (RPE_MIN, noch deutlich Reserve) und 1,15 (RPE_MAX, Muskelversagen),
+// linear um 1,0 bei RPE_NEUTRAL (Mitte des Bereichs) — bewusst ein moderater Ausschlag (±15%):
+// die Übung/Bewegung selbst bestimmt den Großteil des Verbrauchs (das steckt schon im MET-Wert),
+// die empfundene Anstrengung verschiebt ihn nur zusätzlich leicht nach oben oder unten.
+function rpeIntensityFactor(avgRpe){
+  if (avgRpe == null) return 1;
+  return 1 + (avgRpe - RPE_NEUTRAL) * (0.15 / ((RPE_MAX - RPE_MIN) / 2));
+}
+// Zusätzlicher, bewusst kleiner Korrekturfaktor aus Geschlecht (plan.bodySex) und BMI (aus
+// plan.bodyHeightCm + Körpergewicht) — beides rein optional, ohne Angabe bleibt der Faktor bei
+// genau 1 (unverändertes Verhalten wie vor dieser Erweiterung).
+// Geschlecht: Frauen haben im Bevölkerungsdurchschnitt bei gleichem Gewicht einen etwas
+// niedrigeren Grundumsatz (mehr Fett-, weniger Muskelanteil im Schnitt) — ein fester, moderater
+// Abschlag von 8%, keine individuelle Aussage.
+// BMI: bewusst NUR ein kleiner Ausschlag (±5%, gedeckelt) statt eines starken Faktors — BMI
+// unterscheidet nicht zwischen Muskel- und Fettanteil (ein muskulöser Mensch mit hohem Gewicht
+// bei normaler Größe hat einen hohen BMI, verbrennt aber tendenziell MEHR statt weniger), ist
+// also nur eine sehr grobe Krücke. Referenzwert 22 (Mitte des als "normal" geltenden Bereichs).
+function bodyCompositionKcalFactor(bw, heightCm, sex){
+  let factor = 1;
+  if (sex === 'female') factor *= 0.92;
+  if (heightCm && bw){
+    const heightM = heightCm / 100;
+    const bmi = bw / (heightM * heightM);
+    const bmiAdjustment = Math.max(-0.05, Math.min(0.05, (22 - bmi) * 0.005));
+    factor *= (1 + bmiAdjustment);
+  }
+  return factor;
+}
+// Gibt die geschätzten kcal für eine gespeicherte Session zurück, oder null, wenn die Funktion
+// in den Einstellungen deaktiviert ist oder kein Körpergewicht hinterlegt ist (die Formel
+// braucht es zwingend, ein geratener Standardwert wäre hier eher irreführend als hilfreich —
+// siehe auch die bestehende needsBodyWeightWarning-Logik im aktiven Training).
+function estimateSessionKcal(session){
+  if (!kcalEstimateEnabled()) return null;
+  const bw = plan && plan.bodyWeight;
+  if (!bw || !session || !session.entries || !session.entries.length) return null;
+  const bodyFactor = bodyCompositionKcalFactor(bw, plan.bodyHeightCm, plan.bodySex);
+  const entriesWithoutOwnTime = session.entries.filter(e => !e.timeSpentSec);
+  const fallbackSecPerEntry = entriesWithoutOwnTime.length
+    ? (session.durationSec || 0) / entriesWithoutOwnTime.length
+    : 0;
+  let totalKcal = 0;
+  session.entries.forEach(e => {
+    const planEx = plan.exercises.find(x => x.id === e.exerciseId);
+    const sec = e.timeSpentSec || fallbackSecPerEntry;
+    if (!sec) return;
+    const met = metForEntry(e, planEx);
+    const rpeFactor = rpeEnabled() ? rpeIntensityFactor(avgRpeForSessions([{ entries: [e] }])) : 1;
+    totalKcal += met * rpeFactor * bodyFactor * 3.5 * bw / 200 * (sec / 60);
+  });
+  return Math.round(totalKcal);
+}
+
 // von unterstützten Übungen (z. B. Klimmzugmaschine: Körpergewicht - eingestelltes Gewicht)
 // und reinen Eigenkörpergewicht-Übungen (z. B. Liegestütze: Körpergewicht + evtl. Zusatzgewicht).
 // planEx: das Übungsobjekt aus plan.exercises (kann undefined sein), setWeight: eingetragenes Gewicht am Gerät.
@@ -166,6 +317,58 @@ function fmtRpe(rpe){
   if (rpe === null || rpe === undefined || isNaN(rpe)) return '';
   return Number.isInteger(rpe) ? String(rpe) : rpe.toFixed(1);
 }
+
+/* ---------------------------------------------------
+   Trainingsintensität (RPE) — Auswertung
+   ---------------------------------------------------
+   Vier grobe Intensitätsstufen über den vollen RPE_MIN–RPE_MAX-Bereich (6–10) dieser App,
+   angelehnt an gängige RPE-Einordnungen (6 = noch deutlich Luft, 10 = Muskelversagen). Reine
+   Orientierungswerte, keine sportwissenschaftliche Norm. Grün→Gelb→Orange→Rot folgt derselben
+   "leicht bis hart"-Farblogik, die auch sonst in der App verwendet wird (grün für positive
+   Deltas, die bestehende Rekord-Gelbfarbe #d9c74a, --accent-2 für Warnungen/negative Deltas).
+--------------------------------------------------- */
+const RPE_BANDS = [
+  { key: 'locker', label: 'Locker', max: 6.9, color: '#7cc576' },
+  { key: 'moderat', label: 'Moderat', max: 7.9, color: '#d9c74a' },
+  { key: 'intensiv', label: 'Intensiv', max: 8.9, color: '#e0883a' },
+  { key: 'maximal', label: 'Maximal', max: RPE_MAX, color: 'var(--accent-2)' }
+];
+function intensityBandForRpe(rpe){
+  return RPE_BANDS.find(b => rpe <= b.max) || RPE_BANDS[RPE_BANDS.length - 1];
+}
+// Sammelt alle eingetragenen RPE-Werte aus einer Liste von Sessions (beliebiger Ausschnitt —
+// ein Monat, ein Zeitraum, eine einzelne Einheit) als flaches Array reiner Zahlen. Sätze ohne
+// eingetragenen RPE-Wert (z. B. weil die Erfassung zu dem Zeitpunkt aus war) fließen nicht ein.
+function collectRpeValues(sessionList){
+  const values = [];
+  (sessionList || []).forEach(s => {
+    (s.entries || []).forEach(e => {
+      (e.sets || []).forEach(st => { if (typeof st.rpe === 'number') values.push(st.rpe); });
+    });
+  });
+  return values;
+}
+// Durchschnittliche Trainingsintensität (RPE) über eine Liste von Sessions, oder null, wenn in
+// keiner davon ein RPE-Wert erfasst wurde.
+function avgRpeForSessions(sessionList){
+  const values = collectRpeValues(sessionList);
+  if (!values.length) return null;
+  return Math.round((values.reduce((a,v) => a+v, 0) / values.length) * 10) / 10;
+}
+// Vollständige Auswertung (Durchschnitt + Verteilung auf die vier Intensitätsstufen) über eine
+// Liste von Sessions — Grundlage für den eigenen Statistik-Screen (siehe renderIntensityStats(),
+// 08c-stats-progress-list.js). null, wenn keine RPE-Daten vorliegen.
+function computeRpeOverview(sessionList){
+  const values = collectRpeValues(sessionList);
+  if (!values.length) return null;
+  const avg = Math.round((values.reduce((a,v) => a+v, 0) / values.length) * 10) / 10;
+  const bandCounts = {};
+  RPE_BANDS.forEach(b => bandCounts[b.key] = 0);
+  values.forEach(v => { bandCounts[intensityBandForRpe(v).key]++; });
+  const bands = RPE_BANDS.map(b => ({ ...b, count: bandCounts[b.key], pct: Math.round(bandCounts[b.key] / values.length * 100) }));
+  return { avg, count: values.length, bands };
+}
+
 
 /* ---------------------------------------------------
    jsPDF: Lazy-Load statt statischem <script>-Tag

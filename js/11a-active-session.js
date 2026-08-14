@@ -87,6 +87,7 @@ function startSession(exerciseList, importedSession, mode, variant){
   pushView('active');
   renderActive();
   timerHandle = setInterval(updateTimerDisplay, 1000);
+  requestTrainingWakeLock();
   persistActiveSession();
   // Berechtigung erst hier anfragen (siehe ensureTrainingNotificationPermission()) und danach
   // sofort die erste Benachrichtigung setzen. Absichtlich NICHT awaited, damit sich der
@@ -110,6 +111,7 @@ function repeatSession(session){
     clearInterval(restInterval);
     restState = null;
     active = null;
+    releaseTrainingWakeLock();
     persistActiveSession();
   }
   startSession(exerciseList);
@@ -479,9 +481,13 @@ function autoCheckSetAfterTimer(entry, ei, si){
 
 /* ---------------------------------------------------
    PERFORMANCEMODUS (siehe renderSettings() für den Ein/Aus-Schalter)
-   Schlägt automatisch eine kleine Steigerung vor, sobald man eine Übung öffnet, deren
-   vorausgefüllter erster Satz (siehe buildEntry()) schon 2x in Folge (bzw. bei assistierten
-   Übungen 3x in Folge, siehe checkPerformanceSuggestion()) exakt gleich war.
+   Schlägt automatisch eine kleine Steigerung vor, sobald man eine Übung öffnet.
+   Kraftübungen: doppelte Progression (siehe checkPerformanceSuggestion()) — solange auch nur
+   ein Satz der letzten Einheit unter dem oberen Rand des Wdh.-Zielbereichs der Übung
+   (ex.repsMin/repsMax) liegt, gibt es keinen Vorschlag; erst wenn WIRKLICH ALLE Sätze dort
+   angekommen sind, wird der nächste Gewichtsschritt vorgeschlagen, mit dem Wdh.-Ziel zurück auf
+   den unteren Rand. Kardio-Übungen: weiterhin stagnationsbasiert (siehe
+   checkCardioPerfSuggestion()) — "+30 Sekunden", sobald dieselbe Dauer mehrfach in Folge stand.
 --------------------------------------------------- */
 // Popup-Zustand: null oder { entryIndex, setIndex, weight, reps } — siehe renderActive().
 let perfSuggestion = null;
@@ -651,39 +657,32 @@ function applySetValueAndPropagate(entry, si, values){
   });
 }
 
-// Berechnet aus einem aktuellen (weight, reps) eine "nicht zu große" Steigerung:
-// - Ist die Wdh.-Zahl noch unter 12, wird zuerst die Wdh.-Zahl erhöht (max. +2, gedeckelt
-//   bei 12) und das Gewicht bleibt gleich (z. B. 8x → 10x gleiches Gewicht).
-// - Ist die Wdh.-Zahl schon bei 12 angekommen (bzw. eine Wdh.-Steigerung würde nichts mehr
-//   bringen), wird stattdessen das Gewicht angepasst (2,5 kg ist an den meisten
-//   Geräten/Hanteln nicht sauber einstellbar, daher 5 kg-Schritte) und die Wdh.-Zahl dafür
-//   um 2 gesenkt (nie unter 6 Wdh.).
-//   "direction" steuert dabei die Richtung der Gewichtsänderung: 1 = Gewicht erhöhen
-//   (normale Übungen), -1 = Gewicht senken (assistierte Übungen wie die Klimmzugmaschine,
-//   wo weniger Unterstützungsgewicht = mehr Eigenleistung = die eigentliche Steigerung ist).
-function computeProgressionSuggestion(weight, reps, direction, planEx){
-  if (weight == null || reps == null || !isFinite(weight) || !isFinite(reps) || reps <= 0) return null;
-  if (direction !== -1 && weight <= 0) return null; // 0 kg lässt sich bei normalen Übungen nicht sinnvoll weiter steigern
-  if (reps < 12){
-    const newReps = Math.min(12, reps + 2);
-    if (newReps > reps) return { weight, reps: newReps };
-  }
+// Berechnet aus einem Gewicht das nächste tatsächlich einstellbare Rastergewicht (siehe
+// weightStepFor()/weightBaseFor(), z. B. Beinpresse 5-13-21-29..., weightBase 5 / weightStep 8)
+// in die angegebene Richtung: direction 1 = Gewicht erhöhen (normale Übungen), -1 = Gewicht
+// senken (assistierte Übungen wie die Klimmzugmaschine, wo weniger Unterstützungsgewicht = mehr
+// Eigenleistung = die eigentliche Steigerung ist). "weight + step" würde bei nicht rasterkonform
+// gespeicherten Werten (z. B. manuell eingetragen) auf einen am Gerät gar nicht einstellbaren
+// Wert landen — stattdessen immer der nächste Rasterwert STRIKT ober- bzw. unterhalb.
+function nextGridWeight(weight, direction, planEx){
   const step = weightStepFor(planEx);
-  // Auf das NÄCHSTE tatsächlich einstellbare Rastergewicht schnappen statt blind step zu
-  // addieren: Bei Geräten mit eigenem Raster (z. B. Beinpresse 5-13-21-29..., weightBase 5 /
-  // weightStep 8) landete "weight + step" auf einem Wert, der am Gerät gar nicht einstellbar
-  // ist, sobald das aktuelle Gewicht nicht exakt auf dem Raster lag. Jetzt wird immer der
-  // nächste Rasterwert STRIKT ober- bzw. unterhalb des aktuellen Gewichts gewählt — bei
-  // rasterkonformen Werten ist das genau ein Schritt (53 → 61), bei abweichenden Werten der
-  // nächste erreichbare Wert nach oben bzw. unten.
   const base = weightBaseFor(planEx);
   const n = (weight - base) / step;
   const newWeight = direction === -1
     ? Math.max(Math.min(0, base), base + (Math.ceil(n) - 1) * step)
     : base + (Math.floor(n) + 1) * step;
   if (direction === -1 && newWeight >= weight) return null; // Unterstützungsgewicht ist schon am Minimum, keine weitere Steigerung möglich
-  return { weight: newWeight, reps: Math.max(6, reps - 2) };
+  return newWeight;
 }
+
+// Wdh.-Zielbereich einer Übung (ex.repsMin/repsMax, siehe Übungen-Editor) — Fallback 8-12 für
+// den unwahrscheinlichen Fall, dass an einer Übung (noch) keine eigenen Werte hinterlegt sind.
+function repsRangeFor(planEx){
+  const min = (planEx && Number.isFinite(planEx.repsMin)) ? planEx.repsMin : 8;
+  const maxRaw = (planEx && Number.isFinite(planEx.repsMax)) ? planEx.repsMax : 12;
+  return { min, max: Math.max(min, maxRaw) };
+}
+
 
 // Prüft, ob für die gerade abgehakte Kombination (exerciseId, Satz-Position si, weight, reps)
 // ein Steigerungs-Vorschlag angezeigt werden soll. Bei normalen Übungen reicht es, wenn die
@@ -700,11 +699,12 @@ function computeProgressionSuggestion(weight, reps, direction, planEx){
 // (assistiert) entsprechen.
 const PERF_HISTORY_DEPTH = 20;
 
-// Wie viele vorangegangene Einheiten mit identischem Volumen nötig sind, bevor ein
-// Steigerungs-Vorschlag erscheint — abhängig vom frei einstellbaren Schwellwert
-// (plan.performanceThreshold, Zahlenfeld in den Einstellungen, Standard: 3 = ab dem 3. Mal).
-// Assistierte Übungen (z. B. Klimmzugmaschine) brauchen dabei weiterhin einen Treffer mehr als
-// normale Übungen.
+// Wie viele vorangegangene Einheiten mit identischer Dauer nötig sind, bevor bei einer
+// Kardio-Übung ein Steigerungs-Vorschlag erscheint — abhängig vom frei einstellbaren
+// Schwellwert (plan.performanceThreshold, Zahlenfeld in den Einstellungen, Standard: 3 = ab
+// dem 3. Mal). Gilt NUR für Kardio-Übungen (checkCardioPerfSuggestion()) — Kraftübungen nutzen
+// seit der Umstellung auf doppelte Progression stattdessen den Wdh.-Zielbereich der Übung
+// (siehe checkPerformanceSuggestion()), unabhängig von diesem Schwellwert.
 // Liest den frei einstellbaren Prozentsatz für das Performancemodus-Kontingent
 // (plan.performancePercentage, Schieberegler in den Einstellungen, Standard: 20%,
 // gültige Werte 10-100 in 10er-Schritten) — siehe computePerfSuggestionQuota().
@@ -723,27 +723,35 @@ function requiredMatchesFor(assisted){
 function checkPerformanceSuggestion(exerciseId, si, weight, reps, planEx){
   if (weight == null || reps == null) return null;
   const assisted = !!(planEx && planEx.assisted);
-  const requiredMatches = requiredMatchesFor(assisted);
+  const { min: repsMin, max: repsMax } = repsRangeFor(planEx);
   const history = lastPerformance[exerciseId];
-  if (!Array.isArray(history) || history.length < requiredMatches) return null;
-  for (let i = 0; i < requiredMatches; i++){
-    const s = Array.isArray(history[i]) ? history[i][si] : null;
-    if (!s || s.weight !== weight || s.reps !== reps) return null;
-  }
+  // Doppelte Progression: erst wenn WIRKLICH JEDER Satz der letzten protokollierten Einheit
+  // (nicht nur der erste) den oberen Rand des Wdh.-Zielbereichs erreicht hat — UND dabei
+  // durchgehend dasselbe Gewicht genutzt wurde (sonst lässt sich "eine Stufe höher" nicht sauber
+  // ableiten) — gilt die aktuelle Gewichtsstufe als ausgereizt. Erst dann wird der nächste
+  // Gewichtsschritt vorgeschlagen, mit dem Wdh.-Ziel zurück auf den unteren Rand des Bereichs.
+  // Liegt auch nur ein Satz noch darunter, gibt es KEINEN Vorschlag — dort soll beim gleichen
+  // Gewicht einfach an den Wiederholungen weitergearbeitet werden, ganz ohne Popup dafür.
+  const lastSets = Array.isArray(history) && Array.isArray(history[0]) ? history[0] : null;
+  if (!lastSets || !lastSets.length) return null;
+  const baseWeight = lastSets[0].weight;
+  if (baseWeight == null) return null;
+  const allAtTop = lastSets.every(s => s && s.weight === baseWeight && s.reps != null && s.reps >= repsMax);
+  if (!allAtTop) return null;
   // RPE-bewusste Bremse (nur wirksam, wenn RPE-Erfassung aktiv ist, siehe rpeEnabled() in
-  // 04-utils.js): war der zuletzt geloggte Satz an dieser Position bereits sehr hart
-  // (RPE >= RPE_HIGH_THRESHOLD, praktisch Muskelversagen/kurz davor), ist "gleiches Gewicht,
-  // gleiche Wdh." kein Zeichen von Stagnation, sondern schlicht die aktuelle Belastungsgrenze —
-  // eine Steigerung würde hier eher zu Formverlust/Verletzungsrisiko führen als zu echtem
-  // Fortschritt. Der Vorschlag wird in diesem Fall unterdrückt, ganz ohne dass die sonstige
-  // Wiederholungs-Logik oben angefasst werden muss. Fehlt der RPE-Wert (z. B. weil die
-  // Einstellung erst kürzlich aktiviert wurde oder für ältere Sätze), bleibt das Verhalten
-  // unverändert wie vorher — die Bremse greift nur bei einem tatsächlich eingetragenen, hohen Wert.
+  // 04-utils.js): war der letzte Satz der letzten Einheit bereits sehr hart
+  // (RPE >= RPE_HIGH_THRESHOLD, praktisch Muskelversagen/kurz davor), auch wenn formal alle
+  // Sätze den oberen Rand erreicht haben, ist das eher die aktuelle Belastungsgrenze als
+  // Spielraum für mehr Gewicht — eine Steigerung würde hier eher zu Formverlust/
+  // Verletzungsrisiko führen als zu echtem Fortschritt. Fehlt der RPE-Wert, bleibt das
+  // Verhalten unverändert — die Bremse greift nur bei einem tatsächlich eingetragenen, hohen Wert.
   if (rpeEnabled()){
-    const lastSet = Array.isArray(history[0]) ? history[0][si] : null;
+    const lastSet = lastSets[lastSets.length - 1];
     if (lastSet && typeof lastSet.rpe === 'number' && lastSet.rpe >= RPE_HIGH_THRESHOLD) return null;
   }
-  return computeProgressionSuggestion(weight, reps, assisted ? -1 : 1, planEx);
+  const newWeight = nextGridWeight(baseWeight, assisted ? -1 : 1, planEx);
+  if (newWeight == null) return null;
+  return { weight: newWeight, reps: repsMin };
 }
 
 // Kardio-Pendant zu checkPerformanceSuggestion(): schlägt "30 Sekunden länger" vor, sobald

@@ -667,6 +667,7 @@ function fmtDurationCompact(sec){
 // der Muskelgruppen-Zeit-Donut teilt sich bewusst DENSELBEN Zeitraum-Filter statt eigener
 // 30/90-Tage-Buttons, damit auf dem Screen nur EIN Zeitraum-Konzept existiert.
 function statsPeriodToDays(period){
+  if (period === 'week') return 7;
   if (period === 'month') return 30;
   if (period === 'quarter') return 90;
   if (period === 'year') return 365;

@@ -25,6 +25,7 @@ function renderSessionDetail(id){
   viewingSessionId = id;
 
   const totalSets = s.entries.reduce((a,e)=>a+e.sets.length,0);
+  const estimatedKcal = estimateSessionKcal(s);
   const sessionHasCardio = s.entries.some(e => {
     const planEx = plan.exercises.find(x => x.id === e.exerciseId);
     return planEx && planEx.cardioMachine;
@@ -80,6 +81,7 @@ function renderSessionDetail(id){
         <span>${fmtDate(s.date)}</span>
         <span>${fmtDuration(s.durationSec)}</span>
         <span>${s.entries.length} Übungen · ${totalSets} Sätze</span>
+        ${estimatedKcal != null ? `<span>≈ ${estimatedKcal.toLocaleString('de-DE')} kcal</span>` : ''}
       </div>
     </div>
     ${highlightsHTML ? `

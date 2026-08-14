@@ -210,6 +210,19 @@ function renderStatsChart(metric){
       buildLineChart(groupPoints, muscleGroupColor(g), v => v.toLocaleString('de-DE')));
   }).join('');
 
+  // Körpergewichtstrend zusätzlich innerhalb von "Bewegtes Gewicht" (nicht bei "Trainingszeit"):
+  // teilt sich bewusst denselben Zeitraum-Filter (statsPeriod) wie der Rest des Screens statt
+  // eines eigenen — gleiches Prinzip wie schon beim Zeit-Donut im Trainingszeit-Screen (siehe
+  // dortiger Kommentar). Nur sichtbar, wenn überhaupt Körpergewichts-Einträge vorliegen
+  // (plan.bodyWeightLog, siehe logBodyWeight()/renderBodyWeightChart()) — sonst bliebe nur ein
+  // leeres Akkordeon stehen, das niemand aufklappen würde.
+  const bodyWeightLog = Array.isArray(plan.bodyWeightLog) ? plan.bodyWeightLog : [];
+  const bodyWeightFormatter = v => formatGermanNumber(Math.round(v * 10) / 10) + ' kg';
+  const bodyWeightPoints = (isTime || !bodyWeightLog.length) ? [] : aggregateHistoryPoints(bodyWeightLog, statsPeriod)
+    .map(e => ({ label: shortDate(e.date), value: e.weight, date: e.date }));
+  const bodyWeightTrendHTML = (isTime || !bodyWeightLog.length) ? '' : chartAccordionHTML(statsChartOpen, 'bodyweight', 'Körpergewicht', bodyWeightPoints, cssVar('--accent-3'), bodyWeightFormatter,
+    buildLineChart(bodyWeightPoints, cssVar('--accent-3'), bodyWeightFormatter));
+
   app.innerHTML = `
     <div class="back-row" style="margin-top:0;"><button class="back-btn-icon" id="btnBack" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button></div>
     <div class="progress-summary" style="margin-top:18px;">
@@ -223,6 +236,7 @@ function renderStatsChart(metric){
     </div>
     ${chartAccordionHTML(statsChartOpen, 'main', title, chartPoints, color, formatter, buildLineChart(chartPoints, color, formatter))}
     ${widgetHTML}
+    ${bodyWeightTrendHTML}
     ${groupChartsHTML ? `<div class="section-label" style="margin-top:18px;">Nach Muskelgruppe</div>${groupChartsHTML}` : ''}
     ${isTime ? timeDonutSectionHTML(statsPeriodToDays(statsPeriod)) : ''}
   `;
@@ -661,7 +675,7 @@ function chartTitleHTML(title, points, color, formatter){
 // responsive, füllt die Kartenbreite) unverändert erhalten.
 const CHART_BASE_W = 560;
 const WIDE_POINT_GAP = 46;
-function buildLineChart(points, color, valueFormatter){
+function buildLineChart(points, color, valueFormatter, yMinOverride){
   const fmt = valueFormatter || (v => v);
   if (!points.length) return '<div class="chart-empty">Noch keine Daten — nach der ersten geloggten Einheit erscheint hier der Verlauf.</div>';
   // Mit nur einem Punkt lässt sich kein Trend zeigen — der Punkt würde (Skala startet bei 0)
@@ -677,7 +691,12 @@ function buildLineChart(points, color, valueFormatter){
 
   const values = points.map(p => p.value);
   const maxV = Math.max(...values);
-  const minV = Math.min(0, Math.min(...values));
+  // Feste untere Achsengrenze bei 0, wie gehabt — AUSSER ein Aufrufer übergibt explizit einen
+  // eigenen Wert (yMinOverride, z. B. die Trainingsintensität: RPE bewegt sich nur zwischen
+  // 6 und 10, bei einer festen 0-Grenze würde die eigentlich interessante Schwankung auf einen
+  // schmalen Streifen ganz oben zusammengequetscht). Für alle bisherigen Aufrufer (Zeit,
+  // bewegtes Gewicht, Körpergewicht, Muskelgruppen) ändert sich dadurch nichts.
+  const minV = yMinOverride != null ? Math.min(yMinOverride, Math.min(...values)) : Math.min(0, Math.min(...values));
   const range = (maxV - minV) || 1;
 
   // Zeitproportionale X-Achse: Punkte werden entlang ihres tatsächlichen Datums verteilt statt
@@ -698,6 +717,30 @@ function buildLineChart(points, color, valueFormatter){
     ...p
   }));
   const path = coords.map((c,i) => (i===0?'M':'L') + c.x.toFixed(1) + ',' + c.y.toFixed(1)).join(' ');
+
+  // Trendlinie (einfache lineare Regression, Methode der kleinsten Quadrate über die bereits
+  // berechneten x-Koordinaten/Werte) — gestrichelt und dezent in --muted statt der Diagramm-
+  // farbe, damit sie sich klar von der eigentlichen Werte-Linie abhebt, aber nicht dominiert.
+  // Erst ab 3 Punkten sinnvoll (bei 2 Punkten deckt sie sich ohnehin exakt mit der Linie selbst
+  // und zeigt nichts Zusätzliches). Rein auf den sichtbaren x/y-Koordinaten gerechnet (nicht
+  // nochmal auf Rohdaten), das entspricht optisch exakt dem, was im Diagramm zu sehen ist.
+  let trendPath = '';
+  if (coords.length >= 3){
+    const n = coords.length;
+    const sumX = coords.reduce((a,c) => a + c.x, 0);
+    const sumY = coords.reduce((a,c) => a + c.y, 0);
+    const sumXY = coords.reduce((a,c) => a + c.x*c.y, 0);
+    const sumXX = coords.reduce((a,c) => a + c.x*c.x, 0);
+    const denom = (n*sumXX - sumX*sumX);
+    if (denom !== 0){
+      const slope = (n*sumXY - sumX*sumY) / denom;
+      const intercept = (sumY - slope*sumX) / n;
+      const x1 = coords[0].x, x2 = coords[n-1].x;
+      const y1 = slope*x1 + intercept, y2 = slope*x2 + intercept;
+      trendPath = `<line class="chart-trend" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`;
+    }
+  }
+
 
   // Tap-Tooltip statt fester Wertelabels über JEDEM Punkt: Bei vielen Punkten überlappten sich
   // die alten Dauerlabels ohnehin nur noch, und der letzte Wert steht bereits im Akkordeon-Kopf
@@ -742,6 +785,7 @@ function buildLineChart(points, color, valueFormatter){
   const svg = `<svg viewBox="0 0 ${w} ${h}" width="${isWide ? w : '100%'}" height="${h}" role="img" aria-label="Verlaufsdiagramm, Punkte antippen für Details" data-wide="${isWide ? '1' : '0'}">
     ${gridLines}
     <line class="chart-axis" x1="${padL}" y1="${padT+innerH}" x2="${w-padR}" y2="${padT+innerH}"/>
+    ${trendPath}
     <path d="${path}" fill="none" stroke="${color}" stroke-width="2"/>
     ${dots}${tooltips}${xLabels}
   </svg>`;

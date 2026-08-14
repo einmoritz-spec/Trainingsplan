@@ -238,6 +238,7 @@ async function importSingleSessionFile(file){
         clearInterval(restInterval);
         restState = null;
         active = null;
+        releaseTrainingWakeLock();
         persistActiveSession();
       }
       openImportWeightsPrompt(data.session, exerciseList);

@@ -983,14 +983,6 @@ function renderSettings(){
       </div>
     `, plan.splitMode ? SPLIT_MODE_LABELS[plan.splitMode] : 'Aus')}
 
-    <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
-      <span class="mg-name">Körpergewicht</span>
-      <div class="settings-row-btns">
-        <button class="progress-stat-editbtn" id="btnBodyWeightHistory" type="button" aria-label="Verlauf" style="margin:0; width:36px; height:36px;"><img src="${ICON_HISTORY}" alt=""></button>
-        <input type="text" inputmode="decimal" class="settings-row-input" id="bodyWeightInput" enterkeyhint="done" placeholder="kg" value="${formatGermanNumber(plan.bodyWeight)}">
-      </div>
-    </div>
-
     <div class="muscle-group" style="margin-top:10px;">
       <div class="muscle-group-header settings-static-row">
         <span class="mg-name">Performancemodus</span>
@@ -999,8 +991,11 @@ function renderSettings(){
         </button>
       </div>
       <div class="muscle-group-body" style="display:${perfModeOn ? 'block' : 'none'}">
-        <div style="padding:14px 16px; text-align:left; font-size:14px; line-height:1.6;">
-          Steigerung vorschlagen ab <input type="number" inputmode="numeric" min="2" max="20" step="1" class="inline-plain-input" id="perfThresholdInput" enterkeyhint="done" value="${perfThreshold}"> mal.
+        <div class="history-empty" style="margin:0 16px 10px; padding:8px 4px; text-align:left; background:none; border:none;">
+          <span style="font-size:11px; color:var(--muted);">Bei Kraftübungen: Steigerung wird automatisch vorgeschlagen, sobald in der letzten Einheit ALLE Sätze den oberen Rand des Wdh.-Zielbereichs der Übung (Wdh von/bis, siehe Übungen-Editor) erreicht haben — danach ein Gewichtsschritt, Wdh.-Ziel zurück auf den unteren Rand (doppelte Progression).</span>
+        </div>
+        <div style="padding:0 16px 14px; text-align:left; font-size:14px; line-height:1.6;">
+          Bei Kardio-Übungen: Steigerung vorschlagen ab <input type="number" inputmode="numeric" min="2" max="20" step="1" class="inline-plain-input" id="perfThresholdInput" enterkeyhint="done" value="${perfThreshold}"> mal gleicher Dauer.
         </div>
         <div style="padding:0 16px 14px;">
           <div style="display:flex; align-items:center; gap:10px;">
@@ -1008,7 +1003,7 @@ function renderSettings(){
             <span style="font-size:13px; color:var(--text); min-width:38px; text-align:right;" id="perfPercentageValue">${perfPercentage}%</span>
           </div>
           <div class="history-empty" style="margin-top:8px; padding:8px 4px; text-align:left; background:none; border:none;">
-            <span style="font-size:11px; color:var(--muted);">Bei wie viel Prozent der Übungen im Training soll nach dem ${perfThreshold}. mal eine Verbesserung vorgeschlagen werden.</span>
+            <span style="font-size:11px; color:var(--muted);">Bei wie viel Prozent der Übungen im Training soll eine Verbesserung vorgeschlagen werden.</span>
           </div>
         </div>
       </div>
@@ -1032,8 +1027,50 @@ function renderSettings(){
     </div>
 
     <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
+      <span class="mg-name">Bildschirm anlassen</span>
+      <button class="toggle-switch ${plan.wakeLockEnabled === true ? 'on' : ''}" id="wakeLockToggle" type="button" role="switch" aria-checked="${plan.wakeLockEnabled === true}" aria-label="Bildschirm während des Trainings anlassen">
+        <span class="toggle-knob"></span>
+      </button>
+    </div>
+    <div class="history-empty" style="margin:8px 0 0; padding:8px 4px; text-align:left; background:none; border:none; display:${plan.wakeLockEnabled === true ? 'none' : 'block'};">
+      <span style="font-size:11px; color:var(--muted);">Verhindert, dass sich der Bildschirm bei laufendem Training abschaltet. Standardmäßig aus.</span>
+    </div>
+
+    <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
+      <span class="mg-name">Geschätzter Kalorienverbrauch</span>
+      <button class="toggle-switch ${plan.kcalEstimateEnabled !== false ? 'on' : ''}" id="kcalEstimateToggle" type="button" role="switch" aria-checked="${plan.kcalEstimateEnabled !== false}" aria-label="Geschätzten Kalorienverbrauch anzeigen">
+        <span class="toggle-knob"></span>
+      </button>
+    </div>
+    <div class="history-empty" style="margin:8px 0 0; padding:8px 4px; text-align:left; background:none; border:none; display:${plan.kcalEstimateEnabled !== false ? 'none' : 'block'};">
+      <span style="font-size:11px; color:var(--muted);">Grobe Schätzung (Trainingsdetail, Zusammenfassung, Essenstracker-Snapshot) auf Basis von Übungsart, Dauer und Körpergewicht. Standardmäßig an. Ist zusätzlich die RPE-Erfassung aktiv, fließt die eingetragene Anstrengung mit ein — RPE 10 verbraucht bei gleicher Dauer etwas mehr als RPE 6.</span>
+    </div>
+
+    <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
       <span class="mg-name">Stangengewicht</span>
       <input type="text" inputmode="decimal" class="settings-row-input" id="barWeightSettingsInput" enterkeyhint="done" placeholder="kg" value="${formatGermanNumber(barWeightKg())}">
+    </div>
+
+    <div class="section-label">Körperdaten</div>
+    <p class="settings-hint">Alles optional außer Körpergewicht (für die Vorschläge im Performancemodus und die Statistiken nötig). Geschlecht und Größe fließen nur als kleiner, gedeckelter Korrekturfaktor in den geschätzten Kalorienverbrauch ein — Körpergewicht bleibt dabei der mit Abstand größte Faktor, ohne die beiden anderen Angaben wird einfach weitergerechnet wie bisher.</p>
+    <div class="muscle-group-header settings-static-row" style="margin-top:0;">
+      <span class="mg-name">Körpergewicht</span>
+      <div class="settings-row-btns">
+        <button class="progress-stat-editbtn" id="btnBodyWeightHistory" type="button" aria-label="Verlauf" style="margin:0; width:36px; height:36px;"><img src="${ICON_HISTORY}" alt=""></button>
+        <input type="text" inputmode="decimal" class="settings-row-input" id="bodyWeightInput" enterkeyhint="done" placeholder="kg" value="${formatGermanNumber(plan.bodyWeight)}">
+      </div>
+    </div>
+    <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
+      <span class="mg-name">Körpergröße</span>
+      <input type="text" inputmode="decimal" class="settings-row-input" id="bodyHeightInput" enterkeyhint="done" placeholder="cm" value="${plan.bodyHeightCm != null ? formatGermanNumber(plan.bodyHeightCm) : ''}">
+    </div>
+    <div style="margin-top:14px; text-align:left;">
+      <span class="mg-name" style="display:block; margin-bottom:8px;">Geschlecht</span>
+      <div class="period-row" style="margin:0;">
+        <button class="period-btn ${plan.bodySex === 'male' ? 'active' : ''}" data-body-sex="male">Männlich</button>
+        <button class="period-btn ${plan.bodySex === 'female' ? 'active' : ''}" data-body-sex="female">Weiblich</button>
+        <button class="period-btn ${!plan.bodySex ? 'active' : ''}" data-body-sex="">Keine Angabe</button>
+      </div>
     </div>
 
     <div class="section-label">Daten</div>
@@ -1208,6 +1245,28 @@ function renderSettings(){
     renderSettings();
   };
 
+  const wakeLockToggleEl = document.getElementById('wakeLockToggle');
+  if (wakeLockToggleEl) wakeLockToggleEl.onclick = async () => {
+    const willBeOn = plan.wakeLockEnabled !== true;
+    plan.wakeLockEnabled = willBeOn;
+    // Direkt reagieren, falls gerade ein Training läuft: sofort anfordern bzw.
+    // freigeben, statt erst beim nächsten Trainingsstart wirksam zu werden.
+    if (active){
+      if (willBeOn) requestTrainingWakeLock();
+      else releaseTrainingWakeLock();
+    }
+    await saveJSON('plan', plan);
+    renderSettings();
+  };
+
+  const kcalEstimateToggleEl = document.getElementById('kcalEstimateToggle');
+  if (kcalEstimateToggleEl) kcalEstimateToggleEl.onclick = async () => {
+    const wasEnabled = plan.kcalEstimateEnabled !== false; // Standard AN (undefined zählt als an)
+    plan.kcalEstimateEnabled = !wasEnabled;
+    await saveJSON('plan', plan);
+    renderSettings();
+  };
+
   const trainingToolsToggleEl = document.getElementById('trainingToolsToggle');
   if (trainingToolsToggleEl) trainingToolsToggleEl.onclick = async () => {
     const willBeOn = plan.trainingToolsEnabled !== true;
@@ -1260,6 +1319,28 @@ function renderSettings(){
       await saveJSON('plan', plan);
     };
   }
+
+  const bodyHeightInputEl = document.getElementById('bodyHeightInput');
+  if (bodyHeightInputEl){
+    bodyHeightInputEl.onkeydown = (ev) => {
+      if (ev.key === 'Enter'){
+        ev.preventDefault();
+        bodyHeightInputEl.blur();
+      }
+    };
+    bodyHeightInputEl.onchange = async (e) => {
+      const v = e.target.value === '' ? null : parseGermanNumber(e.target.value);
+      plan.bodyHeightCm = (v === null || isNaN(v)) ? null : v;
+      await saveJSON('plan', plan);
+    };
+  }
+  app.querySelectorAll('[data-body-sex]').forEach(btn => {
+    btn.onclick = async () => {
+      plan.bodySex = btn.dataset.bodySex || null;
+      await saveJSON('plan', plan);
+      renderSettings();
+    };
+  });
 
   const perfModeToggleEl = document.getElementById('perfModeToggle');
   if (perfModeToggleEl) perfModeToggleEl.onclick = async () => {
@@ -1397,6 +1478,7 @@ function renderSettings(){
       clearInterval(restInterval);
       restState = null;
       active = null;
+      releaseTrainingWakeLock();
       clearActiveTrainingNotification(); // App-Reset ruft persistActiveSession() nicht auf
       plan = JSON.parse(JSON.stringify(DEFAULT_PLAN));
       sessions = [];
@@ -1583,6 +1665,17 @@ function openNewExerciseModal(){
   const MUSCLE_GROUP_TO_BODYPART = { Beine: 'legs', Bauch: 'legs', Schultern: 'push', Brust: 'push', Rücken: 'pull' };
   let draft = { id: null, name: '', sets: 3, repsMin: 8, repsMax: 12, secondsMin: 30, secondsMax: 60, weight: 0, category: 'oberkoerper', muscleGroup: 'Sonstige', mainMuscle: '', muscles: '', type: 'reps', assisted: false, bodyweightExercise: false };
   let stepIndex = 0;
+  // Zählt, wie viele History-Einträge dieser Wizard bisher selbst gepusht hat (ein Eintrag pro
+  // vorwärts besuchtem Schritt, siehe render() unten) — BUGFIX: "Später · Fertig" fügte die
+  // Übung zwar korrekt hinzu, poppte beim Schließen aber nur EINEN dieser Einträge
+  // (popOverlayStateIfOpen() ging bisher von "ein Schritt = ein Eintrag = ein Pop" aus). Bei
+  // z. B. 6 besuchten Schritten blieben so 5 "Geister"-Einträge im History-Stack zurück; das
+  // eine ausgelöste history.back() traf dadurch auf den POPSTATE-HANDLER, der wegen des noch
+  // nicht leeren overlayCloseStack fälschlich einen der übrig gebliebenen Schritt-Rückwärts-
+  // Handler auslöste — der Wizard baute sich (mit stepIndex-1) wieder auf, obwohl er eigentlich
+  // schon fertig war. Fix: closeOverlay() poppt jetzt in einer Schleife GENAU so oft wie zuvor
+  // gepusht wurde (siehe unten), statt sich auf einen einzelnen Pop zu verlassen.
+  let pushedStates = 0;
 
   // Schritt-Definitionen: jeder Schritt liefert sein Inhalts-HTML und verkabelt seine
   // Eingaben selbst. "next()" wird von den einzelnen Schritten aufgerufen, sobald genug
@@ -1771,10 +1864,18 @@ function openNewExerciseModal(){
     await saveJSON('plan', plan);
     closeOverlay();
     renderPlanEditor();
+    showTopToast(`Erfolgreich hinzugefügt: ${newExercise.name}`);
   }
 
   function closeOverlay(){
-    popOverlayStateIfOpen();
+    // Genau so oft poppen, wie dieser Wizard selbst gepusht hat (siehe pushedStates oben) —
+    // ein einzelner Pop reichte nur für den allerersten Schritt, bei mehreren besuchten
+    // Schritten blieben sonst "Geister"-Einträge im History-Stack zurück (siehe Kommentar bei
+    // pushedStates). popOverlayStateIfOpen() unterstützt mehrfaches Aufrufen in Folge bereits
+    // (siehe overlaySelfClosingCount-Mechanismus), genau wie beim Schließen mehrerer
+    // verschachtelter Popups an anderer Stelle in der App.
+    for (let i = 0; i < pushedStates; i++){ popOverlayStateIfOpen(); }
+    pushedStates = 0;
     removeOverlayEl();
   }
   function removeOverlayEl(){
@@ -1819,6 +1920,7 @@ function openNewExerciseModal(){
     // Vorwärts-Eintrag erzeugen.
     if (!fromPopState){
       pushOverlayState(() => {
+        pushedStates -= 1;
         if (stepIndex > 0){
           stepIndex -= 1;
           render(true);
@@ -1826,12 +1928,21 @@ function openNewExerciseModal(){
           removeOverlayEl();
         }
       });
+      pushedStates += 1;
     }
 
     overlay.onclick = (ev) => { if (ev.target === overlay) closeOverlay(); };
     document.getElementById('newExerciseClose').onclick = closeOverlay;
     const backBtn = document.getElementById('wizBack');
-    if (backBtn) backBtn.onclick = () => { popOverlayStateIfOpen(); stepIndex -= 1; render(); };
+    // Ruft NUR history.back() auf, ohne selbst weiter einzugreifen — der bereits registrierte
+    // popstate-Handler (siehe pushOverlayState oben) übernimmt das eigentliche Zurückschalten
+    // (stepIndex verringern + neu rendern) genauso, wie es auch die Hardware-Zurück-Taste tun
+    // würde. BUGFIX: vorher rief dieser Button selbst sowohl popOverlayStateIfOpen() (löst
+    // asynchron history.back() aus) ALS AUCH direkt danach render() (löst SYNCHRON erneut
+    // pushOverlayState()/history.pushState() aus) auf — dieselbe Race Condition zwischen
+    // asynchronem back() und sofort folgendem synchronem pushState(), die schon an anderer
+    // Stelle in der App dokumentiert und behoben wurde (siehe z. B. openAddTilePrompt()).
+    if (backBtn) backBtn.onclick = () => { history.back(); };
 
     const body = document.getElementById('wizardBody');
     const next = () => { stepIndex += 1; render(); };

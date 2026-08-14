@@ -352,12 +352,14 @@ async function endSession(){
   if (!session.entries.length){
     const discarded = active;
     active = null;
+    releaseTrainingWakeLock();
     await saveJSON('activeSession', null);
     clearActiveTrainingNotification(); // umgeht persistActiveSession(), daher hier explizit aufräumen
     replaceView('home');
     renderHome();
     showUndoToast('Training verworfen.', () => {
       active = discarded;
+      requestTrainingWakeLock();
       persistActiveSession();
       pushView('active');
       timerHandle = setInterval(updateTimerDisplay, 1000);
@@ -382,6 +384,7 @@ async function endSession(){
   await saveSession(session);
   await saveJSON('lastPerformance', lastPerformance);
   active = null;
+  releaseTrainingWakeLock();
   await saveJSON('activeSession', null);
   clearActiveTrainingNotification(); // umgeht persistActiveSession(), daher hier explizit aufräumen
   // "home" ersetzt den bisherigen History-Eintrag (das aktive Training soll beim Zurück-

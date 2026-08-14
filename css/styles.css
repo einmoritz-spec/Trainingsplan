@@ -650,6 +650,7 @@ html[data-theme="light"] .bodyweight-warning-icon{ filter: none; }
 .chart-title-value{ font-family:'JetBrains Mono', monospace; font-size:22px; font-weight:700; margin-bottom:10px; }
 .chart-axis{ stroke: var(--border); stroke-width:1; }
 .chart-grid{ stroke: var(--border); stroke-width:1; opacity:0.5; }
+.chart-trend{ stroke: var(--muted); stroke-width:1.5; stroke-dasharray:4 3; opacity:0.55; }
 .chart-label{ font-family:'JetBrains Mono', monospace; font-size:10px; fill: var(--muted); }
 .bar-chart-value-label{ font-family:'JetBrains Mono', monospace; font-size:17px; font-weight:700; fill: rgba(0,0,0,0.35); }
 .chart-empty{ color: var(--muted); font-size:13px; text-align:center; padding: 26px 0; }
@@ -770,13 +771,13 @@ html[data-theme="light"] .bodyweight-warning-icon{ filter: none; }
 
 /* ---------- Übungs-Bilderleiste (aktives Training) ---------- */
 .thumb-strip{
-  /* padding-top 12px: gerade genug Puffer für den über die Kacheln hinausragenden
-     "Supersatz"-Schriftzug (.thumb-superset-label, top:-10px + eigene Texthöhe) — die
+  /* padding-top 15px: gerade genug Puffer für den über die Kacheln hinausragenden
+     "Supersatz"-Schriftzug (.thumb-superset-label, top:-13px + eigene Texthöhe) — die
      scrollbare Leiste schneidet vertikal Überstehendes ab (overflow-x:auto erzwingt implizit
      auch overflow-y:auto). War hier zuvor auf 6px reduziert (Nutzerwunsch: kleinerer Abstand
      zur Pausentimer-Reihe darüber), wodurch der Schriftzug oben abgeschnitten wurde — jetzt
      wieder ausreichend Puffer bei weiterhin deutlich weniger als den ursprünglichen 16px. */
-  display:flex; gap:10px; overflow-x:auto; padding: 12px 2px 10px;
+  display:flex; gap:10px; overflow-x:auto; padding: 15px 2px 10px;
   margin-bottom:16px; -webkit-overflow-scrolling:touch;
 }
 .thumb{
@@ -829,7 +830,7 @@ html[data-theme="light"] .bodyweight-warning-icon{ filter: none; }
 }
 .thumb-superset-group .thumb.active{ outline:2px solid var(--accent); outline-offset:-2px; }
 .thumb-superset-label{
-  position:absolute; left:50%; top:-10px; transform:translateX(-50%);
+  position:absolute; left:50%; top:-13px; transform:translateX(-50%);
   font-family:'JetBrains Mono', monospace; font-size:8.5px; font-weight:600;
   letter-spacing:.04em; text-transform:uppercase; color: var(--muted); white-space:nowrap;
   opacity:.7; pointer-events:none;
@@ -892,6 +893,7 @@ html[data-theme="light"] .bodyweight-warning-icon{ filter: none; }
 /* RPE-Spalte (siehe rpeEnabled(), 11b-active-session-render.js) — nur eingeblendet, wenn in
    den Einstellungen aktiviert. Schmale Extra-Spalte zwischen VOL und den Aktions-Buttons. */
 .set-row.has-rpe, .sets-header.has-rpe{ grid-template-columns: 22px 1fr 1fr 44px 42px 32px 26px; }
+.set-row.set-row-time.has-rpe, .sets-header.sets-header-time.has-rpe{ grid-template-columns: 22px 1fr 42px 32px 26px; }
 .set-row input.rpe-input{ font-size:13px; padding:10px 2px; }
 .sets-header{
   display:grid; grid-template-columns: 22px 1fr 1fr 44px 32px 26px;
@@ -2507,3 +2509,15 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
   background:none; border:none; color:var(--accent); font-weight:700; font-size:0.85rem; cursor:pointer;
   padding:6px 10px; flex-shrink:0; font-family:inherit;
 }
+/* Kurze Bestätigungsmeldung oben am Bildschirmrand (showTopToast(), 12-session-summary.js) —
+   analog zu .undo-toast/.toast, aber oben statt unten positioniert und ohne Aktions-Button.
+   safe-area-inset-top berücksichtigt, damit sie nicht unter der Statusleiste/Notch verschwindet. */
+.top-toast{
+  position:fixed; top: calc(14px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%) translateY(-12px);
+  background: var(--text); color: var(--bg); padding:10px 18px; border-radius:24px;
+  font-size:13px; font-weight:600; z-index:80; opacity:0; pointer-events:none;
+  max-width:calc(100vw - 40px); text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+  transition: opacity .2s ease, transform .2s ease;
+}
+.top-toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }

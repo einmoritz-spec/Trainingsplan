@@ -38,6 +38,9 @@ let active = null;      // { startedAt, entries: [{exerciseId, name, target, set
 let activeSetMetricMode = 'vol';
 let timerHandle = null;
 let viewingSessionId = null;
+// Wake-Lock-Sentinel für laufendes Training (siehe requestTrainingWakeLock() in 04-utils.js) —
+// null solange keins gehalten wird oder die API/das Gerät sie nicht unterstützt.
+let trainingWakeLock = null;
 
 const app = document.getElementById('app');
 
@@ -749,6 +752,7 @@ async function init(){
     replaceView('active');
     renderActive();
     timerHandle = setInterval(updateTimerDisplay, 1000);
+    requestTrainingWakeLock();
   } else {
     // Bei einem versehentlichen Browser-Reload (oder erneutem Öffnen desselben Tabs) auf der
     // zuletzt offenen Seite bleiben statt immer zur Startseite zu springen — history.state
@@ -948,7 +952,7 @@ function calcPlatesPerSide(totalWeight){
 // das Gewicht drastisch zu halbieren. Gewicht wird dabei immer auf 5kg-Schritte gerundet.
 // WICHTIG bei unterstützten Übungen (planEx.assisted, z. B. Klimmzugmaschine): dort ist es
 // GENAU UMGEKEHRT — weniger eingestelltes Gewicht bedeutet MEHR eigene Anstrengung (das
-// Gerät nimmt einem weniger ab), siehe effectiveSetWeight()/computeProgressionSuggestion().
+// Gerät nimmt einem weniger ab), siehe effectiveSetWeight()/nextGridWeight().
 // Ein "leichteres" Deload muss das Gewicht bei assistierten Übungen daher ERHÖHEN statt
 // senken, sonst würde der Schalter das Training versehentlich verschärfen statt entlasten.
 // Zeitbasierte Einträge (Kardio) werden von beiden Funktionen bewusst nicht angefasst,
@@ -1152,7 +1156,7 @@ function openTrainingToolsPrompt(entry, planEx){
           <div class="tools-section-title-row">
             <div class="tools-section-title-group">
               <span class="tools-section-title" style="margin-bottom:0;">Supersätze</span>
-              <span class="tools-section-title-hint">Kacheln per Ziehen &amp; Halten verbinden</span>
+              <span class="tools-section-title-hint">Kacheln aufeinander ziehen</span>
             </div>
             <button class="toggle-switch ${plan.supersetsEnabled !== false ? 'on' : ''}" id="toolsSupersetsToggle" type="button" role="switch" aria-checked="${plan.supersetsEnabled !== false}" aria-label="Supersätze">
               <span class="toggle-knob"></span>

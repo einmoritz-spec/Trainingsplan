@@ -67,6 +67,7 @@ function cancelActiveSession(){
   const discarded = active;
   const wasOnActiveView = (history.state && history.state.view) === 'active';
   active = null;
+  releaseTrainingWakeLock();
   persistActiveSession();
   if (wasOnActiveView){
     replaceView('home');
@@ -76,6 +77,7 @@ function cancelActiveSession(){
   }
   showUndoToast('Training verworfen.', () => {
     active = discarded;
+    requestTrainingWakeLock();
     persistActiveSession();
     timerHandle = setInterval(updateTimerDisplay, 1000);
     updateMiniPlayer();
@@ -100,6 +102,10 @@ function goProgressList(push){
 function goMuscleBalance(push){
   if (push !== false) pushView('muscleBalance');
   renderMuscleBalance();
+}
+function goIntensityStats(push){
+  if (push !== false) pushView('intensityStats');
+  renderIntensityStats();
 }
 function goProgressDetail(name, push){
   if (push !== false) pushView('progressDetail', { name });
@@ -251,6 +257,7 @@ function renderViewByState(state){
     case 'settings': renderSettings(); break;
     case 'progressList': renderProgressList(); break;
     case 'muscleBalance': renderMuscleBalance(); break;
+    case 'intensityStats': renderIntensityStats(); break;
     case 'progressDetail': renderExerciseProgress(state.params.name); break;
     case 'sessionDetail': renderSessionDetail(state.params.id); break;
     case 'sessionSummary': {

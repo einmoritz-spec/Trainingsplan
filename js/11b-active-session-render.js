@@ -9,6 +9,263 @@
    sie selbst aufzubrechen, was das Risiko für Folgefehler deutlich erhöht
    hätte. Der Dateigrößen-Nutzen kommt hier rein aus der Trennung von 11a/11c.
 --------------------------------------------------- */
+/* ---------------------------------------------------
+   Sätze-Liste (Header + Zeilen) der aktuellen Übung — als eigene Funktion ausgelagert, damit
+   sie sowohl vom vollen renderActive() als auch von refreshCurrentSets() (gezieltes Update nur
+   von #currentSets bei reiner Werteingabe, siehe dort) genutzt werden kann, ohne Duplikation.
+   Erwartet dieselben drei Werte, die renderActive() ohnehin am Anfang berechnet.
+--------------------------------------------------- */
+function buildCurrentSetsMarkup(entry, ei, currentPlanEx){
+  if (!entry) return '';
+  // RPE-Spalte nur wenn in den Einstellungen aktiviert (siehe rpeEnabled(), 04-utils.js) —
+  // Standard ist AUS, dann sieht die Sätze-Tabelle exakt wie vorher aus. Gilt für ALLE
+  // Übungstypen gleichermaßen (Kraft, Zeit/Plank, Kardiogeräte) — Anstrengung lässt sich
+  // genauso bei einer gehaltenen Position oder einer Kardio-Einheit einschätzen wie bei einem
+  // Kraftsatz.
+  const rpeShown = rpeEnabled();
+
+  const setsHeaderHTML = entry.type === 'time' ? `
+    <div class="sets-header sets-header-time ${rpeShown ? 'has-rpe' : ''}">
+      <span class="sets-header-cell"></span>
+      <span class="sets-header-cell">${currentPlanEx && currentPlanEx.cardioMachine ? '' : 'Sek.'}</span>
+      ${rpeShown ? '<span class="sets-header-cell">RPE</span>' : ''}
+      <span class="sets-header-cell"></span>
+      <span class="sets-header-cell"></span>
+    </div>
+  ` : `
+    <div class="sets-header ${rpeShown ? 'has-rpe' : ''}">
+      <span class="sets-header-cell"></span>
+      <span class="sets-header-cell">KG</span>
+      <span class="sets-header-cell">WDH</span>
+      <button class="sets-header-cell sets-header-cell-toggle" id="btnToggleSetMetric" type="button">${activeSetMetricMode === 'vol' ? 'VOL' : activeSetMetricMode === '10rm' ? '10RM' : '1RM'}</button>
+      ${rpeShown ? '<span class="sets-header-cell">RPE</span>' : ''}
+      <span class="sets-header-cell"></span>
+      <span class="sets-header-cell"></span>
+    </div>
+  `;
+
+  const setsHTML = entry.sets.map((set, si) => {
+    const isSuggestSet = !!(perfSuggestion && perfSuggestion.entryIndex === ei && perfSuggestion.setIndex === si);
+    return entry.type === 'time' ? `
+    <div class="set-row set-row-time ${rpeShown ? 'has-rpe' : ''} ${set.done ? 'set-done' : ''} ${isSuggestSet ? 'perf-suggest-active' : ''}" data-set="${si}">
+      <span class="set-idx">${isSuggestSet ? `<svg class="perf-suggest-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20V4"></path><path d="M5 11l7-7 7 7"></path></svg>` : si+1}</span>
+      ${isSuggestSet ? `
+      <input type="number" inputmode="numeric" enterkeyhint="done" id="perfSuggestSeconds" value="${perfSuggestion.seconds}" aria-label="Sekunden">
+      ` : currentPlanEx && currentPlanEx.cardioMachine ? `
+      <div class="mmss-field-row">
+        <div class="set-mmss">
+          <input type="number" inputmode="numeric" enterkeyhint="done" placeholder="Min" min="0" value="${set.seconds != null ? Math.floor(set.seconds / 60) : ''}" data-mmss="min">
+          <span class="set-mmss-sep">:</span>
+          <input type="number" inputmode="numeric" enterkeyhint="done" placeholder="Sek" min="0" max="59" value="${set.seconds != null ? String(set.seconds % 60).padStart(2,'0') : ''}" data-mmss="sec">
+        </div>
+        <button type="button" class="seconds-timer-btn" data-start-timer="${si}" aria-label="Stoppuhr für Satz ${si+1} starten">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l3 2"></path><path d="M9 2h6"></path></svg>
+        </button>
+      </div>
+      ` : `
+      <div class="seconds-field-row">
+        <input type="number" inputmode="numeric" enterkeyhint="done" placeholder="Sekunden" value="${set.seconds ?? ''}" data-field="seconds" data-si="${si}">
+        <button type="button" class="seconds-timer-btn" data-start-timer="${si}" aria-label="Stoppuhr für Satz ${si+1} starten">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l3 2"></path><path d="M9 2h6"></path></svg>
+        </button>
+      </div>
+      `}
+      ${rpeShown ? (isSuggestSet ? '<span></span>' : `<input type="number" inputmode="decimal" enterkeyhint="done" placeholder="RPE" step="${RPE_STEP}" min="${RPE_MIN}" max="${RPE_MAX}" value="${fmtRpe(set.rpe)}" data-field="rpe" data-si="${si}" class="rpe-input" aria-label="RPE (Anstrengung) Satz ${si+1}">`) : ''}
+      ${isSuggestSet ? `
+      <button class="perf-suggest-row-confirm" id="perfSuggestConfirm" type="button" aria-label="Vorschlag übernehmen">✓</button>
+      <button class="perf-suggest-row-reject" id="perfSuggestReject" type="button" aria-label="Vorschlag ablehnen">✕</button>
+      ` : `
+      <button class="set-check ${set.done ? 'checked' : ''}" data-checkset="${si}" aria-label="Satz ${si+1} erledigt">✓</button>
+      ${currentPlanEx && currentPlanEx.cardioMachine ? '' : `<button class="icon-x" data-removeset="${si}" aria-label="Satz ${si+1} entfernen">✕</button>`}
+      `}
+    </div>
+    ${cardioFieldsFor(currentPlanEx).length ? `
+    <div class="set-cardio-extra" data-set="${si}">
+      ${cardioFieldsFor(currentPlanEx).map(f => `
+        <div class="set-cardio-field">
+          <label>${f.label}</label>
+          <input type="number" inputmode="decimal" enterkeyhint="done" step="${f.step}" min="${f.min ?? 0}" ${f.max !== undefined ? `max="${f.max}"` : ''} value="${set[f.key] ?? ''}" data-field="${f.key}">
+        </div>
+      `).join('')}
+      ${currentPlanEx.cardioMachine === 'laufband' ? `
+        <div class="set-cardio-distance" id="cardioDistance${si}">${cardioDistanceKm(currentPlanEx, set) != null ? `≈ ${cardioDistanceKm(currentPlanEx, set).toLocaleString('de-DE')} km` : ''}</div>
+      ` : ''}
+    </div>` : ''}
+  ` : `
+    <div class="set-row ${rpeShown ? 'has-rpe' : ''} ${set.done ? 'set-done' : ''} ${isSuggestSet ? 'perf-suggest-active' : ''}" data-set="${si}">
+      <span class="set-idx">${isSuggestSet ? `<svg class="perf-suggest-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20V4"></path><path d="M5 11l7-7 7 7"></path></svg>` : (set.warmup ? 'WU' : si+1)}</span>
+      <input type="number" inputmode="decimal" enterkeyhint="done" placeholder="${currentPlanEx && currentPlanEx.bodyweightExercise ? '+kg' : 'kg'}" step="0.5" value="${isSuggestSet ? perfSuggestion.weight : (currentPlanEx && currentPlanEx.noWeight ? '' : (set.weight ?? ''))}" ${isSuggestSet ? 'id="perfSuggestWeight"' : `data-field="weight" data-si="${si}"`} class="${currentPlanEx && currentPlanEx.bodyweightExercise && !isSuggestSet ? 'weight-input-optional' : ''}" ${currentPlanEx && currentPlanEx.noWeight && !isSuggestSet ? 'disabled' : ''}>
+      <input type="number" inputmode="numeric" enterkeyhint="done" placeholder="Wdh" value="${isSuggestSet ? perfSuggestion.reps : (set.reps ?? '')}" ${isSuggestSet ? 'id="perfSuggestReps"' : `data-field="reps" data-si="${si}"`}>
+      <span class="set-vol">${isSuggestSet ? '' : ((currentPlanEx && currentPlanEx.noWeight) ? '–' : (setMetricValue(set.reps, set.weight, currentPlanEx, activeSetMetricMode) ?? '–'))}</span>
+      ${rpeShown ? (isSuggestSet ? '<span></span>' : `<input type="number" inputmode="decimal" enterkeyhint="done" placeholder="RPE" step="${RPE_STEP}" min="${RPE_MIN}" max="${RPE_MAX}" value="${fmtRpe(set.rpe)}" data-field="rpe" data-si="${si}" class="rpe-input" aria-label="RPE (Anstrengung) Satz ${si+1}">`) : ''}
+      ${isSuggestSet ? `
+      <button class="perf-suggest-row-confirm" id="perfSuggestConfirm" type="button" aria-label="Vorschlag übernehmen">✓</button>
+      <button class="perf-suggest-row-reject" id="perfSuggestReject" type="button" aria-label="Vorschlag ablehnen">✕</button>
+      ` : `
+      <button class="set-check ${set.done ? 'checked' : ''}" data-checkset="${si}" aria-label="Satz ${si+1} erledigt">✓</button>
+      <button class="icon-x" data-removeset="${si}" aria-label="Satz ${si+1} entfernen">✕</button>
+      `}
+    </div>
+  `;
+  }).join('');
+
+  return setsHeaderHTML + setsHTML;
+}
+
+/* ---------------------------------------------------
+   Verkabelung der Eingabefelder innerhalb #currentSets (Gewicht/Wdh/Sekunden/Kardio-Zusatz-
+   felder je Satz) — als eigene Funktion ausgelagert, damit sie sowohl nach dem vollen
+   renderActive() als auch nach refreshCurrentSets() (siehe dort) erneut aufgerufen werden kann,
+   ohne die komplette Verkabelungslogik zu duplizieren.
+--------------------------------------------------- */
+function wireCurrentSetsInputs(entry, ei, currentPlanEx){
+  // Aktualisiert die Live-Distanzanzeige (≈ X km) beim Laufband anhand der GERADE
+  // getippten Werte (nicht erst nach dem Speichern) — liest Minuten/Sekunden und Tempo
+  // direkt aus dem DOM, da diese über zwei getrennte Zeilen (.set-row/.set-cardio-extra)
+  // verteilt sind.
+  function refreshCardioDistanceDisplay(si){
+    if (!currentPlanEx || currentPlanEx.cardioMachine !== 'laufband') return;
+    const distEl = document.getElementById(`cardioDistance${si}`);
+    if (!distEl) return;
+    const setRow = document.querySelector(`#currentSets .set-row[data-set="${si}"]`);
+    const extraRow = document.querySelector(`#currentSets .set-cardio-extra[data-set="${si}"]`);
+    const minEl = setRow && setRow.querySelector('[data-mmss="min"]');
+    const secEl = setRow && setRow.querySelector('[data-mmss="sec"]');
+    const speedEl = extraRow && extraRow.querySelector('[data-field="speed"]');
+    const min = minEl && minEl.value !== '' ? Number(minEl.value) : 0;
+    const sec = secEl && secEl.value !== '' ? Number(secEl.value) : 0;
+    const speed = speedEl && speedEl.value !== '' ? Number(speedEl.value) : null;
+    const hasTime = !!((minEl && minEl.value !== '') || (secEl && secEl.value !== ''));
+    const dist = (speed != null && hasTime) ? Math.round(speed * ((min*60+sec)/3600) * 100)/100 : null;
+    distEl.textContent = dist != null ? `≈ ${dist.toLocaleString('de-DE')} km` : '';
+  }
+
+  const currentSetsEl = document.getElementById('currentSets');
+  if (!currentSetsEl) return;
+  currentSetsEl.querySelectorAll('.set-row, .set-cardio-extra').forEach(row => {
+    const si = Number(row.dataset.set);
+    row.querySelectorAll('input[data-field]').forEach(input => {
+      input.onkeydown = (ev) => {
+        if (ev.key === 'Enter'){
+          ev.preventDefault();
+          // Statt immer nur die Tastatur zu schließen: springt zum NÄCHSTEN Eingabefeld
+          // derselben Zeile (z. B. kg → Wdh), aber NUR wenn dieses noch leer ist — steht
+          // dort schon ein Wert (z. B. aus der Übernahme vom vorherigen Satz), bleibt
+          // "Bestätigen" wie gewohnt beim Schließen der Tastatur (kein ungewolltes
+          // Überspringen eines bereits ausgefüllten Feldes). input.blur() löst über den
+          // bestehenden onchange-Handler refreshCurrentSets() aus, das NUR #currentSets neu
+          // aufbaut (siehe dort) — das Zielfeld muss deshalb ERST NACH diesem Neuaufbau frisch
+          // aus dem DOM geholt werden, ein vorher gemerkter Knoten wäre danach bereits verwaist.
+          const fieldsInRow = Array.from(row.querySelectorAll('input[data-field]'));
+          const idx = fieldsInRow.indexOf(input);
+          const nextInput = fieldsInRow[idx + 1];
+          const nextField = (nextInput && nextInput.value === '' && !nextInput.disabled) ? nextInput.dataset.field : null;
+          input.blur(); // löst onchange aus (Wert übernehmen, speichern, neu rendern)
+          if (nextField){
+            const freshNext = document.querySelector(`#currentSets input[data-field="${nextField}"][data-si="${si}"]`);
+            if (freshNext) freshNext.focus();
+          }
+        }
+      };
+      input.onchange = () => {
+        const val = input.value === '' ? null : Number(input.value);
+        const field = input.dataset.field;
+        // Trägt den Wert direkt beim Eintragen (kein Abhaken nötig) in diesen Satz ein
+        // und schreibt ihn wie beim Abhaken automatisch in alle direkt folgenden, noch
+        // leeren bzw. nur automatisch befüllten Sätze fort (applySetValueAndPropagate).
+        applySetValueAndPropagate(entry, si, { [field]: val });
+        persistActiveSession();
+        // Reine Werteingabe ändert weder den erledigt-Status noch die Übungsauswahl/
+        // Bilderleiste — ein gezieltes Neuaufbauen NUR von #currentSets reicht, siehe
+        // refreshCurrentSets(). Das ist der Kern der Bugfix-Lektion "Long-Press-Drag/
+        // scrollLeft/Fokus nach komplettem Rebuild": je kleiner der neu aufgebaute
+        // Bereich, desto weniger Nebenwirkungen dieser Art entstehen können.
+        refreshCurrentSets();
+      };
+      if (entry.type !== 'time'){
+        input.oninput = () => {
+          const s = entry.sets[si];
+          const reps = input.dataset.field === 'reps' ? (input.value === '' ? null : Number(input.value)) : s.reps;
+          const weight = input.dataset.field === 'weight' ? (input.value === '' ? null : Number(input.value)) : s.weight;
+          const volEl = row.querySelector('.set-vol');
+          if (volEl) volEl.textContent = setMetricValue(reps, weight, currentPlanEx, activeSetMetricMode) ?? '–';
+        };
+      } else if (input.dataset.field === 'speed'){
+        input.oninput = () => refreshCardioDistanceDisplay(si);
+      }
+    });
+    // Kardio: Minuten + Sekunden werden getrennt eingegeben, aber weiterhin als eine
+    // gemeinsame Sekundenzahl in set.seconds gespeichert — dieselbe Datengrundlage wie bei
+    // allen anderen Zeit-Übungen (Verlauf, Rekorde, PDF etc. bleiben dadurch unverändert).
+    const minEl = row.querySelector('[data-mmss="min"]');
+    const secEl = row.querySelector('[data-mmss="sec"]');
+    if (minEl && secEl){
+      const commit = () => {
+        const min = minEl.value === '' ? 0 : Number(minEl.value);
+        const sec = secEl.value === '' ? 0 : Number(secEl.value);
+        const seconds = (minEl.value === '' && secEl.value === '') ? null : (min * 60 + sec);
+        // Wie bei Gewicht/Wdh: Dauer direkt beim Eintragen in Folge-Sätze übernehmen.
+        applySetValueAndPropagate(entry, si, { seconds });
+        persistActiveSession();
+        refreshCurrentSets(); // reine Werteingabe, siehe Kommentar oben
+      };
+      [minEl, secEl].forEach(el => {
+        el.onkeydown = (ev) => { if (ev.key === 'Enter'){ ev.preventDefault(); el.blur(); } };
+        el.onchange = commit;
+        el.oninput = () => refreshCardioDistanceDisplay(si);
+      });
+      const cardioTimerBtn = row.querySelector('.mmss-field-row .seconds-timer-btn');
+      if (cardioTimerBtn) cardioTimerBtn.onclick = () => {
+        openPlankTimerOverlay((sec) => {
+          minEl.value = Math.floor(sec / 60);
+          secEl.value = String(sec % 60).padStart(2, '0');
+          applySetValueAndPropagate(entry, si, { seconds: sec });
+          // autoCheckSetAfterTimer hakt den Satz zusätzlich ab (siehe dort) — das ändert den
+          // erledigt-Status (Bilderleiste, ggf. automatischer Pausetimer), betrifft also mehr
+          // als nur #currentSets. Bleibt deshalb bewusst beim vollen renderActive().
+          autoCheckSetAfterTimer(entry, ei, si);
+          persistActiveSession();
+          renderActive();
+        });
+      };
+    }
+    if (entry.type === 'time' && !(minEl && secEl)){
+      const secondsInput = row.querySelector('[data-field="seconds"]');
+      const timerBtn = row.querySelector('.seconds-timer-btn');
+      if (timerBtn && secondsInput){
+        timerBtn.onclick = () => {
+          openPlankTimerOverlay((sec) => {
+            applySetValueAndPropagate(entry, si, { seconds: sec });
+            autoCheckSetAfterTimer(entry, ei, si); // siehe Kommentar oben — voller renderActive()
+            persistActiveSession();
+            renderActive();
+          });
+        };
+      }
+    }
+  });
+}
+
+// Gezieltes Update NUR der Sätze-Liste (#currentSets) nach reiner Werteingabe (Gewicht/Wdh/
+// Sekunden/Kardio-Zusatzfelder), OHNE die komplette Seite (app.innerHTML) neu aufzubauen. Das
+// vermeidet strukturell die ganze Klasse von Bugs, die aus dem kompletten Rebuild entstand
+// (Bilderleiste sprang an den Anfang zurück, Fokus musste nach dem Rebuild erst wieder
+// mühsam aus dem DOM geholt werden, s. Kommentare in wireCurrentSetsInputs()/renderActive()
+// weiter oben) — Übungsauswahl, Bilderleiste, Timer-Anzeige, Pause-Ring etc. bleiben von
+// dieser Art Update komplett unberührt, weil sie außerhalb von #currentSets liegen.
+// Sicherheitsnetz: bricht auf den vollen renderActive() zurück, falls #currentSets aus
+// irgendeinem Grund (noch) nicht existiert, z. B. bei unerwarteter Zwischenzustands-Änderung.
+function refreshCurrentSets(){
+  if (!active) return;
+  const ei = active.currentIndex;
+  const entry = active.entries[ei];
+  const currentSetsEl = document.getElementById('currentSets');
+  if (!entry || !currentSetsEl){ renderActive(); return; }
+  const currentPlanEx = plan.exercises.find(x => x.id === entry.exerciseId);
+  currentSetsEl.innerHTML = buildCurrentSetsMarkup(entry, ei, currentPlanEx);
+  wireCurrentSetsInputs(entry, ei, currentPlanEx);
+}
+
 function renderActive(){
   accrueExerciseTime();
   persistActiveSession();
@@ -120,93 +377,7 @@ function renderActive(){
     </div>
   `;
 
-  // RPE-Spalte nur bei Kraft-Übungen (nicht bei Zeit/Kardio) und nur, wenn in den
-  // Einstellungen aktiviert (siehe rpeEnabled(), 04-utils.js) — Standard ist AUS, dann
-  // sieht die Sätze-Tabelle exakt wie vorher aus.
-  const rpeShown = !!(entry && entry.type !== 'time' && rpeEnabled());
-
-  const setsHeaderHTML = entry ? (entry.type === 'time' ? `
-    <div class="sets-header sets-header-time">
-      <span class="sets-header-cell"></span>
-      <span class="sets-header-cell">${currentPlanEx && currentPlanEx.cardioMachine ? '' : 'Sek.'}</span>
-      <span class="sets-header-cell"></span>
-      <span class="sets-header-cell"></span>
-    </div>
-  ` : `
-    <div class="sets-header ${rpeShown ? 'has-rpe' : ''}">
-      <span class="sets-header-cell"></span>
-      <span class="sets-header-cell">KG</span>
-      <span class="sets-header-cell">WDH</span>
-      <button class="sets-header-cell sets-header-cell-toggle" id="btnToggleSetMetric" type="button">${activeSetMetricMode === 'vol' ? 'VOL' : activeSetMetricMode === '10rm' ? '10RM' : '1RM'}</button>
-      ${rpeShown ? '<span class="sets-header-cell">RPE</span>' : ''}
-      <span class="sets-header-cell"></span>
-      <span class="sets-header-cell"></span>
-    </div>
-  `) : '';
-
-  const setsHTML = entry ? entry.sets.map((set, si) => {
-    const isSuggestSet = !!(perfSuggestion && perfSuggestion.entryIndex === ei && perfSuggestion.setIndex === si);
-    return entry.type === 'time' ? `
-    <div class="set-row set-row-time ${set.done ? 'set-done' : ''} ${isSuggestSet ? 'perf-suggest-active' : ''}" data-set="${si}">
-      <span class="set-idx">${isSuggestSet ? `<svg class="perf-suggest-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20V4"></path><path d="M5 11l7-7 7 7"></path></svg>` : si+1}</span>
-      ${isSuggestSet ? `
-      <input type="number" inputmode="numeric" enterkeyhint="done" id="perfSuggestSeconds" value="${perfSuggestion.seconds}" aria-label="Sekunden">
-      ` : currentPlanEx && currentPlanEx.cardioMachine ? `
-      <div class="mmss-field-row">
-        <div class="set-mmss">
-          <input type="number" inputmode="numeric" enterkeyhint="done" placeholder="Min" min="0" value="${set.seconds != null ? Math.floor(set.seconds / 60) : ''}" data-mmss="min">
-          <span class="set-mmss-sep">:</span>
-          <input type="number" inputmode="numeric" enterkeyhint="done" placeholder="Sek" min="0" max="59" value="${set.seconds != null ? String(set.seconds % 60).padStart(2,'0') : ''}" data-mmss="sec">
-        </div>
-        <button type="button" class="seconds-timer-btn" data-start-timer="${si}" aria-label="Stoppuhr für Satz ${si+1} starten">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l3 2"></path><path d="M9 2h6"></path></svg>
-        </button>
-      </div>
-      ` : `
-      <div class="seconds-field-row">
-        <input type="number" inputmode="numeric" enterkeyhint="done" placeholder="Sekunden" value="${set.seconds ?? ''}" data-field="seconds">
-        <button type="button" class="seconds-timer-btn" data-start-timer="${si}" aria-label="Stoppuhr für Satz ${si+1} starten">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l3 2"></path><path d="M9 2h6"></path></svg>
-        </button>
-      </div>
-      `}
-      ${isSuggestSet ? `
-      <button class="perf-suggest-row-confirm" id="perfSuggestConfirm" type="button" aria-label="Vorschlag übernehmen">✓</button>
-      <button class="perf-suggest-row-reject" id="perfSuggestReject" type="button" aria-label="Vorschlag ablehnen">✕</button>
-      ` : `
-      <button class="set-check ${set.done ? 'checked' : ''}" data-checkset="${si}" aria-label="Satz ${si+1} erledigt">✓</button>
-      ${currentPlanEx && currentPlanEx.cardioMachine ? '' : `<button class="icon-x" data-removeset="${si}" aria-label="Satz ${si+1} entfernen">✕</button>`}
-      `}
-    </div>
-    ${cardioFieldsFor(currentPlanEx).length ? `
-    <div class="set-cardio-extra" data-set="${si}">
-      ${cardioFieldsFor(currentPlanEx).map(f => `
-        <div class="set-cardio-field">
-          <label>${f.label}</label>
-          <input type="number" inputmode="decimal" enterkeyhint="done" step="${f.step}" min="${f.min ?? 0}" ${f.max !== undefined ? `max="${f.max}"` : ''} value="${set[f.key] ?? ''}" data-field="${f.key}">
-        </div>
-      `).join('')}
-      ${currentPlanEx.cardioMachine === 'laufband' ? `
-        <div class="set-cardio-distance" id="cardioDistance${si}">${cardioDistanceKm(currentPlanEx, set) != null ? `≈ ${cardioDistanceKm(currentPlanEx, set).toLocaleString('de-DE')} km` : ''}</div>
-      ` : ''}
-    </div>` : ''}
-  ` : `
-    <div class="set-row ${rpeShown ? 'has-rpe' : ''} ${set.done ? 'set-done' : ''} ${isSuggestSet ? 'perf-suggest-active' : ''}" data-set="${si}">
-      <span class="set-idx">${isSuggestSet ? `<svg class="perf-suggest-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20V4"></path><path d="M5 11l7-7 7 7"></path></svg>` : (set.warmup ? 'WU' : si+1)}</span>
-      <input type="number" inputmode="decimal" enterkeyhint="done" placeholder="${currentPlanEx && currentPlanEx.bodyweightExercise ? '+kg' : 'kg'}" step="0.5" value="${isSuggestSet ? perfSuggestion.weight : (currentPlanEx && currentPlanEx.noWeight ? '' : (set.weight ?? ''))}" ${isSuggestSet ? 'id="perfSuggestWeight"' : 'data-field="weight"'} class="${currentPlanEx && currentPlanEx.bodyweightExercise && !isSuggestSet ? 'weight-input-optional' : ''}" ${currentPlanEx && currentPlanEx.noWeight && !isSuggestSet ? 'disabled' : ''}>
-      <input type="number" inputmode="numeric" enterkeyhint="done" placeholder="Wdh" value="${isSuggestSet ? perfSuggestion.reps : (set.reps ?? '')}" ${isSuggestSet ? 'id="perfSuggestReps"' : 'data-field="reps"'}>
-      <span class="set-vol">${isSuggestSet ? '' : ((currentPlanEx && currentPlanEx.noWeight) ? '–' : (setMetricValue(set.reps, set.weight, currentPlanEx, activeSetMetricMode) ?? '–'))}</span>
-      ${rpeShown ? (isSuggestSet ? '<span></span>' : `<input type="number" inputmode="decimal" enterkeyhint="done" placeholder="RPE" step="${RPE_STEP}" min="${RPE_MIN}" max="${RPE_MAX}" value="${fmtRpe(set.rpe)}" data-field="rpe" class="rpe-input" aria-label="RPE (Anstrengung) Satz ${si+1}">`) : ''}
-      ${isSuggestSet ? `
-      <button class="perf-suggest-row-confirm" id="perfSuggestConfirm" type="button" aria-label="Vorschlag übernehmen">✓</button>
-      <button class="perf-suggest-row-reject" id="perfSuggestReject" type="button" aria-label="Vorschlag ablehnen">✕</button>
-      ` : `
-      <button class="set-check ${set.done ? 'checked' : ''}" data-checkset="${si}" aria-label="Satz ${si+1} erledigt">✓</button>
-      <button class="icon-x" data-removeset="${si}" aria-label="Satz ${si+1} entfernen">✕</button>
-      `}
-    </div>
-  `;
-  }).join('') : '';
+  const currentSetsMarkup = buildCurrentSetsMarkup(entry, ei, currentPlanEx);
 
   const referenceHTML = (entry && entry.referenceHistory && entry.referenceHistory.length) ? `
     <div class="reference-block">
@@ -240,8 +411,7 @@ function renderActive(){
         <button class="icon-x" id="btnRemoveExercise" aria-label="${entry.name} aus dieser Einheit entfernen">✕</button>
       </div>
       <div class="sets" id="currentSets">
-        ${setsHeaderHTML}
-        ${setsHTML}
+        ${currentSetsMarkup}
       </div>
       <div class="add-set-row ${entry.type === 'time' ? 'set-row-time' : ''}" ${currentPlanEx && currentPlanEx.cardioMachine ? 'style="display:none;"' : ''}>
         <button class="add-set" id="btnAddSet" aria-label="Satz hinzufügen">+</button>
@@ -386,121 +556,7 @@ function renderActive(){
   }
 
   if (entry){
-    // Aktualisiert die Live-Distanzanzeige (≈ X km) beim Laufband anhand der GERADE
-    // getippten Werte (nicht erst nach dem Speichern) — liest Minuten/Sekunden und Tempo
-    // direkt aus dem DOM, da diese über zwei getrennte Zeilen (.set-row/.set-cardio-extra)
-    // verteilt sind.
-    function refreshCardioDistanceDisplay(si){
-      if (!currentPlanEx || currentPlanEx.cardioMachine !== 'laufband') return;
-      const distEl = document.getElementById(`cardioDistance${si}`);
-      if (!distEl) return;
-      const setRow = document.querySelector(`#currentSets .set-row[data-set="${si}"]`);
-      const extraRow = document.querySelector(`#currentSets .set-cardio-extra[data-set="${si}"]`);
-      const minEl = setRow && setRow.querySelector('[data-mmss="min"]');
-      const secEl = setRow && setRow.querySelector('[data-mmss="sec"]');
-      const speedEl = extraRow && extraRow.querySelector('[data-field="speed"]');
-      const min = minEl && minEl.value !== '' ? Number(minEl.value) : 0;
-      const sec = secEl && secEl.value !== '' ? Number(secEl.value) : 0;
-      const speed = speedEl && speedEl.value !== '' ? Number(speedEl.value) : null;
-      const hasTime = !!((minEl && minEl.value !== '') || (secEl && secEl.value !== ''));
-      const dist = (speed != null && hasTime) ? Math.round(speed * ((min*60+sec)/3600) * 100)/100 : null;
-      distEl.textContent = dist != null ? `≈ ${dist.toLocaleString('de-DE')} km` : '';
-    }
-
-    document.getElementById('currentSets').querySelectorAll('.set-row, .set-cardio-extra').forEach(row => {
-      const si = Number(row.dataset.set);
-      row.querySelectorAll('input[data-field]').forEach(input => {
-        input.onkeydown = (ev) => {
-          if (ev.key === 'Enter'){
-            ev.preventDefault();
-            // Statt immer nur die Tastatur zu schließen: springt zum NÄCHSTEN Eingabefeld
-            // derselben Zeile (z. B. kg → Wdh), aber NUR wenn dieses noch leer ist — steht
-            // dort schon ein Wert (z. B. aus der Übernahme vom vorherigen Satz), bleibt
-            // "Bestätigen" wie gewohnt beim Schließen der Tastatur (kein ungewolltes
-            // Überspringen eines bereits ausgefüllten Feldes). input.blur() löst über den
-            // bestehenden onchange-Handler renderActive() aus, das die komplette Sätze-Liste
-            // neu aufbaut — das Zielfeld muss deshalb ERST NACH diesem Neuaufbau frisch aus
-            // dem DOM geholt werden, ein vorher gemerkter Knoten wäre danach bereits verwaist.
-            const fieldsInRow = Array.from(row.querySelectorAll('input[data-field]'));
-            const idx = fieldsInRow.indexOf(input);
-            const nextInput = fieldsInRow[idx + 1];
-            const nextField = (nextInput && nextInput.value === '' && !nextInput.disabled) ? nextInput.dataset.field : null;
-            input.blur(); // löst onchange aus (Wert übernehmen, speichern, neu rendern)
-            if (nextField){
-              const freshNext = document.querySelector(`#currentSets input[data-field="${nextField}"][data-si="${si}"]`);
-              if (freshNext) freshNext.focus();
-            }
-          }
-        };
-        input.onchange = () => {
-          const val = input.value === '' ? null : Number(input.value);
-          const field = input.dataset.field;
-          // Trägt den Wert direkt beim Eintragen (kein Abhaken nötig) in diesen Satz ein
-          // und schreibt ihn wie beim Abhaken automatisch in alle direkt folgenden, noch
-          // leeren bzw. nur automatisch befüllten Sätze fort (applySetValueAndPropagate).
-          applySetValueAndPropagate(entry, si, { [field]: val });
-          persistActiveSession();
-          renderActive();
-        };
-        if (entry.type !== 'time'){
-          input.oninput = () => {
-            const s = entry.sets[si];
-            const reps = input.dataset.field === 'reps' ? (input.value === '' ? null : Number(input.value)) : s.reps;
-            const weight = input.dataset.field === 'weight' ? (input.value === '' ? null : Number(input.value)) : s.weight;
-            const volEl = row.querySelector('.set-vol');
-            if (volEl) volEl.textContent = setMetricValue(reps, weight, currentPlanEx, activeSetMetricMode) ?? '–';
-          };
-        } else if (input.dataset.field === 'speed'){
-          input.oninput = () => refreshCardioDistanceDisplay(si);
-        }
-      });
-      // Kardio: Minuten + Sekunden werden getrennt eingegeben, aber weiterhin als eine
-      // gemeinsame Sekundenzahl in set.seconds gespeichert — dieselbe Datengrundlage wie bei
-      // allen anderen Zeit-Übungen (Verlauf, Rekorde, PDF etc. bleiben dadurch unverändert).
-      const minEl = row.querySelector('[data-mmss="min"]');
-      const secEl = row.querySelector('[data-mmss="sec"]');
-      if (minEl && secEl){
-        const commit = () => {
-          const min = minEl.value === '' ? 0 : Number(minEl.value);
-          const sec = secEl.value === '' ? 0 : Number(secEl.value);
-          const seconds = (minEl.value === '' && secEl.value === '') ? null : (min * 60 + sec);
-          // Wie bei Gewicht/Wdh: Dauer direkt beim Eintragen in Folge-Sätze übernehmen.
-          applySetValueAndPropagate(entry, si, { seconds });
-          persistActiveSession();
-          renderActive();
-        };
-        [minEl, secEl].forEach(el => {
-          el.onkeydown = (ev) => { if (ev.key === 'Enter'){ ev.preventDefault(); el.blur(); } };
-          el.onchange = commit;
-          el.oninput = () => refreshCardioDistanceDisplay(si);
-        });
-        const cardioTimerBtn = row.querySelector('.mmss-field-row .seconds-timer-btn');
-        if (cardioTimerBtn) cardioTimerBtn.onclick = () => {
-          openPlankTimerOverlay((sec) => {
-            minEl.value = Math.floor(sec / 60);
-            secEl.value = String(sec % 60).padStart(2, '0');
-            applySetValueAndPropagate(entry, si, { seconds: sec });
-            autoCheckSetAfterTimer(entry, ei, si);
-            persistActiveSession();
-            renderActive();
-          });
-        };
-      }
-      if (entry.type === 'time' && !(minEl && secEl)){
-        const secondsInput = row.querySelector('[data-field="seconds"]');
-        const timerBtn = row.querySelector('.seconds-timer-btn');
-        if (timerBtn && secondsInput){
-          timerBtn.onclick = () => {
-            openPlankTimerOverlay((sec) => {
-              applySetValueAndPropagate(entry, si, { seconds: sec });
-              autoCheckSetAfterTimer(entry, ei, si);
-              persistActiveSession();
-              renderActive();
-            });
-          };
-        }
-      }
-    });
+    wireCurrentSetsInputs(entry, ei, currentPlanEx);
 
     app.querySelectorAll('[data-checkset]').forEach(btn => {
       btn.onclick = () => {

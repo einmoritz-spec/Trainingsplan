@@ -93,6 +93,7 @@ function renderSessionSummary(session){
   const sessionNumber = sessions.length;
   const streak = computeWeekStreak();
   const { highlights: exerciseHighlights, starCount, improvedCount } = computeExerciseHighlights(session);
+  const sessionAvgRpe = rpeEnabled() ? avgRpeForSessions([session]) : null;
   const durationDisplay = fmtDuration(session.durationSec);
   // Ab 1h wird aus "MM:SS" ein "H:MM:SS" — spürbar breiter, daher kleinere Schrift in der Pill
   // (siehe .summary-pill-value-long), damit die Ziffern nicht über die Trennlinie laufen.
@@ -151,6 +152,12 @@ function renderSessionSummary(session){
       <div class="summary-pill-item">
         <div class="summary-pill-top"><img class="summary-pill-icon-img" src="${ICON_IMPROVEMENT}" alt=""><span class="summary-pill-value">${improvedCount}</span></div>
         <div class="summary-pill-label">Verbessert</div>
+      </div>` : ''}
+      ${sessionAvgRpe != null ? `
+      <div class="summary-pill-divider"></div>
+      <div class="summary-pill-item">
+        <div class="summary-pill-top"><span class="summary-pill-value" style="color:${intensityBandForRpe(sessionAvgRpe).color};">${fmtRpe(sessionAvgRpe)}</span></div>
+        <div class="summary-pill-label">Ø Intensität</div>
       </div>` : ''}
     </div>
     ${rowsHTML ? `
@@ -329,6 +336,8 @@ function buildFullSummaryPdfBlob(session, opts){
   y += 9;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(60);
   let metaLine = `${fmtDate(session.date)}  ·  Dauer ${fmtDuration(session.durationSec)}`;
+  const summaryKcal = estimateSessionKcal(session);
+  if (summaryKcal != null) metaLine += `  ·  ≈ ${summaryKcal} kcal`;
   if (opts.sessionNumber) metaLine += `  ·  Einheit Nr. ${opts.sessionNumber}`;
   if (opts.streak) metaLine += `  ·  ${opts.streak} ${opts.streak === 1 ? 'Woche' : 'Wochen'} am Stück`;
   doc.text(pdfSafeText(metaLine), marginX, y);
@@ -441,6 +450,32 @@ function showUndoToast(message, onUndo){
     onUndo();
   };
   undoToastTimeout = setTimeout(remove, 5000);
+}
+
+// Kurze reine Bestätigungsmeldung OBEN am Bildschirmrand (kein Rückgängig-Button nötig, z. B.
+// "Erfolgreich hinzugefügt: X") — bewusst eine eigene, einfachere Variante statt showUndoToast()
+// zu missbrauchen (die IMMER einen Rückgängig-Button zeigt und unten sitzt). Blendet sich nach
+// kurzer Zeit von selbst wieder aus.
+let topToastTimeout = null;
+function showTopToast(message){
+  const existing = document.getElementById('topToast');
+  if (existing) existing.remove();
+  if (topToastTimeout) clearTimeout(topToastTimeout);
+
+  const toast = document.createElement('div');
+  toast.className = 'top-toast';
+  toast.id = 'topToast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('show'));
+
+  const remove = () => {
+    const el = document.getElementById('topToast');
+    if (!el) return;
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 250);
+  };
+  topToastTimeout = setTimeout(remove, 2200);
 }
 
 // Kompakter PDF-Export aller "Fortschritt"-Statistiken auf einen Blick — nutzt bewusst den

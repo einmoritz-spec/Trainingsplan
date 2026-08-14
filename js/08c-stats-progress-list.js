@@ -71,6 +71,11 @@ function renderProgressList(){
     <button class="btn btn-ghost" id="cardMuscleBalance" style="margin-bottom:18px; text-align:left; display:flex; align-items:center; justify-content:space-between;">
       <span>Muskelgruppen-Verteilung</span><span class="progress-chevron">›</span>
     </button>
+    ${rpeEnabled() ? `
+    <button class="btn btn-ghost" id="cardIntensityStats" style="margin-bottom:18px; text-align:left; display:flex; align-items:center; justify-content:space-between;">
+      <span>Trainingsintensität (RPE)</span><span class="progress-chevron">›</span>
+    </button>
+    ` : ''}
     ${rows || '<div class="history-empty">Noch keine Übung mit protokollierten Daten.</div>'}
     <button class="btn btn-ghost btn-icon-label" id="btnProgressExportPdf" style="margin-top:18px;">
       <svg class="btn-icon-label-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"></path><path d="M5 13v-8a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2h-6.5"></path><path d="M3 19h9"></path><path d="M9 16l3 3l-3 3"></path></svg>
@@ -82,6 +87,8 @@ function renderProgressList(){
   document.getElementById('cardTimeStats').onclick = () => goStatsChart('time');
   document.getElementById('cardWeightStats').onclick = () => goStatsChart('weight');
   document.getElementById('cardMuscleBalance').onclick = () => goMuscleBalance();
+  const cardIntensityStatsEl = document.getElementById('cardIntensityStats');
+  if (cardIntensityStatsEl) cardIntensityStatsEl.onclick = () => goIntensityStats();
   document.getElementById('btnProgressExportPdf').onclick = async () => {
     await ensureJsPdfLoaded();
     let blob = null;
@@ -490,5 +497,95 @@ function renderExerciseProgress(name){
   document.getElementById('progressStatsEditBtn').onclick = () => {
     openProgressStatsEditPrompt(statType, order, labels, name, refreshStatsList);
   };
+}
+
+/* ---------------------------------------------------
+   TRAININGSINTENSITÄT (RPE) — eigener Statistik-Screen
+   ---------------------------------------------------
+   Erreichbar von der Statistik-Übersicht (renderProgressList()) aus, gleich neben
+   "Muskelgruppen-Verteilung" — nur sichtbar, wenn die RPE-Erfassung in den Einstellungen
+   aktiv ist (rpeEnabled()), sonst gäbe es hier ohnehin nichts auszuwerten. Eigener
+   Zeitraum-Zustand mit "Woche" als zusätzlicher Stufe (die anderen Zeitraum-Screens der App
+   haben nur Monat/Quartal/Jahr/Insgesamt) — statsPeriodToDays() unterstützt 'week' bereits mit.
+   Baut bewusst auf denselben, bereits etablierten Bausteinen auf statt eigene Optik zu
+   erfinden: chartAccordionHTML/buildLineChart für den Verlauf (exakt wie Trainingszeit/
+   Bewegtes Gewicht/Körpergewicht), und für die Verteilung auf die vier Intensitätsstufen
+   dieselben .month-report-muscle-*-Klassen wie der gestapelte Balken in der Monatsbericht-
+   Muskelgruppen-Karte (rein optisch generische Balken-/Legenden-Bausteine, keine inhaltliche
+   Kopplung an Monatsberichte).
+--------------------------------------------------- */
+let intensityStatsPeriod = 'month';
+const INTENSITY_PERIOD_LABELS = { week: 'Woche', month: 'Monat', quarter: 'Quartal', year: 'Jahr', total: 'Insgesamt' };
+let intensityChartOpen = new Set();
+
+function renderIntensityStats(){
+  if (!rpeEnabled()) return goProgressList(false); // Sicherheitsnetz, falls über Zurück/Vorwärts erreicht, während RPE inzwischen deaktiviert wurde
+  const days = statsPeriodToDays(intensityStatsPeriod);
+  const cutoff = days ? Date.now() - days * 86400000 : null;
+  const periodSessions = sessions.filter(s => !cutoff || new Date(s.date).getTime() >= cutoff);
+  const overview = computeRpeOverview(periodSessions);
+  const color = cssVar('--accent-2');
+
+  // Ein Datenpunkt pro Einheit (Durchschnitts-RPE über alle in dieser Einheit erfassten Sätze),
+  // nicht pro Einzelsatz — sonst würde der Verlauf bei mehreren Sätzen je Übung unlesbar dicht
+  // und würde Schwankungen INNERHALB einer Einheit (z. B. härterer letzter Satz) zeigen statt
+  // der eigentlich interessanten Frage: wie hart war die Einheit insgesamt im Vergleich zu
+  // anderen Einheiten.
+  const chartPoints = periodSessions
+    .slice()
+    .sort((a,b) => new Date(a.date) - new Date(b.date))
+    .map(s => {
+      const v = avgRpeForSessions([s]);
+      return v == null ? null : { label: shortDate(s.date), value: v, date: s.date };
+    })
+    .filter(Boolean);
+
+  const bandRowsHTML = overview ? overview.bands.filter(b => b.count > 0).map(b => `
+    <div class="month-report-muscle-legend-item">
+      <span class="month-report-muscle-dot" style="background:${b.color};"></span>
+      <span class="month-report-muscle-legend-name">${b.label}</span>
+      <span class="month-report-muscle-legend-pct">${b.pct}%</span>
+    </div>
+  `).join('') : '';
+  const bandBarHTML = overview ? overview.bands.filter(b => b.count > 0).map(b =>
+    `<div class="month-report-muscle-bar-seg" style="width:${b.pct}%; background:${b.color};"></div>`
+  ).join('') : '';
+
+  app.innerHTML = `
+    <div class="back-row" style="margin-top:0;"><button class="back-btn-icon" id="btnBack" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button></div>
+    <div class="progress-summary" style="margin-top:18px;">
+      <span>${overview ? overview.count + ' erfasste Sätze' : 'Noch keine RPE-Werte erfasst'}</span>
+      ${overview ? `<span style="color:${intensityBandForRpe(overview.avg).color};">Ø ${fmtRpe(overview.avg)} · ${intensityBandForRpe(overview.avg).label}</span>` : ''}
+    </div>
+    <div class="period-row">
+      ${Object.keys(INTENSITY_PERIOD_LABELS).map(p => `
+        <button class="period-btn ${intensityStatsPeriod === p ? 'active' : ''}" data-period="${p}">${INTENSITY_PERIOD_LABELS[p]}</button>
+      `).join('')}
+    </div>
+    ${chartAccordionHTML(intensityChartOpen, 'main', 'Verlauf je Einheit', chartPoints, color, fmtRpe, buildLineChart(chartPoints, color, fmtRpe, RPE_MIN - 0.5))}
+    ${overview ? `
+    <div class="month-report-card" style="margin-top:14px;">
+      <div class="month-report-card-title">Verteilung</div>
+      <div class="month-report-muscle-bar">${bandBarHTML}</div>
+      <div class="month-report-muscle-legend">${bandRowsHTML}</div>
+    </div>
+    ` : `<div class="history-empty" style="margin-top:14px;">Für diesen Zeitraum liegen noch keine RPE-Werte vor.</div>`}
+  `;
+
+  document.getElementById('btnBack').onclick = () => history.back();
+  app.querySelectorAll('.period-btn').forEach(btn => {
+    btn.onclick = () => {
+      intensityStatsPeriod = btn.dataset.period;
+      renderIntensityStats();
+    };
+  });
+  app.querySelectorAll('[data-chartacc]').forEach(btn => {
+    btn.onclick = () => {
+      const key = btn.dataset.chartacc;
+      if (intensityChartOpen.has(key)) intensityChartOpen.delete(key); else intensityChartOpen.add(key);
+      renderIntensityStats();
+    };
+  });
+  wireLineCharts(app);
 }
 

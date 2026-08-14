@@ -1274,7 +1274,9 @@ async function ftExportDaySnapshotPdf(){
       doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(20);
       doc.text(pdfSafeText(modeDisplayLabel(session.mode)), marginX, y);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(120);
-      doc.text(pdfSafeText(`Dauer ${fmtDuration(session.durationSec)}`), 210 - marginX, y, { align: 'right' });
+      const sessionKcal = estimateSessionKcal(session);
+      const durationLabel = `Dauer ${fmtDuration(session.durationSec)}` + (sessionKcal != null ? ` · ≈ ${sessionKcal} kcal` : '');
+      doc.text(pdfSafeText(durationLabel), 210 - marginX, y, { align: 'right' });
       y += 5.5;
       session.entries.forEach(e => {
         const planEx = plan.exercises.find(x => x.id === e.exerciseId);
