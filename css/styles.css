@@ -459,8 +459,13 @@ button.month-overview-day-num{ cursor:pointer; -webkit-tap-highlight-color:trans
 #dayTrainingPopupOverlay .new-exercise-modal-body{ padding:14px 16px 18px; }
 .day-popup-block{ padding:0; }
 .day-popup-tile-name{ font-size:14px; font-weight:600; margin-bottom:12px; text-align:center; }
-.day-popup-stats{ display:flex; align-items:stretch; gap:4px; }
-.day-popup-stat{ display:flex; flex-direction:column; align-items:center; flex:1; min-width:0; }
+/* Grid statt flex: bei 5 Kennzahlen (z. B. Übungen/Sätze/Rekorde/Verbessert/Ø Intensität)
+   quetschte eine 5-spaltige Flex-Reihe die zweizeilige Beschriftung "Ø Intensität" auf eine
+   viel zu schmale Spalte, wodurch die Zeilen der Nachbarspalten optisch ineinander verrutschten.
+   3 Spalten geben jedem Feld spürbar mehr Platz; bei mehr als 3 Kennzahlen rutschen die
+   überzähligen automatisch in eine zweite Zeile (row-gap sorgt dort für Abstand). */
+.day-popup-stats{ display:grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap:14px 4px; }
+.day-popup-stat{ display:flex; flex-direction:column; align-items:center; min-width:0; }
 .day-popup-stat-value{ font-family:'JetBrains Mono', monospace; font-size:18px; font-weight:700; color:var(--text); }
 .day-popup-stat-label{ font-size:10.5px; color:var(--muted); margin-top:3px; }
 .day-popup-divider{ height:1px; background:var(--border); margin:10px 0; }
