@@ -668,8 +668,24 @@ function ftComputeTotals(iso){
     fiber:Math.round(fiber*10)/10, sugar:Math.round(sugar*10)/10, salt:Math.round(salt*100)/100,
   };
 }
-function ftMealTotal(iso, meal){
+// Echte (unhalbierte) Summe der tatsächlich geloggten Einträge einer Mahlzeit — Basis für die
+// Hälfte-Berechnung sowohl auf der Quell- als auch der Ziel-Seite einer Aufteilung (siehe
+// ftMealTotal() unten und ftOpenSplitMealPrompt(), 15b-food-day.js).
+function ftMealRealTotal(iso, meal){
   return Math.round(ftGetDay(iso)[meal].reduce((s,e)=>s+e.kcal,0));
+}
+// Angezeigte Summe inkl. einer eventuell aktiven Aufteilen-Verknüpfung: ist diese Mahlzeit
+// QUELLE einer Aufteilung, wird nur die Hälfte ihrer eigenen echten Summe gezeigt (die andere
+// Hälfte "gehört" der Zielmahlzeit); ist sie ZIEL einer Aufteilung, kommt zusätzlich die
+// Hälfte der Quellmahlzeit oben drauf. Die zugrunde liegenden Einträge selbst bleiben davon
+// immer unangetastet — rein rechnerisch/darstellerisch, siehe ftDaySplitMeals().
+function ftMealTotal(iso, meal){
+  const splits = ftDaySplitMeals(iso);
+  let total = ftMealRealTotal(iso, meal);
+  if (splits[meal]) total = Math.round(total / 2);
+  const incomingSource = Object.keys(splits).find(k => splits[k] === meal);
+  if (incomingSource) total += Math.round(ftMealRealTotal(iso, incomingSource) / 2);
+  return total;
 }
 
 

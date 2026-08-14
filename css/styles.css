@@ -2334,6 +2334,18 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
   display:flex; align-items:center; justify-content:center; cursor:pointer;
 }
 .empty-meal{padding:16px 14px; color:var(--muted); font-size:0.88rem; text-align:center;}
+/* Synthetische "Hälfte von X"-Zeile (siehe ftMealHTML()/ftOpenSplitMealPrompt() in
+   15b-food-day.js) — optisch fast wie ein echter Lebensmittel-Eintrag (.food-row), aber
+   kursiv/nicht anklickbar (cursor:default), damit klar bleibt: das ist eine Verknüpfung, kein
+   eigener Eintrag zum Bearbeiten. */
+.meal-split-row{ cursor:default; font-style:italic; color:var(--muted); }
+.meal-split-row .food-row-name{ font-style:italic; }
+/* Hinweiszeile bei der QUELLE einer Aufteilung ("Andere Hälfte bei X"). */
+.meal-split-note{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:10px 14px; font-size:0.82rem; color:var(--muted); font-style:italic;
+  border-bottom:1px solid var(--border);
+}
 .save-meal-btn{
   display:block; width:100%; text-align:center; background:none; border:none; color:var(--accent);
   font-weight:600; font-size:0.82rem; padding:10px 0 12px; cursor:pointer;

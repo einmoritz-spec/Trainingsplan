@@ -106,6 +106,9 @@ function renderFoodTracker(navDirection){
     const saveBtn = document.getElementById('saveMeal_'+meal);
     if(saveBtn) saveBtn.onclick = ()=>ftOpenSaveMealPrompt(meal);
   });
+  document.querySelectorAll('[data-split-undo]').forEach(btn=>{
+    btn.onclick = (ev)=>{ ev.stopPropagation(); ftUndoSplitMeal(btn.dataset.splitUndo); };
+  });
   ftWireDateSwipe();
 }
 
@@ -194,6 +197,9 @@ function ftSortedByKcal(entries){
 
 function ftMealHTML(meal){
   const entries = ftGetDay(ftCurrentDate)[meal];
+  const splits = ftDaySplitMeals(ftCurrentDate);
+  const splitTarget = splits[meal]; // diese Mahlzeit ist QUELLE einer Aufteilung, abgegeben an splitTarget
+  const splitSourceMeal = Object.keys(splits).find(k => splits[k] === meal); // diese Mahlzeit ist ZIEL, empfängt die Hälfte von splitSourceMeal
   // "Als Mahlzeit speichern" nur, solange die Mahlzeit ausschließlich aus einzelnen
   // Lebensmitteln besteht. Steckt bereits ein gruppierter Eintrag (kind:'mealGroup', also eine
   // zuvor gespeicherte Mahlzeit) darin, wäre das Ergebnis eine Mahlzeit aus einer Mahlzeit —
@@ -206,10 +212,14 @@ function ftMealHTML(meal){
   const canSaveAsMeal = meal !== 'snacks';
   const collapsed = ftMealIsCollapsed(meal, ftCurrentDate);
   const isCurrent = ftCurrentMeal(ftCurrentDate) === meal;
-  const kcalBadgeHTML = entries.length ? `<span class="meal-kcal">· ${ftMealTotal(ftCurrentDate, meal)} kcal</span>` : '';
-  // Aufteilen-Button nur ab 1000 kcal (siehe ftOpenSplitMealPrompt oben) — bei kleineren
-  // Mahlzeiten selten nötig, würde den Kopf nur unnötig zustellen.
-  const splitBtnHTML = ftMealTotal(ftCurrentDate, meal) > 1000 ? `
+  // "Inhalt vorhanden" schließt eine rein EINGEHENDE Aufteilung mit ein (Ziel-Mahlzeit ohne
+  // eigene Einträge, aber mit der eingeblendeten "Hälfte von X"-Zeile).
+  const hasAnyContent = entries.length > 0 || !!splitSourceMeal;
+  const kcalBadgeHTML = hasAnyContent ? `<span class="meal-kcal">· ${ftMealTotal(ftCurrentDate, meal)} kcal</span>` : '';
+  // Aufteilen-Button nur ab 1000 kcal (siehe ftOpenSplitMealPrompt oben), nicht bei Snacks, und
+  // nicht wenn diese Mahlzeit bereits selbst QUELLE einer Aufteilung ist (dann gibt es schon
+  // eine aktive Verknüpfung — erst über das ✕ auf der Hinweiszeile wieder aufheben).
+  const splitBtnHTML = (meal !== 'snacks' && !splitTarget && ftMealTotal(ftCurrentDate, meal) > 1000) ? `
     <button class="meal-split-btn" id="splitBtn_${meal}" type="button" aria-label="${FT_MEAL_LABELS[meal]} aufteilen">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3L18 21"></path><path d="M18 3L14 8"></path><path d="M6 21l4-5"></path></svg>
     </button>
@@ -224,6 +234,28 @@ function ftMealHTML(meal){
       </div>
     </div>
   `;
+  // Hinweiszeile bei der QUELLE einer Aufteilung ("die andere Hälfte steht bei Y").
+  const splitNoteHTML = splitTarget ? `
+    <div class="meal-split-note">
+      <span>Andere Hälfte bei ${FT_MEAL_LABELS[splitTarget]}</span>
+      <button class="icon-x" data-split-undo="${meal}" aria-label="Aufteilung aufheben">✕</button>
+    </div>
+  ` : '';
+  // Eingeblendete Zeile beim ZIEL einer Aufteilung, optisch wie ein normaler Lebensmittel-
+  // Eintrag (siehe ftFoodRowHTML) — erscheint genau dort, wo sonst Lebensmittel stehen, ohne
+  // dass dafür ein echter Eintrag angelegt/verschoben wurde. Das ✕ hebt die Aufteilung wieder
+  // auf (nicht "löschen" im Sinne von Daten wegwerfen, da nichts Echtes dahintersteckt).
+  const splitIncomingRowHTML = splitSourceMeal ? `
+    <div class="food-row meal-split-row">
+      <div class="food-row-main">
+        <div class="food-row-name">Hälfte von ${FT_MEAL_LABELS[splitSourceMeal]}</div>
+      </div>
+      <div class="food-row-right">
+        <div class="food-row-kcal">${Math.round(ftMealRealTotal(ftCurrentDate, splitSourceMeal) / 2)}</div>
+        <button class="food-row-del" data-split-undo="${splitSourceMeal}" aria-label="Aufteilung aufheben">${ftIconX()}</button>
+      </div>
+    </div>
+  ` : '';
   // EIN durchgehender Kasten für die ganze Mahlzeit, ob ein- oder ausgeklappt (.meal-section
   // selbst trägt jetzt Rahmen/Ecken/Hintergrund, siehe CSS) — vorher hatte der aufgeklappte
   // Zustand den Titel als freistehende Zeile darüber und die Zutaten in einer eigenen,
@@ -252,6 +284,7 @@ function ftMealHTML(meal){
     // Sortiert nach kcal absteigend (größter Beitrag zuerst) statt wie vorher neueste zuerst —
     // sowohl hier in der Vorschau als auch unten in der vollen Liste (ftSortedByKcal()).
     const previewAllNames = ftSortedByKcal(entries).map(e => e.name);
+    if (splitSourceMeal) previewAllNames.unshift(`Hälfte von ${FT_MEAL_LABELS[splitSourceMeal]}`);
     const PREVIEW_MAX_CHARS = 34;
     const shownNames = [];
     let usedChars = 0;
@@ -263,10 +296,11 @@ function ftMealHTML(meal){
     }
     const remainingCount = previewAllNames.length - shownNames.length;
     const previewText = shownNames.join(' · ') + (remainingCount > 0 ? ` +${remainingCount} weitere` : '');
+    const previewSuffix = splitTarget ? ` · Rest bei ${FT_MEAL_LABELS[splitTarget]}` : '';
     return `
-      <div class="meal-section${isCurrent ? ' current' : ''}${entries.length ? ' has-body' : ''}" data-meal="${meal}">
+      <div class="meal-section${isCurrent ? ' current' : ''}${hasAnyContent ? ' has-body' : ''}" data-meal="${meal}">
         ${headHTML}
-        ${entries.length ? `<div class="meal-collapsed-items">${ftEscapeHTML(previewText)}</div>` : ''}
+        ${hasAnyContent ? `<div class="meal-collapsed-items">${ftEscapeHTML(previewText)}${ftEscapeHTML(previewSuffix)}</div>` : ''}
       </div>
     `;
   }
@@ -274,8 +308,10 @@ function ftMealHTML(meal){
     <div class="meal-section${isCurrent ? ' current' : ''} has-body" data-meal="${meal}">
       ${headHTML}
       <div class="food-list">
-        ${entries.length ? ftSortedByKcal(entries).map(e=> e.kind==='mealGroup' ? ftMealGroupRowHTML(meal,e) : ftFoodRowHTML(meal, e)).join('') : `<div class="empty-meal">Noch nichts eingetragen</div>`}
+        ${splitIncomingRowHTML}
+        ${entries.length ? ftSortedByKcal(entries).map(e=> e.kind==='mealGroup' ? ftMealGroupRowHTML(meal,e) : ftFoodRowHTML(meal, e)).join('') : (splitSourceMeal ? '' : `<div class="empty-meal">Noch nichts eingetragen</div>`)}
       </div>
+      ${splitNoteHTML}
       ${entries.length && !hasMealGroup && canSaveAsMeal ? `<button class="save-meal-btn" id="saveMeal_${meal}">Als Mahlzeit speichern</button>` : ''}
     </div>
   `;
@@ -407,75 +443,53 @@ function ftCopyPreviousDay(mealKeys){
   });
 }
 
-// Teilt eine Mahlzeit auf zwei Mahlzeiten desselben Tages auf (z. B. wenn beim Nachtragen alles
-// versehentlich unter "Mittagessen" gelandet ist, obwohl ein Teil eigentlich zum Abendessen
-// gehört) — Checkbox-Auswahl, welche Einträge verschoben werden sollen, plus Zielmahlzeit.
-// Button dafür erscheint nur bei Mahlzeiten über 1000 kcal (siehe splitMealBtnHTML in
-// ftMealHTML()) — bei kleineren Mahlzeiten ist ein Aufteilen selten nötig und der Button würde
-// nur unnötig Platz im Kopf jeder Mahlzeit beanspruchen.
+// Teilt eine Mahlzeit rechnerisch 50/50 auf eine ZWEITE Mahlzeit desselben Tages auf — OHNE
+// echte Lebensmittel-Einträge zu verschieben. Button dafür erscheint nur ab 1000 kcal (siehe
+// splitBtnHTML in ftMealHTML()) und nur bei Frühstück/Mittag/Abend als Ziel (Snacks ergibt als
+// Ziel keinen Sinn). Auswahl der Zielmahlzeit per Button — sofort ausgeführt, kein zusätzlicher
+// Bestätigungsschritt nötig, da es nur eine einzige Entscheidung ist.
+// Datenmodell (siehe ftDaySplitMeals()): day.splitMeals = { [quellMahlzeit]: zielMahlzeit } —
+// rein eine Verknüpfung, die QUELL-Mahlzeit behält ihre echten Einträge unverändert (weiterhin
+// normal bearbeitbar), zeigt aber nur noch die Hälfte ihrer echten Summe (siehe ftMealTotal()).
+// Die ZIEL-Mahlzeit bekommt zusätzlich zu ihren eigenen echten Einträgen eine einzelne
+// eingeblendete Zeile "Hälfte von X" in der Optik eines normalen Lebensmittel-Eintrags (siehe
+// ftMealHTML()) — beide Seiten bleiben dynamisch: ändert sich die Quelle später, verschiebt
+// sich die Hälfte automatisch mit, ohne dass hier neu aufgeteilt werden müsste.
+function ftDaySplitMeals(iso){
+  const day = ftGetDay(iso);
+  if (!day.splitMeals) day.splitMeals = {};
+  return day.splitMeals;
+}
 function ftOpenSplitMealPrompt(meal){
-  const entries = ftGetDay(ftCurrentDate)[meal];
-  if (!entries.length) return;
-  const otherMeals = FT_MEAL_KEYS.filter(k => k !== meal);
-  let selectedIds = new Set();
-  let targetMeal = otherMeals[0];
-
-  function bodyHTML(){
-    const rowsHTML = ftSortedByKcal(entries).map(e => `
-      <button class="stat-toggle-row ${selectedIds.has(e.id) ? 'checked' : ''}" data-split-entry="${e.id}" type="button">
-        <span class="stat-toggle-check">${selectedIds.has(e.id) ? '✓' : ''}</span>
-        <span style="flex:1; min-width:0; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${ftEscapeHTML(e.name)}</span>
-        <span style="color:var(--muted); font-size:12.5px; flex-shrink:0;">${Math.round(e.kcal)} kcal</span>
-      </button>
-    `).join('');
-    const targetBtnsHTML = otherMeals.map(k => `
-      <button class="wizard-choice ft-split-target ${targetMeal === k ? 'selected' : ''}" data-target-meal="${k}" type="button" style="flex:1;">${FT_MEAL_LABELS[k]}</button>
-    `).join('');
-    return `
-      <div class="field-label" style="margin-top:0;">Was verschieben?</div>
-      ${rowsHTML}
-      <div class="field-label" style="margin-top:16px;">Wohin verschieben?</div>
-      <div style="display:flex; gap:8px;">${targetBtnsHTML}</div>
-      <button class="ft-btn-primary" id="ftSplitConfirmBtn" style="margin-top:18px;" ${selectedIds.size ? '' : 'disabled'}>Verschieben</button>
-    `;
-  }
-
+  const targetMeals = FT_MEAL_KEYS.filter(k => k !== meal && k !== 'snacks');
   ftOpenOverlay(`
     <div class="modal" id="ftSplitMealModal">
       <div class="modal-head"><div class="modal-title">${FT_MEAL_LABELS[meal]} aufteilen</div><button class="sheet-close" id="ftSplitMealClose">${ftIconX()}</button></div>
-      <div class="modal-body" id="ftSplitMealBody">${bodyHTML()}</div>
+      <div class="modal-body">
+        <div class="field-label" style="margin-top:0;">Zur Hälfte verschieben zu …</div>
+        ${targetMeals.map(k => `<button class="ft-btn-ghost ft-split-target" data-target-meal="${k}" type="button">${FT_MEAL_LABELS[k]}</button>`).join('')}
+      </div>
     </div>
   `, {type:'modal'});
-
-  function wire(){
-    document.querySelectorAll('.ft-split-target').forEach(btn => {
-      btn.onclick = () => { targetMeal = btn.dataset.targetMeal; refresh(); };
-    });
-    document.querySelectorAll('[data-split-entry]').forEach(btn => {
-      btn.onclick = () => {
-        const id = btn.dataset.splitEntry;
-        if (selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
-        refresh();
-      };
-    });
-    const confirmBtn = document.getElementById('ftSplitConfirmBtn');
-    if (confirmBtn) confirmBtn.onclick = async () => {
-      if (!selectedIds.size) return;
-      const day = ftGetDay(ftCurrentDate);
-      const moving = day[meal].filter(e => selectedIds.has(e.id));
-      day[meal] = day[meal].filter(e => !selectedIds.has(e.id));
-      day[targetMeal] = [...day[targetMeal], ...moving];
+  document.getElementById('ftSplitMealClose').onclick = ftCloseOverlay;
+  document.querySelectorAll('.ft-split-target').forEach(btn => {
+    btn.onclick = async () => {
+      const splits = ftDaySplitMeals(ftCurrentDate);
+      splits[meal] = btn.dataset.targetMeal;
       await ftSaveDays(ftCurrentDate);
       ftCloseOverlay();
       renderFoodTracker();
     };
-  }
-  function refresh(){
-    document.getElementById('ftSplitMealBody').innerHTML = bodyHTML();
-    wire();
-  }
-  document.getElementById('ftSplitMealClose').onclick = ftCloseOverlay;
-  wire();
+  });
+}
+// Hebt eine aktive Aufteilung wieder auf (✕-Button auf der Hinweiszeile bzw. der eingeblendeten
+// "Hälfte von …"-Zeile, siehe ftMealHTML()) — betrifft nie die echten Lebensmittel-Einträge,
+// nur die Verknüpfung selbst.
+async function ftUndoSplitMeal(sourceMeal){
+  const splits = ftDaySplitMeals(ftCurrentDate);
+  delete splits[sourceMeal];
+  await ftSaveDays(ftCurrentDate);
+  renderFoodTracker();
 }
 
 

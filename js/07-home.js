@@ -272,8 +272,7 @@ function renderHome(){
   const historyHTML = foodOn ? `
     <div class="muscle-group" style="margin-top:0;">
       <button class="muscle-group-header" id="btnHomeHistoryToggle" type="button">
-        <img class="section-label-icon" src="${ICON_HISTORY}" alt="" style="width:14px; height:14px; margin-right:8px; flex-shrink:0;">
-        <span class="mg-name">Verlauf</span>
+        <span class="mg-name" style="display:inline-flex; align-items:center; gap:8px;"><img class="section-label-icon" src="${ICON_HISTORY}" alt="" style="width:14px; height:14px; display:block; flex-shrink:0;">Verlauf</span>
         <span class="mg-meta"><span class="mg-arrow">${homeVerlaufOpen ? '▾' : '▸'}</span></span>
       </button>
       <div class="muscle-group-body" style="display:${homeVerlaufOpen ? 'block' : 'none'};">
