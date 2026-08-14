@@ -312,7 +312,16 @@ async function writeFoodDayChunks(daysObj){
 }
 async function loadAllFoodDays(){
   const chunkIndex = await loadJSON('food:daysChunkIndex', null);
-  if (chunkIndex){
+  // BUGFIX: "if (chunkIndex)" allein reichte nicht — ein LEERES Array ([]) ist in JS truthy,
+  // wurde hier also fälschlich als "Chunks vorhanden, aber zufällig keine referenziert"
+  // behandelt und lieferte {} zurück, OHNE je den Legacy-Blob-Fallback darunter zu prüfen. Das
+  // konnte echten Datenverlust vortäuschen: läuft loadAllFoodDays() einmal auf frisch geleertem
+  // Speicher (z. B. direkt nach "Speicher löschen" in Chrome, noch VOR einem Import), landet man
+  // im untersten Zweig und schreibt bewusst einen leeren Index (siehe ganz unten) — wird DANACH
+  // per Import ein Legacy-Blob unter 'food:days' abgelegt (siehe ftApplyImportedData()), blieb
+  // der (jetzt falsch als "gültig" gewertete) leere Index bestehen und verdeckte die eigentlich
+  // vorhandenen Daten bei jedem künftigen Laden — obwohl sie unangetastet in 'food:days' lagen.
+  if (chunkIndex && chunkIndex.length){
     const chunks = await Promise.all(chunkIndex.map(mk => loadJSON('food:daysChunk:' + mk, {})));
     const merged = {};
     chunks.forEach(chunk => Object.assign(merged, chunk));

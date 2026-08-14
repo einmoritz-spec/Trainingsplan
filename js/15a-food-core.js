@@ -913,7 +913,14 @@ async function ftApplyImportedData(food){
   ftGoals = food.goals || { kcal: null, p: null, c: null, f: null };
   foodTrackerLoaded = true;
   await Promise.all([
-    ftSave('days', ftDays),
+    // BUGFIX: schreibt jetzt direkt korrekt gechunkt (siehe writeFoodDayChunks(), 01-storage.js)
+    // statt wie zuvor in den veralteten Einzel-Blob-Key 'food:days' — der verließ sich beim
+    // nächsten Laden auf den Migrations-Zweig in loadAllFoodDays(), der durch einen
+    // unabhängigen Bug (siehe dortiger Kommentar) übersprungen werden konnte, wenn schon vorher
+    // (z. B. direkt nach einem Speicher-Reset) ein leerer Chunk-Index geschrieben worden war —
+    // die importierten Tage lagen dann zwar unversehrt in der Datenbank, wurden aber nie mehr
+    // geladen. Direktes Schreiben in Chunks umgeht diesen Umweg komplett.
+    writeFoodDayChunks(ftDays),
     ftSave('favorites', ftFavorites),
     ftSave('customFoods', ftCustomFoods),
     ftSave('savedMeals', ftSavedMeals),
@@ -922,6 +929,7 @@ async function ftApplyImportedData(food){
     ftSave('usageCount', ftFoodUsageCount),
     ftSave('goals', ftGoals),
   ]);
+  await deleteJSON('food:days').catch(() => {}); // falls hier zufällig noch ein alter Legacy-Blob-Rest lag
 }
 
 function ftExportData(){

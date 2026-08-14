@@ -6,7 +6,7 @@
 // (sw.js, Cache-First) nach einem Update oft noch mehrere Starts lang die ALTE Fassung —
 // ohne diesen Stempel ist "der Fix wirkt nicht" nicht von "der Fix ist nie angekommen" zu
 // unterscheiden. Bei jeder Änderung zusammen mit CACHE_NAME in sw.js erhöhen.
-const BUILD_STAMP = '36';
+const BUILD_STAMP = '37';
 /* ---------------------------------------------------
    Wake Lock (Bildschirm bei laufendem Training nicht abschalten)
    ---------------------------------------------------
@@ -48,8 +48,8 @@ document.addEventListener('visibilitychange', () => {
    "typisches" Training MIT Satzpausen (nicht Dauerbelastung) — eine echte Schätzung bräuchte
    Herzfrequenz-/Aktivitätstracking, das diese App nicht hat. Verstanden als grobe Orientierung,
    nicht als medizinisch/sportwissenschaftlich exakter Wert. Über plan.kcalEstimateEnabled in den
-   Einstellungen ein-/ausschaltbar (Standard AN, damit sich am bisherigen Verhalten nichts
-   ändert) — bei AUS liefert estimateSessionKcal() überall konsequent null zurück, an ALLEN
+   Einstellungen ein-/ausschaltbar (Standard AUS, da es sich um eine Schätzung mit spürbaren
+   Unsicherheiten handelt) — bei AUS liefert estimateSessionKcal() überall konsequent null zurück, an ALLEN
    Anzeigestellen (Trainingsdetail, Zusammenfassungs-PDF, Essenstracker-Snapshot) verschwindet
    die Anzeige dann einfach, ganz ohne eigene Prüfung an jeder einzelnen Stelle.
    Als Trainingsdauer je Übung wird e.timeSpentSec verwendet (siehe accrueExerciseTime(), zählt
@@ -69,7 +69,7 @@ document.addEventListener('visibilitychange', () => {
    Formel (Körpergewicht bleibt der mit Abstand größte Faktor).
 --------------------------------------------------- */
 function kcalEstimateEnabled(){
-  return !(plan && plan.kcalEstimateEnabled === false);
+  return plan && plan.kcalEstimateEnabled === true;
 }
 const MET_STRENGTH = 5.0;       // Krafttraining allgemein (freie Gewichte/Maschinen), Mittelwert moderat–intensiv inkl. Satzpausen
 const MET_BODYWEIGHT = 4.0;     // Eigengewichtsübungen (Liegestütze, Klimmzüge etc.), moderat inkl. Satzpausen

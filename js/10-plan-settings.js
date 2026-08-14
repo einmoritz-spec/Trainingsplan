@@ -1009,7 +1009,7 @@ function renderSettings(){
 
     <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
       <span class="mg-name">Geschätzter Kalorienverbrauch</span>
-      <button class="toggle-switch ${plan.kcalEstimateEnabled !== false ? 'on' : ''}" id="kcalEstimateToggle" type="button" role="switch" aria-checked="${plan.kcalEstimateEnabled !== false}" aria-label="Geschätzten Kalorienverbrauch anzeigen">
+      <button class="toggle-switch ${kcalEstimateEnabled() ? 'on' : ''}" id="kcalEstimateToggle" type="button" role="switch" aria-checked="${kcalEstimateEnabled()}" aria-label="Geschätzten Kalorienverbrauch anzeigen">
         <span class="toggle-knob"></span>
       </button>
     </div>
@@ -1227,7 +1227,7 @@ function renderSettings(){
 
   const kcalEstimateToggleEl = document.getElementById('kcalEstimateToggle');
   if (kcalEstimateToggleEl) kcalEstimateToggleEl.onclick = async () => {
-    const wasEnabled = plan.kcalEstimateEnabled !== false; // Standard AN (undefined zählt als an)
+    const wasEnabled = kcalEstimateEnabled(); // Standard AUS (undefined zählt als aus)
     plan.kcalEstimateEnabled = !wasEnabled;
     await saveJSON('plan', plan);
     renderSettings();
