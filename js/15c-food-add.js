@@ -31,6 +31,12 @@
    nach einem echten Tap auf das Suchfeld selbst, wie bei jedem gewöhnlichen Eingabefeld. */
 let ftAddSheetMeal = null;
 let ftAddSheetSearchToken = 0;
+// Aktiv, während "Auto-Mahlzeit für X" aus den Einstellungen heraus zusammengestellt wird
+// (siehe ftOpenAutoMealBuilder(), 15b-food-day.js) — die ganz normale "Lebensmittel
+// hinzufügen"-Seite (renderFtAddFood()) bekommt dadurch oben eine zusätzliche Sammel-Leiste;
+// ein Antippen eines Lebensmittels landet dann NICHT im heutigen Tag, sondern in
+// ftAutoMealBuilder.items (siehe ftWireResultRows() unten). null = normaler Modus.
+let ftAutoMealBuilder = null;
 // "Eigene Lebensmittel" und "Gespeicherte Mahlzeiten" starten standardmäßig eingeklappt (siehe
 // ftRenderDefaultResults() unten) — im Gegensatz zu "Favoriten"/"Zuletzt in ..." wachsen diese
 // beiden Listen mit der Zeit potenziell stark an und sind seltener der direkte Einstieg (man
@@ -44,23 +50,41 @@ function goFtAddFood(meal, push){
   if (push !== false) pushView('foodAddMeal', { meal });
   renderFtAddFood(meal);
 }
+// Öffnet dieselbe "Lebensmittel hinzufügen"-Seite im Sammel-Modus (siehe ftAutoMealBuilder
+// oben) — aufgerufen aus den Einstellungen (15b-food-day.js), damit man eine Auto-Mahlzeit
+// direkt aus einzelnen Lebensmitteln bauen kann, statt vorher zwingend eine "gespeicherte
+// Mahlzeit" über den Umweg "Als Mahlzeit speichern" bei einer echten Tages-Mahlzeit anlegen zu
+// müssen. Landet am Ende trotzdem als ganz normale ftSavedMeals-Vorlage (siehe
+// ftFinishAutoMealBuilder() weiter unten) — alles andere (Auswahl-Dropdown, automatisches
+// Eintragen, Löschen-Aufräumen) funktioniert dadurch ohne jede Sonderbehandlung weiter.
+function goFtAutoMealBuilder(meal){
+  ftAutoMealBuilder = { meal, items: [] };
+  pushView('foodAutoMealBuilder', { meal });
+  renderFtAddFood(meal);
+}
 
 function renderFtAddFood(meal){
   ftApplyTheme();
   ftAddSheetMeal = meal;
+  const building = ftAutoMealBuilder && ftAutoMealBuilder.meal === meal;
   app.innerHTML = `
     <div class="back-row" style="margin-top:0;">
       <button class="back-btn-icon" id="ftAddBackBtn" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button>
     </div>
-    <div class="brand" style="margin-bottom:14px;"><h1 style="font-size:22px;">${FT_MEAL_LABELS[meal]}</h1></div>
+    <div class="brand" style="margin-bottom:14px;"><h1 style="font-size:22px;">${building ? `Auto-Mahlzeit · ${FT_MEAL_LABELS[meal]}` : FT_MEAL_LABELS[meal]}</h1></div>
+    ${building ? `<div id="ftAmbWrap">${ftAutoMealBuilderBarHTML()}</div>` : ''}
     <div class="search-wrap">
       <input class="search-input" id="ftFoodSearchInput" placeholder="Lebensmittel suchen …" autocomplete="off">
       <button class="icon-btn" id="ftScanBtn" title="Barcode scannen">${ftIconBarcode()}</button>
     </div>
     <div id="ftSearchResults"></div>
   `;
-  document.getElementById('ftAddBackBtn').onclick = () => history.back();
+  document.getElementById('ftAddBackBtn').onclick = () => {
+    ftAutoMealBuilder = null; // Zurück-Navigation bricht das Sammeln ab, ohne zu speichern
+    history.back();
+  };
   document.getElementById('ftScanBtn').onclick = ftOpenScanner;
+  if (building) ftWireAutoMealBuilderBar();
   const input = document.getElementById('ftFoodSearchInput');
   let searchDebounceTimer = null;
   input.addEventListener('input', ()=>{
@@ -144,7 +168,15 @@ function ftResultRowHTML(food){
   return `
     <div class="result-row" data-food-id="${food.id}">
       <div class="result-main"><div class="result-name">${ftEscapeHTML(food.name)}</div><div class="result-sub">${sub}</div></div>
-      ${isCustom ? `<button class="result-star" data-del-food="${food.id}" title="Löschen">${ftIconTrash()}</button>` : ''}
+      ${isCustom
+        ? `<button class="result-star" data-del-food="${food.id}" title="Löschen">${ftIconTrash()}</button>`
+        // Reserviert exakt denselben Platz wie der Löschen-Button oben, nur unsichtbar
+        // (visibility statt display:none, damit das Layout identisch bleibt) — sonst rutscht
+        // der Stern bei Basislisten-Treffern (kein eigenes Lebensmittel, also kein
+        // Löschen-Button) weiter nach rechts als bei eigenen/löschbaren Lebensmitteln in
+        // derselben Liste, was optisch wie eine krumme, nicht ausgerichtete Spalte wirkt.
+        : `<button class="result-star" style="visibility:hidden;" aria-hidden="true" tabindex="-1">${ftIconTrash()}</button>`
+      }
       <button class="result-star" data-fav-id="${food.id}">${ftIconStar(isFav)}</button>
     </div>
   `;
@@ -153,7 +185,19 @@ function ftWireResultRows(box){
   box.querySelectorAll('.result-row[data-food-id]').forEach(row=>{
     row.addEventListener('click', (ev)=>{
       if(ev.target.closest('[data-fav-id], [data-del-food]')) return;
-      ftOpenQuantityModal(ftGetFoodById(row.dataset.foodId));
+      const food = ftGetFoodById(row.dataset.foodId);
+      if(ftAutoMealBuilder){
+        // Sammel-Modus (siehe goFtAutoMealBuilder()/ftAutoMealBuilder oben): die Menge wird
+        // ganz normal über das gewohnte Mengen-Modal abgefragt, landet danach aber NICHT im
+        // heutigen Tag, sondern in der Sammel-Liste — daher hier `null` als editCtx (kein
+        // Bearbeiten eines bestehenden Eintrags) und ein eigenes onSave statt der
+        // Standard-Übernahme in ftOpenQuantityModal().
+        ftOpenQuantityModal(food, null, { onSave: (amountG, mode, pieceCount) => {
+          ftAutoMealBuilderAddItem(food, amountG, mode, pieceCount);
+        }});
+      } else {
+        ftOpenQuantityModal(food);
+      }
     });
   });
   box.querySelectorAll('[data-fav-id]').forEach(btn=>{
@@ -178,9 +222,91 @@ function ftWireResultRows(box){
   box.querySelectorAll('[data-saved-meal]').forEach(row=>{
     row.addEventListener('click', (ev)=>{
       if(ev.target.closest('[data-del-meal]')) return;
+      // Im Sammel-Modus ergibt "eine andere gespeicherte Mahlzeit übernehmen" keinen Sinn
+      // (man baut hier gerade erst eine neue zusammen) — außerdem würde ftApplySavedMeal()
+      // sonst versehentlich direkt in den heutigen Tag eintragen.
+      if(ftAutoMealBuilder) return;
       ftApplySavedMeal(row.dataset.savedMeal);
     });
   });
+}
+// Sammel-Leiste oben auf der "Lebensmittel hinzufügen"-Seite im Auto-Mahlzeit-Baumodus (siehe
+// ftAutoMealBuilder oben) — kurzer Hinweistext, die bisher gesammelten Lebensmittel als
+// kompakte Zeilenliste (gleiche Optik wie .food-list in der Tagesansicht) mit
+// Entfernen-Buttons, und der abschließende "Fertig"-Button.
+function ftAutoMealBuilderBarHTML(){
+  const b = ftAutoMealBuilder;
+  const rowsHTML = b.items.map((it, idx) => {
+    const food = ftGetFoodById(it.sourceFoodId);
+    const name = food ? (food.brand ? `${food.name} (${food.brand})` : food.name) : 'Lebensmittel';
+    const amountLabel = it.unitMode === 'piece'
+      ? `${it.pieceCount}× ${food && food.piece ? food.piece.label.replace(/^1\s*/,'') : 'Stück'}`
+      : `${it.amountG} g`;
+    return `
+      <div class="food-row">
+        <div class="food-row-main">
+          <div class="food-row-name">${ftEscapeHTML(name)}</div>
+          <div class="food-row-sub">${amountLabel}</div>
+        </div>
+        <div class="food-row-right">
+          <button class="food-row-del" data-amb-remove="${idx}" title="Entfernen">${ftIconX()}</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  return `
+    <div class="no-results" style="text-align:left; padding:0 0 10px;">
+      Diese Lebensmittel werden künftig automatisch für „${FT_MEAL_LABELS[b.meal]}" eingetragen,
+      sobald diese Mahlzeit an einem Tag noch leer ist.
+    </div>
+    ${b.items.length ? `<div class="food-list" style="margin-bottom:10px;">${rowsHTML}</div>` : ''}
+    <button class="ft-btn-primary" id="ftAmbFinishBtn" ${b.items.length ? '' : 'disabled'}>
+      Fertig${b.items.length ? ` · ${b.items.length} Position${b.items.length>1?'en':''}` : ''}
+    </button>
+  `;
+}
+function ftWireAutoMealBuilderBar(){
+  const wrap = document.getElementById('ftAmbWrap');
+  if(!wrap) return;
+  wrap.querySelectorAll('[data-amb-remove]').forEach(btn=>{
+    btn.onclick = () => {
+      ftAutoMealBuilder.items.splice(Number(btn.dataset.ambRemove), 1);
+      ftRefreshAutoMealBuilderBar();
+    };
+  });
+  const finishBtn = document.getElementById('ftAmbFinishBtn');
+  if(finishBtn) finishBtn.onclick = ftFinishAutoMealBuilder;
+}
+function ftRefreshAutoMealBuilderBar(){
+  const wrap = document.getElementById('ftAmbWrap');
+  if(!wrap) return;
+  wrap.innerHTML = ftAutoMealBuilderBarHTML();
+  ftWireAutoMealBuilderBar();
+}
+function ftAutoMealBuilderAddItem(food, amountG, mode, pieceCount){
+  if(!ftAutoMealBuilder) return;
+  ftPersistOffFoodIfNeeded(food);
+  ftAutoMealBuilder.items.push({ sourceFoodId: food.id, amountG: Math.round(amountG), unitMode: mode, pieceCount });
+  ftRefreshAutoMealBuilderBar();
+}
+// Schließt das Sammeln ab: speichert die Liste als ganz normale gespeicherte Mahlzeit
+// (ftSavedMeals, dieselbe Datenform wie "Als Mahlzeit speichern" bei einer echten Tages-
+// Mahlzeit erzeugt) und weist sie direkt als Auto-Mahlzeit für den entsprechenden Slot zu.
+function ftFinishAutoMealBuilder(){
+  const b = ftAutoMealBuilder;
+  if(!b || !b.items.length) return;
+  const defaultName = `Auto · ${FT_MEAL_LABELS[b.meal]}`;
+  const name = (prompt('Name für diese Auto-Mahlzeit:', defaultName) || '').trim();
+  if(!name) return; // Abbruch, Sammlung bleibt erhalten, falls man sich nur vertippt hat
+  const sm = { id: 'sm_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), name, items: b.items };
+  ftSavedMeals.push(sm);
+  ftSave('savedMeals', ftSavedMeals);
+  ftAutoMeals[b.meal] = sm.id;
+  ftSave('autoMeals', ftAutoMeals);
+  ftAutoMealBuilder = null;
+  ftApplyAutoMealsUpcoming();
+  ftToast('Auto-Mahlzeit gespeichert');
+  history.back();
 }
 function ftDeleteCustomFood(id){
   const food = ftCustomFoods.find(f=>f.id===id);
@@ -201,7 +327,7 @@ function ftDeleteSavedMeal(id){
   ftSave('savedMeals', ftSavedMeals);
   // Zeigte diese gespeicherte Mahlzeit gerade auf einen Auto-Eintrag (Einstellungen ›
   // "Automatisch täglich eintragen"), muss die Referenz mit weg — sonst bliebe eine verwaiste
-  // ID in ftAutoMeals hängen, die ftApplyAutoMealsForNewDay() zwar sauber ignoriert (kein
+  // ID in ftAutoMeals hängen, die ftApplyAutoMealsForDay() zwar sauber ignoriert (kein
   // Crash), aber ftSettingsBodyHTML() würde das zugehörige Dropdown dann fälschlich als "Kein
   // Auto-Eintrag" anzeigen, obwohl im Speicher noch die alte ID steht.
   let autoMealsChanged = false;
@@ -650,7 +776,7 @@ function ftOpenSaveMealPrompt(meal){
 // Löst eine gespeicherte Mahlzeit gegen die AKTUELLEN Lebensmitteldaten auf (Basis-Items mit
 // eingefrorenen kcal/p/c/f für die hinterlegte Menge) — gemeinsam genutzt vom interaktiven Pfad
 // (ftApplySavedMeal(), fragt danach noch nach der Portion) und vom automatischen Tages-Eintrag
-// (ftApplyAutoMealsForNewDay(), 15a-food-core.js, immer Portion 1×, keine Nachfrage möglich).
+// (ftApplyAutoMealsForDay() weiter unten, immer Portion 1×, keine Nachfrage möglich).
 function ftResolveSavedMealItems(sm){
   let missing = 0;
   const baseItems = [];
@@ -701,7 +827,7 @@ function ftApplySavedMeal(mealId){
 }
 // Baut den gruppierten Mahlzeiten-Eintrag (kind:'mealGroup') OHNE ihn irgendwo einzuhängen —
 // das übernimmt der jeweilige Aufrufer (ftAddMealGroupEntry() für den interaktiven Pfad,
-// ftApplyAutoMealsForNewDay() für den automatischen). Items bleiben als BASIS (Portion=1)
+// ftApplyAutoMealsForDay() für den automatischen). Items bleiben als BASIS (Portion=1)
 // gespeichert; kcal/p/c/f am Eintrag selbst sind das eingefrorene, mit der Portion
 // multiplizierte Endergebnis — dieselben Felder, die ftComputeTotals()/ftMealTotal()
 // (15a-food-core.js) ohnehin von jedem Eintrag lesen, daher funktionieren Tagessummen etc.
@@ -736,14 +862,22 @@ function ftAddMealGroupEntry(name, savedMealId, baseItems, portion){
   // Ergebnisliste einfach neu auf.
   ftRenderDefaultResults();
 }
-// Trägt die in den Einstellungen konfigurierten Auto-Mahlzeiten (ftAutoMeals, 15a-food-core.js)
-// für einen frisch entstandenen Tag ein — aufgerufen aus initFoodTracker() für "heute", NICHT
-// für beliebig durchgeblätterte andere Tage (siehe dortiger Kommentar). Rein additiv: bereits
-// vorhandene Einträge des Tages bleiben unangetastet, es wird nur ergänzt.
-function ftApplyAutoMealsForNewDay(iso){
+// Trägt an EINEM Tag die konfigurierten Auto-Mahlzeiten (ftAutoMeals, 15a-food-core.js) ein —
+// pro Mahlzeit NUR, wenn diese Mahlzeit an diesem Tag noch komplett leer ist (day[meal].length
+// === 0). Das ist absichtlich auch der einzige Schutz gegen doppeltes Eintragen: läuft diese
+// Funktion mehrfach über denselben Tag (z. B. weil ftApplyAutoMealsUpcoming() jeden Monat neu
+// den ganzen Rest-Monat durchläuft), passiert ab dem zweiten Mal nichts mehr, weil die Mahlzeit
+// dann schon den Auto-Eintrag (oder etwas anderes) enthält. Löscht man den Auto-Eintrag später
+// bewusst wieder, wird die Mahlzeit dadurch erneut leer — ein späterer Durchlauf würde ihn dann
+// wieder eintragen; das ist hier bewusst so belassen, exakt das in Nachricht \"nur eintragen,
+// wenn man noch nichts anderes in der Mahlzeit hat\" beschriebene Verhalten. Reiner Baustein
+// ohne eigenes ftSaveDays() — der Aufrufer (ftApplyAutoMealsUpcoming()) speichert einmal
+// gesammelt am Ende, statt bei jedem einzelnen Tag erneut denselben Monats-Chunk zu schreiben.
+function ftApplyAutoMealsForDay(iso){
   let changed = false;
   const day = ftGetDay(iso);
   FT_MEAL_KEYS.forEach(meal => {
+    if (day[meal].length) return; // schon etwas drin (egal ob eigener Eintrag oder früherer Auto-Eintrag) — nicht anfassen
     const savedMealId = ftAutoMeals[meal];
     if(!savedMealId) return;
     const sm = ftSavedMeals.find(m=>m.id===savedMealId);
@@ -753,7 +887,35 @@ function ftApplyAutoMealsForNewDay(iso){
     day[meal].push(ftBuildMealGroupEntry(sm.name, sm.id, baseItems, 1));
     changed = true;
   });
-  if(changed) ftSaveDays(iso);
+  return changed;
+}
+// Füllt nicht mehr nur den einen "heutigen" Tag bei jedem App-Start, sondern trägt die
+// Auto-Mahlzeiten für den gesamten Rest des aktuellen Kalendermonats (heute bis Monatsende) auf
+// einen Schlag vor — man muss also nicht jeden Tag einmal die App öffnen, damit er befüllt
+// wird, sondern kann z. B. eine ganze Woche im Voraus vorausblättern und sieht dort schon die
+// Auto-Mahlzeiten stehen. Läuft der Monat um, deckt der nächste Aufruf automatisch den neuen
+// Rest-Monat ab (der alte ist ohnehin bereits vollständig befüllt gewesen). Aufgerufen aus
+// initFoodTracker() beim App-Start sowie direkt nach jeder Änderung an den Auto-Mahlzeiten in
+// den Einstellungen (15b-food-day.js) bzw. nach ftFinishAutoMealBuilder() oben.
+function ftApplyAutoMealsUpcoming(){
+  const today = ftTodayISO();
+  const monthEnd = ftMonthEndISO(today);
+  let anyChanged = false;
+  let iso = today;
+  while (iso <= monthEnd){
+    if (ftApplyAutoMealsForDay(iso)) anyChanged = true;
+    iso = ftAddDays(iso, 1);
+  }
+  // Alle betroffenen Tage liegen im selben Kalendermonat wie "heute" — ein einziger
+  // ftSaveDays(today) speichert daher automatisch den ganzen befüllten Monats-Chunk mit,
+  // unabhängig davon, an wie vielen einzelnen Tagen darin tatsächlich etwas geändert wurde.
+  if (anyChanged) ftSaveDays(today);
+}
+// Letzter Tag des Kalendermonats, in dem `iso` liegt, z. B. "2026-08-15" → "2026-08-31".
+function ftMonthEndISO(iso){
+  const d = new Date(iso + 'T00:00:00');
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return ftFmtDate(lastDay);
 }
 // ftUpdateMealGroupPortion() (15b-food-day.js, Portion nachträglich ändern).
 function ftSumItemMacros(items){

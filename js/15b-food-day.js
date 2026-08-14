@@ -675,18 +675,17 @@ function ftSettingsBodyHTML(){
 
     ${ftSettingsAccordionSection('autoMahlzeiten', 'Automatisch täglich eintragen', `
       <div style="padding:14px 16px;">
-        ${!ftSavedMeals.length ? `
-          <div class="no-results" style="text-align:left; padding:0;">
-            Lege zuerst über „Als Mahlzeit speichern" bei einer Mahlzeit eine gespeicherte
-            Mahlzeit an (z. B. „Frühstück Standard" mit 250 g Skyr + 30 g Whey) — die steht dann
-            hier zur Auswahl, um sie jeden Tag automatisch einzutragen.
-          </div>
-        ` : FT_MEAL_KEYS.map((meal, i) => `
-          <div class="field-label" style="margin-top:${i===0 ? '0' : '14px'};">${FT_MEAL_LABELS[meal]}</div>
+        <div class="no-results" style="text-align:left; padding:0 0 12px;">
+          Trägt sich nur ein, solange die jeweilige Mahlzeit an dem Tag noch komplett leer ist —
+          eigene Einträge werden nie überschrieben.
+        </div>
+        ${FT_MEAL_KEYS.map((meal, i) => `
+          <div class="field-label" style="margin-top:${i===0 ? '0' : '16px'};">${FT_MEAL_LABELS[meal]}</div>
           <select class="text-input" data-ft-automeal="${meal}">
             <option value="">Kein Auto-Eintrag</option>
             ${ftSavedMeals.map(m => `<option value="${m.id}" ${ftAutoMeals[meal] === m.id ? 'selected' : ''}>${ftEscapeHTML(m.name)}</option>`).join('')}
           </select>
+          <button class="ft-btn-ghost" style="margin-top:6px; font-size:0.82rem; padding:8px 0;" data-ft-automeal-build="${meal}">+ Direkt aus Lebensmitteln zusammenstellen</button>
         `).join('')}
       </div>
     `, Object.values(ftAutoMeals).filter(Boolean).length ? `${Object.values(ftAutoMeals).filter(Boolean).length}` : '')}
@@ -788,6 +787,18 @@ function ftWireSettingsBody(){
       const meal = sel.dataset.ftAutomeal;
       ftAutoMeals[meal] = sel.value || null;
       ftSave('autoMeals', ftAutoMeals);
+      // Nicht erst auf den nächsten App-Start warten: sofort den Rest des Monats mit der neuen
+      // Auswahl auffüllen (nur dort, wo die Mahlzeit noch leer ist, siehe
+      // ftApplyAutoMealsForDay()) und die Tagesansicht dahinter neu zeichnen, damit z. B. der
+      // heutige Tag den Auto-Eintrag sofort zeigt, sobald man das Einstellungen-Sheet schließt.
+      ftApplyAutoMealsUpcoming();
+      renderFoodTracker();
+    };
+  });
+  wrap.querySelectorAll('[data-ft-automeal-build]').forEach(btn => {
+    btn.onclick = () => {
+      ftCloseOverlay();
+      goFtAutoMealBuilder(btn.dataset.ftAutomealBuild);
     };
   });
   ftWireDesignControls(wrap, refresh);

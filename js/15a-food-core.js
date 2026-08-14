@@ -80,7 +80,7 @@ let ftFoodUsageCount = {};
 let ftGoals = { kcal: null, p: null, c: null, f: null };
 // Pro Mahlzeit (breakfast/lunch/dinner/snacks) optional eine feste, gespeicherte Mahlzeit
 // (ftSavedMeals-ID) hinterlegt, die automatisch für den jeweiligen Tag eingetragen wird, sobald
-// dieser zum ersten Mal "entsteht" (siehe ftApplyAutoMealsForNewDay() weiter unten) — für Dinge
+// dieser zum ersten Mal "entsteht" (siehe ftApplyAutoMealsUpcoming() weiter unten) — für Dinge
 // wie ein tägliches Standard-Frühstück (z. B. immer 250 g Skyr + 30 g Whey), die man nicht jeden
 // Tag erneut von Hand eintragen möchte. null = kein Auto-Eintrag für diese Mahlzeit.
 let ftAutoMeals = { breakfast: null, lunch: null, dinner: null, snacks: null };
@@ -129,10 +129,11 @@ async function initFoodTracker(){
   ftOffMemCache = {};
   foodTrackerLoaded = true;
   // Erst NACHDEM alles geladen ist (braucht ftSavedMeals, um eine Auto-Mahlzeits-ID aufzulösen)
-  // den heutigen Tag ggf. mit den konfigurierten Auto-Mahlzeiten befüllen — greift nur, wenn
-  // "heute" noch kein Tagesobjekt hat (siehe ftApplyAutoMealsForNewDay()), passiert also pro Tag
-  // nur genau einmal, unabhängig davon, wie oft die App an diesem Tag noch geöffnet wird.
-  ftApplyAutoMealsForNewDay(ftTodayISO());
+  // den Rest des aktuellen Monats mit den konfigurierten Auto-Mahlzeiten vorausfüllen (siehe
+  // ftApplyAutoMealsUpcoming(), 15c-food-add.js) — nicht nur "heute", damit man auch beim
+  // Vorausblättern in der Tagesansicht schon sieht, was ansteht, statt dass es sich erst beim
+  // tatsächlichen Erreichen des jeweiligen Tages einträgt.
+  ftApplyAutoMealsUpcoming();
 }
 
 // Zählt einen Treffer für die Such-Reihenfolge (ftRankFoods()) hoch — aufgerufen, sobald ein

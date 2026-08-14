@@ -244,7 +244,7 @@ function renderViewByState(state){
   // history.back() und landet hier). monthOverview/monthReport gehören NICHT zu den
   // Essenstracker-eigenen Views (siehe deren Kommentar bei initFoodTracker()-Aufruf unten) —
   // das sind Trainings-Kalenderseiten, die lediglich zusätzlich Essenstracker-Daten laden.
-  const FOOD_TRACKER_VIEWS = new Set(['foodTracker', 'foodStats', 'foodAddMeal', 'foodCalendar']);
+  const FOOD_TRACKER_VIEWS = new Set(['foodTracker', 'foodStats', 'foodAddMeal', 'foodAutoMealBuilder', 'foodCalendar']);
   if (!FOOD_TRACKER_VIEWS.has(state.view)) applyTheme();
   switch(state.view){
     case 'plan': renderPlanEditor(); break;
@@ -270,6 +270,13 @@ function renderViewByState(state){
     case 'foodTracker': initFoodTracker().then(renderFoodTracker); break;
     case 'foodStats': initFoodTracker().then(renderFoodStats); break;
     case 'foodAddMeal': initFoodTracker().then(() => renderFtAddFood(state.params.meal)); break;
+    case 'foodAutoMealBuilder': initFoodTracker().then(() => {
+      // Beim direkten Ansprung dieser Route (Reload/Vorwärts-Navigation) gibt es keine
+      // gesammelten Items aus einer laufenden Sitzung mehr — startet daher bewusst mit einer
+      // leeren Sammlung statt mit einem Fehler, exakt wie ein neu geöffnetes Formular.
+      ftAutoMealBuilder = { meal: state.params.meal, items: [] };
+      renderFtAddFood(state.params.meal);
+    }); break;
     case 'foodCalendar': initFoodTracker().then(renderFtMonthOverview); break;
     case 'active': if (active) renderActive(); else renderHome(); break;
     default: renderHome();
