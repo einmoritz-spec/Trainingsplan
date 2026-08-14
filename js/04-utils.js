@@ -328,9 +328,9 @@ function fmtRpe(rpe){
    Deltas, die bestehende Rekord-Gelbfarbe #d9c74a, --accent-2 für Warnungen/negative Deltas).
 --------------------------------------------------- */
 const RPE_BANDS = [
-  { key: 'locker', label: 'Locker', max: 6.9, color: '#7cc576' },
-  { key: 'moderat', label: 'Moderat', max: 7.9, color: '#d9c74a' },
-  { key: 'intensiv', label: 'Intensiv', max: 8.9, color: '#e0883a' },
+  { key: 'locker', label: 'Locker', max: 7, color: '#7cc576' },
+  { key: 'moderat', label: 'Moderat', max: 8, color: '#d9c74a' },
+  { key: 'intensiv', label: 'Intensiv', max: 9, color: '#e0883a' },
   { key: 'maximal', label: 'Maximal', max: RPE_MAX, color: 'var(--accent-2)' }
 ];
 function intensityBandForRpe(rpe){
