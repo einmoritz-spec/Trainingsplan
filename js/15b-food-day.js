@@ -98,10 +98,7 @@ function renderFoodTracker(navDirection){
       if(delBtn) delBtn.onclick = (ev)=>{ ev.stopPropagation(); ftRemoveEntry(meal, e.id); };
     });
     document.querySelectorAll(`.food-row[data-meal="${meal}"]`).forEach(row=>{
-      row.onclick = () => {
-        if(row.dataset.group === '1') ftOpenMealGroupDetail(meal, row.dataset.entryId);
-        else ftOpenEditEntryModal(meal, row.dataset.entryId);
-      };
+      ftWireFoodRowPressHandlers(row, meal);
     });
     const saveBtn = document.getElementById('saveMeal_'+meal);
     if(saveBtn) saveBtn.onclick = ()=>ftOpenSaveMealPrompt(meal);
@@ -356,6 +353,93 @@ function ftMealGroupRowHTML(meal, e){
 }
 // ftEscapeHTML() lebt jetzt in 15a-food-core.js (dort auch von ftToastWithUndo() gebraucht).
 function ftFormatNum(n){ return (Math.round(n*2)/2).toString().replace('.', ','); }
+
+// Normaler Tap öffnet wie gehabt Bearbeiten/Gruppendetails; Long-Press (450ms, Muster wie bei
+// ftWireSwatchInteractions()) öffnet stattdessen ftOpenCopyEntryPrompt() — kein Drag&Drop,
+// reine Long-Press-Erkennung per Timer + Bewegungstoleranz. Ein Long-Press auf den X-Button
+// selbst löst nichts aus (der behält sein eigenes normales Löschen-Verhalten).
+function ftWireFoodRowPressHandlers(row, meal){
+  const LONG_PRESS_MS = 450;
+  const MOVE_CANCEL_PX = 10;
+  let pressTimer = null, startX = 0, startY = 0, longPressFired = false;
+  const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
+
+  row.onclick = () => {
+    if (longPressFired){ longPressFired = false; return; }
+    if (row.dataset.group === '1') ftOpenMealGroupDetail(meal, row.dataset.entryId);
+    else ftOpenEditEntryModal(meal, row.dataset.entryId);
+  };
+
+  row.addEventListener('contextmenu', (ev) => ev.preventDefault());
+  row.addEventListener('touchstart', (ev) => {
+    if (ev.target.closest('.food-row-del')) return; // eigener Löschen-Button, nicht überlagern
+    longPressFired = false;
+    const t = ev.touches[0];
+    startX = t.clientX; startY = t.clientY;
+    pressTimer = setTimeout(() => {
+      longPressFired = true;
+      if (navigator.vibrate) navigator.vibrate(15);
+      ftOpenCopyEntryPrompt(meal, row.dataset.entryId);
+    }, LONG_PRESS_MS);
+  }, { passive: true });
+  row.addEventListener('touchmove', (ev) => {
+    const t = ev.touches[0];
+    if (Math.abs(t.clientX - startX) > MOVE_CANCEL_PX || Math.abs(t.clientY - startY) > MOVE_CANCEL_PX) cancelPress();
+  }, { passive: true });
+  row.addEventListener('touchend', cancelPress);
+  row.addEventListener('touchcancel', cancelPress);
+}
+
+// Kopiert einen Eintrag (einzelnes Lebensmittel ODER eine gruppierte Mahlzeit, kind:'mealGroup')
+// per Long-Press auf eine beliebige Zutat-Zeile in eine andere Mahlzeit/einen anderen Tag —
+// bewusst KEIN Drag&Drop, nur Long-Press öffnet ein kleines Auswahlfenster (Datum + Mahlzeit),
+// Antippen der Zielmahlzeit kopiert sofort. Das Original bleibt an Ort und Stelle unverändert
+// stehen (eine Kopie, kein Verschieben) — bekommt dabei eine frische id (uid()), damit es beim
+// Löschen/Bearbeiten nicht mit dem Original kollidiert.
+function ftOpenCopyEntryPrompt(meal, entryId){
+  const entry = ftGetDay(ftCurrentDate)[meal].find(e => e.id === entryId);
+  if (!entry) return;
+  let targetDate = ftCurrentDate;
+
+  function bodyHTML(){
+    return `
+      <div class="field-label" style="margin-top:0;">Zu welchem Tag?</div>
+      <input type="date" id="ftCopyDateInput" value="${targetDate}" style="width:100%; padding:12px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:15px;">
+      <div class="field-label" style="margin-top:16px;">Zu welcher Mahlzeit?</div>
+      ${FT_MEAL_KEYS.map(k => `<button class="ft-btn-ghost ft-copy-target-meal" data-target-meal="${k}" type="button">${FT_MEAL_LABELS[k]}${k === meal && targetDate === ftCurrentDate ? ' (diese)' : ''}</button>`).join('')}
+    `;
+  }
+
+  ftOpenOverlay(`
+    <div class="modal" id="ftCopyEntryModal">
+      <div class="modal-head"><div class="modal-title">${ftEscapeHTML(entry.name)} kopieren</div><button class="sheet-close" id="ftCopyEntryClose">${ftIconX()}</button></div>
+      <div class="modal-body" id="ftCopyEntryBody">${bodyHTML()}</div>
+    </div>
+  `, {type:'modal'});
+
+  function wire(){
+    const dateInput = document.getElementById('ftCopyDateInput');
+    if (dateInput) dateInput.onchange = () => { targetDate = dateInput.value; refresh(); };
+    document.querySelectorAll('.ft-copy-target-meal').forEach(btn => {
+      btn.onclick = async () => {
+        const targetMeal = btn.dataset.targetMeal;
+        const copy = JSON.parse(JSON.stringify(entry));
+        copy.id = uid();
+        ftGetDay(targetDate)[targetMeal].push(copy);
+        await ftSaveDays(targetDate);
+        ftCloseOverlay();
+        if (targetDate === ftCurrentDate) renderFoodTracker();
+        ftToast(`Kopiert nach ${FT_MEAL_LABELS[targetMeal]}${targetDate !== ftCurrentDate ? ', ' + ftFmtDateGerman(targetDate) : ''}`);
+      };
+    });
+  }
+  function refresh(){
+    document.getElementById('ftCopyEntryBody').innerHTML = bodyHTML();
+    wire();
+  }
+  document.getElementById('ftCopyEntryClose').onclick = ftCloseOverlay;
+  wire();
+}
 
 function ftRemoveEntry(meal, entryId){
   const dateIso = ftCurrentDate;

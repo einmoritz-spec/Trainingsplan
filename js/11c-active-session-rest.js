@@ -355,6 +355,7 @@ async function endSession(){
     releaseTrainingWakeLock();
     await saveJSON('activeSession', null);
     clearActiveTrainingNotification(); // umgeht persistActiveSession(), daher hier explizit aufräumen
+    overlayCloseStack = []; // siehe Kommentar beim entsprechenden Fix weiter unten in dieser Datei
     replaceView('home');
     renderHome();
     showUndoToast('Training verworfen.', () => {
@@ -392,6 +393,15 @@ async function endSession(){
   // EIGENEN History-Eintrag (pushView statt replaceView) — sonst hätte "Zurück" von einer
   // Übungs-Detailansicht aus (siehe goExerciseSessionDetail) direkt zur Startseite gesprungen
   // statt nur die Detailansicht zu schließen und zur Zusammenfassung zurückzukehren.
+  // BUGFIX: overlayCloseStack zusätzlich explizit leeren — blieb dort aus irgendeinem Grund
+  // (z. B. einem während des Trainings genutzten Popup wie Trainingstools/Übung-Notiz/RPE-
+  // Vorschlag) ein Eintrag hängen, hätte die NÄCHSTE Zurück-Taste (z. B. aus der Übungs-
+  // Erfolgsansicht heraus) fälschlich DIESEN alten Eintrag statt der eigentlich gewünschten
+  // Zusammenfassungs-Navigation ausgelöst — die Zusammenfassung wirkte dann so, als würde sie
+  // sich komplett schließen statt nur die Erfolgsansicht. Der Übergang vom aktiven Training zur
+  // Zusammenfassung ist ein bewusster "Neustart"-Punkt der Navigation, an dem nichts Offenes
+  // aus dem Training mehr gültig sein sollte.
+  overlayCloseStack = [];
   replaceView('home');
   goSessionSummary(session);
 }

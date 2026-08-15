@@ -896,6 +896,13 @@ function ftBuildExportPayload(){
   return {
     days: ftDays, favorites: ftFavorites, customFoods: ftCustomFoods, savedMeals: ftSavedMeals,
     recent: ftRecent, lastAmounts: ftLastAmounts, usageCount: ftFoodUsageCount, goals: ftGoals,
+    // BUGFIX: fehlte hier bisher komplett. ftOffCache enthält die vollen Nährwert-Details zu
+    // jedem per Barcode-Scan oder Online-Suche gefundenen Lebensmittel — Tageseinträge
+    // speichern selbst nur kcal/Makros direkt (bleiben also korrekt), referenzieren für
+    // Bearbeiten/Portionsänderung aber per sourceFoodId auf diesen Cache. Ohne ihn im Export
+    // zeigte ein Antippen eines solchen Eintrags nach einem Reimport "Lebensmittel nicht mehr
+    // verfügbar", obwohl die Daten selbst (Name, kcal, Menge) weiterhin korrekt angezeigt wurden.
+    offCache: ftOffCache,
   };
 }
 // Übernimmt ein per ftBuildExportPayload() (oder kompatibel) erzeugtes Essenstracker-
@@ -911,6 +918,11 @@ async function ftApplyImportedData(food){
   ftLastAmounts = food.lastAmounts || {};
   ftFoodUsageCount = food.usageCount || {};
   ftGoals = food.goals || { kcal: null, p: null, c: null, f: null };
+  // Fehlt offCache in der Datei (z. B. ein Export aus der Zeit vor diesem Bugfix), bestehenden
+  // Cache auf diesem Gerät NICHT wegwerfen — sonst würde ein Reimport einer alten Sicherung
+  // sogar noch vorhandene, funktionierende Einträge kaputt machen. Nur überschreiben, wenn die
+  // Datei tatsächlich welche mitbringt.
+  if (food.offCache) ftOffCache = food.offCache;
   foodTrackerLoaded = true;
   await Promise.all([
     // BUGFIX: schreibt jetzt direkt korrekt gechunkt (siehe writeFoodDayChunks(), 01-storage.js)
@@ -928,6 +940,7 @@ async function ftApplyImportedData(food){
     ftSave('lastAmounts', ftLastAmounts),
     ftSave('usageCount', ftFoodUsageCount),
     ftSave('goals', ftGoals),
+    ftSave('offCache', ftOffCache),
   ]);
   await deleteJSON('food:days').catch(() => {}); // falls hier zufällig noch ein alter Legacy-Blob-Rest lag
 }
