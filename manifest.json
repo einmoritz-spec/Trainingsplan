@@ -32,10 +32,32 @@
   ],
   "shortcuts": [
     {
-      "name": "Training starten",
-      "short_name": "Start",
-      "description": "Direkt zur Auswahl des heutigen Trainings springen",
-      "url": "./?shortcut=start"
+      "name": "Nächstes Training starten",
+      "short_name": "Training",
+      "description": "Startet direkt die laut Split-Rotation als Nächstes anstehende Einheit",
+      "url": "./?shortcut=training",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Frühstück eintragen",
+      "short_name": "Frühstück",
+      "description": "Direkt Essen zum heutigen Frühstück hinzufügen",
+      "url": "./?shortcut=breakfast",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Mittagessen eintragen",
+      "short_name": "Mittag",
+      "description": "Direkt Essen zum heutigen Mittagessen hinzufügen",
+      "url": "./?shortcut=lunch",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Abendessen eintragen",
+      "short_name": "Abend",
+      "description": "Direkt Essen zum heutigen Abendessen hinzufügen",
+      "url": "./?shortcut=dinner",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

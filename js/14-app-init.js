@@ -106,6 +106,46 @@ function handleResumeTrainingParam(){
   } catch (e){ /* Parameter ist reiner Komfort — Fehler darf den Start nicht blockieren */ }
 }
 
+// Homescreen-Shortcuts (siehe "shortcuts" in manifest.json): langes Drücken auf das App-Icon
+// zeigt Direkteinstiege, die die App mit ?shortcut=… starten. Läuft NACH init(), da plan/
+// sessions/Essenstracker-Daten erst dort geladen werden.
+//   - shortcut=training: startet direkt die laut Split-Rotation als Nächstes anstehende
+//     Einheit (computeNextSplitStep(), 09a-start-select.js — z. B. Unterkörper A, wenn zuletzt
+//     Oberkörper A trainiert wurde). Ist kein Split aktiv oder die Rotation noch nicht
+//     bestimmbar (keine passende Einheit in der Historie), landet man auf der normalen
+//     Trainingsauswahl statt willkürlich irgendetwas zu starten. Läuft bereits ein Training,
+//     wird es NICHT überschrieben — dann geht es einfach in die laufende Einheit.
+//   - shortcut=breakfast|lunch|dinner: direkt in den Essen-hinzufügen-Flow der jeweiligen
+//     Mahlzeit für HEUTE (nicht für den zuletzt im Essenstracker offenen Tag).
+async function handleShortcutParam(){
+  try {
+    const params = new URLSearchParams(location.search);
+    const shortcut = params.get('shortcut');
+    if (!shortcut) return;
+
+    if (shortcut === 'training'){
+      if (active){ pushView('active'); renderActive(); return; }
+      const step = computeNextSplitStep();
+      const list = step ? getModeExercises(step.mode, step.variant) : [];
+      if (step && list.length){
+        startSession(list, null, step.mode, step.variant);
+      } else {
+        goStartSelect(); // kein Split aktiv/eingerichtet — normale Auswahl zeigen
+      }
+      return;
+    }
+
+    const MEAL_SHORTCUTS = { breakfast: 'breakfast', lunch: 'lunch', dinner: 'dinner' };
+    const meal = MEAL_SHORTCUTS[shortcut];
+    if (meal){
+      if (!isFoodTrackerEnabled()) return; // Feature aus — dann bleibt die Startseite stehen
+      await initFoodTracker();
+      ftCurrentDate = ftTodayISO(); // bewusst immer heute, unabhängig vom zuletzt offenen Tag
+      goFtAddFood(meal);
+    }
+  } catch (e){ /* Shortcuts sind reiner Komfort — Fehler dürfen den Start nicht blockieren */ }
+}
+
 wireAlternativeNumberInputs();
 wireViewportAwareOverlays();
 try{
@@ -115,6 +155,7 @@ try{
     bootDone = true;
     showPostHardUpdateBanner();
     handleResumeTrainingParam();
+    handleShortcutParam();
     // Falls beim Start noch eine Session aus dem Speicher wiederhergestellt wurde (App wurde
     // z. B. vom System beendet), die Benachrichtigung wieder aufbauen bzw. eine verwaiste von
     // einem bereits beendeten Training entfernen.
