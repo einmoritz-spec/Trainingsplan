@@ -150,6 +150,84 @@ function ftMacroKcalSegments(periodDays){
 // einzelnen Zutaten aufgelöst (mit der zum Trackzeitpunkt gewählten Portion multipliziert) —
 // sonst würde z.B. "Porridge Standard" als ein einziger riesiger Posten erscheinen, obwohl
 // die Aufschlüsselung ja gerade zeigen soll, WELCHE Lebensmittel wie viel beitragen.
+/* ---------------------------------------------------
+   Zusammenfassen ähnlicher Lebensmittel in der Makro-Aufschlüsselung
+   ---------------------------------------------------
+   Dieselbe Sache taucht oft unter leicht verschiedenen Namen auf — andere Sorte, andere Marke,
+   mal Singular/Plural ("Isoclear Grapefruit (ESN)" / "ISOCLEAR Blue Raspberry" / "Isoclear whey
+   proteine", oder Tofu/Skyr von mehreren Herstellern). Einzeln gelistet zersplittert das die
+   Auswertung und keiner der Posten wirkt mehr relevant, obwohl es zusammen ein Hauptbeitrag ist.
+   Verfahren (bewusst ohne feste Produktlisten, damit es auch für künftige Produkte greift):
+   1. Namen in Wörter zerlegen, Marke in Klammern und Füllwörter (bio, light, natur …) verwerfen,
+      grob auf Wortstämme normalisieren (deutsche Plural-/Endungsformen: "Eier" → "Ei").
+   2. Zählen, in wie vielen VERSCHIEDENEN Namen jedes Wort vorkommt.
+   3. Jeder Name wird über sein häufigstes Wort gruppiert. Dadurch finden sich "Knoblauch Chili
+      Crunch" und "Sesam Chili Crunch" über "chili"/"crunch" zusammen, ohne dass sich Ketten
+      bilden können (jeder Name bekommt genau EINEN Schlüssel, keine transitive Verschmelzung).
+   4. Als Gruppenname dienen die Wörter, die ALLE Mitglieder gemeinsam haben ("Chili Crunch",
+      "Isoclear", "Tofu"). Bleibt eine Gruppe einelementig, steht dort unverändert der
+      Originalname — Einzelposten sehen also exakt aus wie vorher.
+--------------------------------------------------- */
+const FT_GROUP_STOPWORDS = new Set([
+  'bio','light','natur','frisch','fettarm','mager','laktosefrei','vegan','vegetarisch',
+  'gekocht','geraeuchert','geräuchert','gebraten','roh','tiefgekuehlt','tiefgekühlt',
+  'der','die','das','mit','und','ohne','aus','im','in','von','zum','zur','fuer','für',
+  'gr','ml','kcal','stueck','stück','packung','portion','classic','original','typ','sorte',
+]);
+function ftGroupToken(word){
+  const w = word.toLowerCase().replace(/[^a-zäöüß0-9]/g, '');
+  if (!w || FT_GROUP_STOPWORDS.has(w)) return null;
+  if (w.length <= 2) return w;
+  // Sehr grobe Stammform, reicht für Singular/Plural-Varianten desselben Produkts
+  // ("Eier" → "Ei", "Tomaten" → "Tomat", "Nudeln" → "Nudel").
+  if (w.length > 3 && (w.endsWith('er') || w.endsWith('en'))) return w.slice(0, -2);
+  if (w.length > 3 && (w.endsWith('e') || w.endsWith('s') || w.endsWith('n'))) return w.slice(0, -1);
+  return w;
+}
+function ftGroupWordsOf(name){
+  // Markenangabe in Klammern fliegt raus — sie unterscheidet gerade die Varianten, die wir
+  // zusammenfassen wollen ("Tofu Geräuchert (REWE Bio)" vs. "Tofu (Alnatura)").
+  const withoutBrand = name.replace(/\([^)]*\)/g, ' ');
+  return withoutBrand.split(/[\s,\/&+–-]+/).filter(Boolean);
+}
+function ftGroupNamesByKey(names){
+  const wordsByName = {}, tokensByName = {};
+  names.forEach(n => {
+    const words = ftGroupWordsOf(n);
+    wordsByName[n] = words;
+    tokensByName[n] = words.map(w => ({ raw: w, tok: ftGroupToken(w) })).filter(x => x.tok);
+  });
+  const freq = {};
+  names.forEach(n => {
+    new Set(tokensByName[n].map(x => x.tok)).forEach(t => { freq[t] = (freq[t] || 0) + 1; });
+  });
+  const keyByName = {};
+  names.forEach(n => {
+    const toks = tokensByName[n];
+    if (!toks.length){ keyByName[n] = n.toLowerCase(); return; }
+    let best = toks[0].tok;
+    toks.forEach(x => { if (freq[x.tok] > freq[best]) best = x.tok; });
+    keyByName[n] = best;
+  });
+  return { keyByName, tokensByName };
+}
+// Anzeigename einer Gruppe: die Wörter, die alle Mitglieder gemeinsam haben, in der Schreibweise
+// und Reihenfolge des ersten (größten) Mitglieds.
+function ftGroupLabel(memberNames, tokensByName, fallbackKey){
+  if (memberNames.length === 1) return memberNames[0];
+  let common = new Set(tokensByName[memberNames[0]].map(x => x.tok));
+  memberNames.slice(1).forEach(n => {
+    const s = new Set(tokensByName[n].map(x => x.tok));
+    common = new Set([...common].filter(t => s.has(t)));
+  });
+  const seen = new Set();
+  const words = tokensByName[memberNames[0]]
+    .filter(x => common.has(x.tok) && !seen.has(x.tok) && seen.add(x.tok))
+    .map(x => x.raw.charAt(0).toUpperCase() + x.raw.slice(1).toLowerCase());
+  if (words.length) return words.join(' ');
+  return fallbackKey.charAt(0).toUpperCase() + fallbackKey.slice(1);
+}
+
 function ftFoodMacroBreakdown(macroKey, periodDays){
   const todayIso = ftTodayISO();
   const cutoffIso = ftAddDays(todayIso, -(periodDays - 1));
@@ -169,8 +247,22 @@ function ftFoodMacroBreakdown(macroKey, periodDays){
       add(e.name, e[macroKey] || 0);
     }));
   });
-  return Object.entries(map).map(([name,val]) => ({ name, val }))
-    .sort((a,b) => b.val - a.val);
+  // Gleiche Produkte in verschiedenen Sorten/Marken zu einem Posten zusammenfassen (siehe
+  // ausführlicher Kommentar oben). Innerhalb einer Gruppe wird nach Beitrag sortiert, damit der
+  // größte Vertreter den Gruppennamen prägt.
+  const names = Object.keys(map);
+  const { keyByName, tokensByName } = ftGroupNamesByKey(names);
+  const groups = {};
+  names.forEach(n => {
+    const key = keyByName[n];
+    if (!groups[key]) groups[key] = { key, members: [], val: 0 };
+    groups[key].members.push(n);
+    groups[key].val += map[n];
+  });
+  return Object.values(groups).map(g => {
+    g.members.sort((a,b) => map[b] - map[a]);
+    return { name: ftGroupLabel(g.members, tokensByName, g.key), val: g.val, members: g.members };
+  }).sort((a,b) => b.val - a.val);
 }
 
 // ftComputeMonthStats() ist nach 15a-food-core.js gewandert (dort auch von 05-calendar.js für
