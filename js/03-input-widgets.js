@@ -334,6 +334,14 @@ function openScrollWheelForInput(input){
   }
   document.getElementById('scrollWheelDone').onclick = () => {
     if (navigator.vibrate) navigator.vibrate(10);
+    // "Fertig" ist eine AUSDRÜCKLICHE Bestätigung des gerade eingerasteten Wertes und zählt
+    // deshalb selbst als Interaktion (touched), auch wenn das Rad nie bewegt wurde.
+    // BUGFIX: sonst ließ sich bei einem noch leeren Feld ausgerechnet der ANFANGSWERT nicht
+    // übernehmen (z. B. RPE 6, das als min bereits eingerastet dasteht): das Rad wurde nicht
+    // bewegt, touched blieb false, und finish() ließ das Feld absichtlich leer. Werte darüber
+    // (7-10) erforderten ein Scrollen und funktionierten deshalb. Das Wegtippen NEBEN das Rad
+    // (overlay.onclick unten) bleibt bewusst ein Abbruch ohne Übernahme.
+    touched = true;
     popOverlayStateIfOpen();
     finish();
   };
