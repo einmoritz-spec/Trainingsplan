@@ -478,12 +478,16 @@ function renderMonthOverview(){
   app.innerHTML = `
     <div class="back-row month-overview-back-sticky" style="margin-top:0;">
       <button class="back-btn-icon" id="btnBack" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button>
+      <button class="gear settings-btn" id="btnYearHeatmap" aria-label="Jahresübersicht" title="Jahresübersicht">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="6" rx="1"></rect><rect x="10.5" y="3" width="6" height="6" rx="1"></rect><rect x="18" y="3" width="3" height="6" rx="1"></rect><rect x="3" y="10.5" width="6" height="6" rx="1"></rect><rect x="10.5" y="10.5" width="6" height="6" rx="1"></rect><rect x="3" y="18" width="6" height="3" rx="1"></rect></svg>
+      </button>
     </div>
     ${yearAccordionsHTML}
     <div id="monthOverviewList"></div>
     <div class="month-overview-sentinel" id="monthOverviewSentinel"></div>
   `;
   document.getElementById('btnBack').onclick = () => history.back();
+  document.getElementById('btnYearHeatmap').onclick = () => goYearHeatmap();
 
   app.querySelectorAll('[data-year-accordion]').forEach(btn => {
     btn.onclick = () => {
@@ -868,5 +872,126 @@ function renderMonthReport(year, month){
   `;
 
   document.getElementById('btnBack').onclick = () => history.back();
+}
+
+/* ---------------------------------------------------
+   JAHRESÜBERSICHT (Heatmap)
+   ---------------------------------------------------
+   Erreichbar über das Raster-Icon oben rechts in der Monatsübersicht (renderMonthOverview()) —
+   bewusst dort statt in der Statistik-Übersicht, da sie inhaltlich zum Kalender gehört (reine
+   Trainingstage-Ansicht, keine Auswertung im Sinne der anderen Statistik-Screens) und anders
+   als Trainingsintensität/Kalorienverbrauch IMMER sichtbar ist — sie braucht weder RPE noch
+   die kcal-Schätzung, nur ganz normale protokollierte Einheiten.
+   Ein Jahr als Raster aus Tages-Kästchen (GitHub-Stil, Mo–So als Zeilen, Wochen als Spalten),
+   Trainingstage nach bewegtem Gewicht in 5 Stufen der Akzentfarbe eingefärbt. Als SVG gebaut,
+   wie die übrigen Diagramme dieser App (buildLineChart/buildBarChart/buildPieChart) — Tippen
+   auf ein Kästchen öffnet denselben Tages-Popup wie sonst auch (openDayTrainingPopup()).
+--------------------------------------------------- */
+let yearHeatmapYear = new Date().getFullYear();
+
+// Bewegtes Gewicht (kg) pro Kalendertag im gewählten Jahr, als "YYYY-MM-DD" → Zahl — dieselbe
+// Rohgröße wie sessionVolumeKgRaw() (04-utils.js), nur nach Tag statt nach Session aufsummiert
+// (an einem Tag können mehrere Einheiten liegen).
+function computeDailyVolumeForYear(year){
+  const map = {};
+  sessions.forEach(s => {
+    const d = new Date(s.date);
+    if (d.getFullYear() !== year) return;
+    const iso = d.toISOString().slice(0, 10);
+    map[iso] = (map[iso] || 0) + sessionVolumeKgRaw(s);
+  });
+  return map;
+}
+
+function buildYearHeatmapSVG(year){
+  const volumeByDay = computeDailyVolumeForYear(year);
+  const maxVol = Math.max(1, ...Object.values(volumeByDay));
+  // Farbstufe 0 (kein Training) bis 4 (Top-Viertel des bewegten Gewichts dieses Jahres) —
+  // Schwellen an Anteilen vom Jahres-Maximum statt an festen kg-Werten, damit die Einfärbung
+  // unabhängig von Trainingsstil/Gewichtsniveau relativ zueinander aussagekräftig bleibt.
+  function levelFor(vol){
+    if (!vol) return 0;
+    const r = vol / maxVol;
+    if (r > 0.75) return 4;
+    if (r > 0.5) return 3;
+    if (r > 0.25) return 2;
+    return 1;
+  }
+  const cell = 11, gap = 3, padL = 4, padT = 18, padB = 4;
+  // Woche startet Montag (wie überall sonst im Kalender dieser App) — erste Spalte beginnt am
+  // Montag der Woche, in der der 1. Januar liegt, damit auch die ersten Januartage korrekt in
+  // ihrer echten Wochenspalte/-zeile landen statt an den linken Rand gequetscht zu werden.
+  const jan1 = new Date(year, 0, 1);
+  const jan1Dow = (jan1.getDay() + 6) % 7; // Montag = 0
+  const gridStart = new Date(jan1); gridStart.setDate(jan1.getDate() - jan1Dow);
+  const dec31 = new Date(year, 11, 31);
+  const totalDays = Math.round((dec31 - gridStart) / 86400000) + 1;
+  const weeks = Math.ceil(totalDays / 7);
+  const w = padL + weeks * (cell + gap);
+  const h = padT + 7 * (cell + gap) + padB;
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  let cells = '', monthLabels = '', lastMonth = -1;
+  for (let i = 0; i < weeks * 7; i++){
+    const d = new Date(gridStart); d.setDate(gridStart.getDate() + i);
+    const col = Math.floor(i / 7), row = i % 7;
+    const x = padL + col * (cell + gap), y = padT + row * (cell + gap);
+    if (d.getFullYear() === year){
+      const iso = d.toISOString().slice(0, 10);
+      const level = levelFor(volumeByDay[iso]);
+      const isToday = iso === todayIso;
+      cells += `<rect class="heatmap-cell heatmap-level-${level}" x="${x}" y="${y}" width="${cell}" height="${cell}" rx="2.5" data-heatmap-day="${iso}"${isToday ? ' data-heatmap-today="1"' : ''}></rect>`;
+      if (d.getDate() === 1 && d.getMonth() !== lastMonth){
+        lastMonth = d.getMonth();
+        monthLabels += `<text class="chart-label" x="${x}" y="${padT - 6}">${MONTH_LABELS_SHORT[d.getMonth()]}</text>`;
+      }
+    }
+  }
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="Trainings-Heatmap ${year}">
+    ${monthLabels}${cells}
+  </svg>`;
+}
+
+const MONTH_LABELS_SHORT = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+
+function renderYearHeatmap(){
+  const volumeByDay = computeDailyVolumeForYear(yearHeatmapYear);
+  const trainedDays = Object.keys(volumeByDay).length;
+  const totalVol = Object.values(volumeByDay).reduce((a,v) => a+v, 0);
+  const earliestYear = sessions.length ? Math.min(...sessions.map(s => new Date(s.date).getFullYear())) : yearHeatmapYear;
+  const currentYear = new Date().getFullYear();
+
+  app.innerHTML = `
+    <div class="back-row" style="margin-top:0;"><button class="back-btn-icon" id="btnBack" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button></div>
+    <div class="progress-summary" style="margin-top:18px;">
+      <span>${trainedDays} Trainingstage</span>
+      <span>${Math.round(totalVol).toLocaleString('de-DE')} kg bewegt</span>
+    </div>
+    <div style="display:flex; align-items:center; justify-content:center; gap:16px; margin:6px 0 18px;">
+      <button class="date-arrow" id="btnYearBack" ${yearHeatmapYear <= earliestYear ? 'disabled style="opacity:0.3;"' : ''}>${ftIconChevron('left')}</button>
+      <span style="font-family:'Fraunces',serif; font-weight:600; font-size:1.05rem;">${yearHeatmapYear}</span>
+      <button class="date-arrow" id="btnYearFwd" ${yearHeatmapYear >= currentYear ? 'disabled style="opacity:0.3;"' : ''}>${ftIconChevron('right')}</button>
+    </div>
+    <div class="month-report-card" style="overflow-x:auto;">
+      ${buildYearHeatmapSVG(yearHeatmapYear)}
+    </div>
+    <div style="display:flex; align-items:center; justify-content:flex-end; gap:4px; margin-top:10px; padding:0 4px;">
+      <span style="font-size:11px; color:var(--muted); margin-right:2px;">weniger</span>
+      ${[0,1,2,3,4].map(l => `<span class="heatmap-legend-swatch heatmap-level-${l}"></span>`).join('')}
+      <span style="font-size:11px; color:var(--muted); margin-left:2px;">mehr</span>
+    </div>
+  `;
+
+  document.getElementById('btnBack').onclick = () => history.back();
+  const backBtn = document.getElementById('btnYearBack');
+  if (backBtn) backBtn.onclick = () => { if (yearHeatmapYear > earliestYear){ yearHeatmapYear--; renderYearHeatmap(); } };
+  const fwdBtn = document.getElementById('btnYearFwd');
+  if (fwdBtn) fwdBtn.onclick = () => { if (yearHeatmapYear < currentYear){ yearHeatmapYear++; renderYearHeatmap(); } };
+  app.querySelectorAll('[data-heatmap-day]').forEach(el => {
+    el.onclick = () => {
+      const [y,m,d] = el.dataset.heatmapDay.split('-').map(Number);
+      openDayTrainingPopup(y, m - 1, d);
+    };
+  });
 }
 
