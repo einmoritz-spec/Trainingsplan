@@ -246,6 +246,77 @@ function wireCurrentSetsInputs(entry, ei, currentPlanEx){
   });
 }
 
+// Verkabelt die BUTTONS innerhalb von #currentSets (Abhaken, Satz entfernen, VOL/10RM/1RM-
+// Umschalter). Musste zusammen mit wireCurrentSetsInputs() aus dem großen renderActive()-Block
+// ausgelagert werden, weil refreshCurrentSets() den Inhalt von #currentSets komplett neu
+// aufbaut: die frisch erzeugten Buttons hatten danach KEINE Handler mehr, weil sie zuvor nur
+// im vollen Render-Durchlauf (app.querySelectorAll) gebunden wurden.
+// BUGFIX dazu: dadurch ließ sich nach jeder Werteingabe, die refreshCurrentSets() auslöst
+// (z. B. RPE eintragen, aber genauso Gewicht/Wdh/Sekunden), kein Satz mehr abhaken — bis man
+// einmal die Übung wechselte und zurückkam, da erst das wieder einen vollen renderActive()
+// auslöste. Jetzt binden beide Wege dieselben Handler.
+function wireCurrentSetsButtons(entry, ei, currentPlanEx){
+  const scope = document.getElementById('currentSets');
+  if (!scope) return;
+
+  scope.querySelectorAll('[data-checkset]').forEach(btn => {
+    btn.onclick = () => {
+      const si = Number(btn.dataset.checkset);
+      const wasDone = entry.sets[si].done;
+      entry.sets[si].done = !wasDone;
+      if (!wasDone){
+        // Satz wurde gerade abgehakt: komplett leere Folge-Sätze automatisch
+        // mit denselben Werten (kg + Wdh bzw. Sekunden) vorausfüllen, damit man
+        // bei gleichbleibendem Gewicht/Wdh nicht jeden Satz neu eintippen muss.
+        applySetValueAndPropagate(entry, si, entry.type === 'time'
+          ? { seconds: entry.sets[si].seconds, ...Object.fromEntries(cardioFieldsFor(currentPlanEx).map(f => [f.key, entry.sets[si][f.key]])) }
+          : { reps: entry.sets[si].reps, weight: entry.sets[si].weight });
+      }
+      if (!wasDone){
+        afterSetChecked(entry, ei);
+        // Standard-Pausetimer (siehe openTrainingToolsPrompt(), Einstellungen →
+        // Trainingstools → "Standard-Pausetimer"): startet automatisch eine Pause
+        // in der hinterlegten Länge, sobald ein Satz abgehakt wird — genau wie ein
+        // manueller Tap auf einen der 30/60/90s-Buttons, nur ohne dass man selbst
+        // draufdrücken muss. Nur wenn eine Dauer hinterlegt ist (Standard: keine).
+        if (plan.trainingToolsEnabled === true && plan.defaultRestSeconds) startRest(plan.defaultRestSeconds);
+      }
+      renderActive();
+    };
+  });
+
+  scope.querySelectorAll('[data-removeset]').forEach(btn => {
+    btn.onclick = () => {
+      const si = Number(btn.dataset.removeset);
+      const removedSet = entry.sets[si];
+      // Nur nachfragen/Undo anbieten, wenn im Satz schon etwas eingetragen war — ein
+      // leerer, noch unbenutzter Satz lässt sich weiterhin ohne Rückfrage entfernen.
+      const hasData = entry.type === 'time'
+        ? (removedSet.seconds !== null && removedSet.seconds !== undefined)
+        : ((removedSet.reps !== null && removedSet.reps !== undefined) || (removedSet.weight !== null && removedSet.weight !== undefined));
+      entry.sets.splice(si, 1);
+      if (perfSuggestion && perfSuggestion.entryIndex === ei && perfSuggestion.setIndex >= si) perfSuggestion = null;
+      renderActive();
+      if (hasData){
+        showUndoToast(`Satz ${si + 1} entfernt.`, () => {
+          entry.sets.splice(si, 0, removedSet);
+          renderActive();
+        });
+      }
+    };
+  });
+
+  const toggleSetMetricBtn = document.getElementById('btnToggleSetMetric');
+  if (toggleSetMetricBtn){
+    toggleSetMetricBtn.onclick = () => {
+      // Rotiert bei jedem Tap durch VOL → 10RM → 1RM → VOL … und merkt sich die Wahl auch
+      // für die restliche Trainingseinheit (nicht nur für diese eine Übung).
+      activeSetMetricMode = activeSetMetricMode === 'vol' ? '10rm' : activeSetMetricMode === '10rm' ? '1rm' : 'vol';
+      renderActive();
+    };
+  }
+}
+
 // Gezieltes Update NUR der Sätze-Liste (#currentSets) nach reiner Werteingabe (Gewicht/Wdh/
 // Sekunden/Kardio-Zusatzfelder), OHNE die komplette Seite (app.innerHTML) neu aufzubauen. Das
 // vermeidet strukturell die ganze Klasse von Bugs, die aus dem kompletten Rebuild entstand
@@ -264,6 +335,7 @@ function refreshCurrentSets(){
   const currentPlanEx = plan.exercises.find(x => x.id === entry.exerciseId);
   currentSetsEl.innerHTML = buildCurrentSetsMarkup(entry, ei, currentPlanEx);
   wireCurrentSetsInputs(entry, ei, currentPlanEx);
+  wireCurrentSetsButtons(entry, ei, currentPlanEx);
 }
 
 function renderActive(){
@@ -557,53 +629,7 @@ function renderActive(){
 
   if (entry){
     wireCurrentSetsInputs(entry, ei, currentPlanEx);
-
-    app.querySelectorAll('[data-checkset]').forEach(btn => {
-      btn.onclick = () => {
-        const si = Number(btn.dataset.checkset);
-        const wasDone = entry.sets[si].done;
-        entry.sets[si].done = !wasDone;
-        if (!wasDone){
-          // Satz wurde gerade abgehakt: komplett leere Folge-Sätze automatisch
-          // mit denselben Werten (kg + Wdh bzw. Sekunden) vorausfüllen, damit man
-          // bei gleichbleibendem Gewicht/Wdh nicht jeden Satz neu eintippen muss.
-          applySetValueAndPropagate(entry, si, entry.type === 'time'
-            ? { seconds: entry.sets[si].seconds, ...Object.fromEntries(cardioFieldsFor(currentPlanEx).map(f => [f.key, entry.sets[si][f.key]])) }
-            : { reps: entry.sets[si].reps, weight: entry.sets[si].weight });
-        }
-        if (!wasDone){
-          afterSetChecked(entry, ei);
-          // Standard-Pausetimer (siehe openTrainingToolsPrompt(), Einstellungen →
-          // Trainingstools → "Standard-Pausetimer"): startet automatisch eine Pause
-          // in der hinterlegten Länge, sobald ein Satz abgehakt wird — genau wie ein
-          // manueller Tap auf einen der 30/60/90s-Buttons, nur ohne dass man selbst
-          // draufdrücken muss. Nur wenn eine Dauer hinterlegt ist (Standard: keine).
-          if (plan.trainingToolsEnabled === true && plan.defaultRestSeconds) startRest(plan.defaultRestSeconds);
-        }
-        renderActive();
-      };
-    });
-
-    app.querySelectorAll('[data-removeset]').forEach(btn => {
-      btn.onclick = () => {
-        const si = Number(btn.dataset.removeset);
-        const removedSet = entry.sets[si];
-        // Nur nachfragen/Undo anbieten, wenn im Satz schon etwas eingetragen war — ein
-        // leerer, noch unbenutzter Satz lässt sich weiterhin ohne Rückfrage entfernen.
-        const hasData = entry.type === 'time'
-          ? (removedSet.seconds !== null && removedSet.seconds !== undefined)
-          : ((removedSet.reps !== null && removedSet.reps !== undefined) || (removedSet.weight !== null && removedSet.weight !== undefined));
-        entry.sets.splice(si, 1);
-        if (perfSuggestion && perfSuggestion.entryIndex === ei && perfSuggestion.setIndex >= si) perfSuggestion = null;
-        renderActive();
-        if (hasData){
-          showUndoToast(`Satz ${si + 1} entfernt.`, () => {
-            entry.sets.splice(si, 0, removedSet);
-            renderActive();
-          });
-        }
-      };
-    });
+    wireCurrentSetsButtons(entry, ei, currentPlanEx);
 
     document.getElementById('btnAddSet').onclick = () => {
       // autoFilled:true, da die Werte hier nur von "last" übernommen wurden, nicht vom
@@ -714,15 +740,6 @@ function renderActive(){
     }
     endSession();
   };
-  const toggleSetMetricBtn = document.getElementById('btnToggleSetMetric');
-  if (toggleSetMetricBtn){
-    toggleSetMetricBtn.onclick = () => {
-      // Rotiert bei jedem Tap durch VOL → 10RM → 1RM → VOL … und merkt sich die Wahl auch
-      // für die restliche Trainingseinheit (nicht nur für diese eine Übung).
-      activeSetMetricMode = activeSetMetricMode === 'vol' ? '10rm' : activeSetMetricMode === '10rm' ? '1rm' : 'vol';
-      renderActive();
-    };
-  }
   // Normaler Tap startet die feste Pausenzeit wie gehabt; Long-Press auf einen der drei
   // Buttons öffnet stattdessen ein Popup für eine frei eingegebene Pausendauer (siehe
   // openCustomRestPrompt()) — gleiches Long-Press-Muster wie z. B. bei den Akzentfarben-
