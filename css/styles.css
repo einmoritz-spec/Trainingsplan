@@ -529,6 +529,18 @@ html[data-theme="light"] .bodyweight-warning-icon{ filter: none; }
 .summary-pill-value-long{ font-size:16px; letter-spacing:-0.3px; }
 .summary-pill-label{ font-size:12px; color: var(--muted); margin-top:4px; text-align:center; }
 .summary-pill-divider{ width:1px; align-self:stretch; background: var(--border); flex-shrink:0; }
+/* Gedrängte Variante ab 5 Kennzahlen (siehe pillItemCount in renderSessionSummary(),
+   12-session-summary.js) — kommt praktisch nur zustande, wenn sowohl RPE-Erfassung als auch
+   geschätzter Kalorienverbrauch aktiviert sind. Kleinere Zahlen/Icons + weniger Innenabstand,
+   und alle Labels bis auf "≈ kcal" ausgeblendet, damit nichts mehr über die Trennlinien läuft. */
+.summary-pill-compact{ padding:12px 10px; gap:2px; }
+.summary-pill-compact .summary-pill-value{ font-size:15px; }
+.summary-pill-compact .summary-pill-value-long{ font-size:13px; }
+.summary-pill-compact .summary-pill-icon-img{ width:14px; height:14px; }
+.summary-pill-compact .summary-pill-icon{ font-size:14px; }
+.summary-pill-compact .summary-pill-top{ gap:4px; }
+.summary-pill-compact .summary-pill-label{ display:none; }
+.summary-pill-compact .summary-pill-label-keep{ display:block; font-size:10px; margin-top:3px; }
 
 /* ---------- Abschluss-Screen nach Training ---------- */
 .summary-badge{
