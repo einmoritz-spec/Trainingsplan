@@ -161,10 +161,6 @@ function goMonthOverview(push){
   // geladenen Daten also nichts.
   initFoodTracker().then(renderMonthOverview);
 }
-function goYearHeatmap(push){
-  if (push !== false) pushView('yearHeatmap');
-  initFoodTracker().then(renderYearHeatmap); // Tages-Popup zeigt auch Ernährungs-Infos, siehe goMonthOverview()
-}
 function goMonthReport(year, month, push){
   if (push !== false) pushView('monthReport', { year, month });
   // Essenstracker-Daten müssen geladen sein, BEVOR der Monatsbericht rendert — er zeigt jetzt
@@ -281,7 +277,6 @@ function renderViewByState(state){
     case 'bodyWeightChart': renderBodyWeightChart(); break;
     case 'workoutsOverview': renderWorkoutsOverview(); break;
     case 'monthOverview': initFoodTracker().then(renderMonthOverview); break;
-    case 'yearHeatmap': initFoodTracker().then(renderYearHeatmap); break;
     case 'monthReport': initFoodTracker().then(() => renderMonthReport(state.params.year, state.params.month)); break;
     case 'exerciseSessionDetail': renderExerciseSessionDetail(state.params.sessionId, state.params.exerciseId); break;
     case 'foodTracker': initFoodTracker().then(renderFoodTracker); break;
