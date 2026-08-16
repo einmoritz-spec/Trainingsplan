@@ -79,6 +79,23 @@ function ftDayTotalsInPeriod(periodDays){
   return ftAllDayTotals().filter(d => d.date >= cutoffIso && d.date <= todayIso);
 }
 
+// Ø kcal-Zufuhr an Trainingstagen vs. Ruhetagen im Zeitraum (siehe "Kalorienverbrauch"-Statistik-
+// Screen, 08c-stats-progress-list.js) — braucht nur die reine Ja/Nein-Info "war an diesem Tag
+// eine Einheit protokolliert" aus dem globalen sessions-Array, unabhängig vom geschätzten
+// Trainings-Verbrauch selbst. Zeigt, ob an Trainingstagen tatsächlich mehr gegessen wird.
+function computeTrainingVsRestDayIntake(periodDays){
+  const days = ftDayTotalsInPeriod(periodDays);
+  if (!days.length) return null;
+  const trainingDates = new Set(sessions.map(s => (s.date || '').slice(0, 10)));
+  const trainingDays = days.filter(d => trainingDates.has(d.date));
+  const restDays = days.filter(d => !trainingDates.has(d.date));
+  const avg = list => list.length ? Math.round(list.reduce((a,d) => a + d.kcal, 0) / list.length) : null;
+  return {
+    trainingAvg: avg(trainingDays), trainingCount: trainingDays.length,
+    restAvg: avg(restDays), restCount: restDays.length,
+  };
+}
+
 // Balkendiagramm-Punkte je nach Zeitraum: Woche/Monat zeigen JEDEN Tag einzeln (auch ohne
 // Eintrag als 0-Balken, damit Lücken im Tracking sichtbar bleiben, nicht nur die geloggten
 // Tage aneinandergereiht), Quartal/Jahr bündeln zu Kalenderwochen bzw. -monaten (sonst bei

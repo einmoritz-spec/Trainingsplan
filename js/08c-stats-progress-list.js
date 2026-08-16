@@ -558,6 +558,71 @@ function renderIntensityStats(){
     `<div class="month-report-muscle-bar-seg" style="width:${b.pct}%; background:${b.color};"></div>`
   ).join('') : '';
 
+  // sRPE-Trainingslast: letzte 8 Wochen als Balkendiagramm, plus Warnhinweis, wenn die
+  // aktuelle Woche deutlich (>30%) über dem Schnitt der 4 Wochen davor liegt — ein simpler,
+  // gängiger Frühindikator für zu schnell gesteigerte Belastung. Nutzt bewusst ALLE Sessions
+  // (nicht nur periodSessions), da 8 Wochen Verlauf unabhängig vom oben gewählten
+  // Zeitraum-Filter immer sinnvoll ist — sonst würde "Woche" hier nur 1 Balken zeigen.
+  const weeklyLoad = computeWeeklyTrainingLoad(sessions, 8);
+  const last = weeklyLoad[weeklyLoad.length - 1];
+  const prev4 = weeklyLoad.slice(-5, -1);
+  const prev4Avg = prev4.length ? prev4.reduce((a,w) => a+w.value, 0) / prev4.length : 0;
+  const loadWarning = (last && prev4Avg > 0 && last.value > prev4Avg * 1.3);
+  const weeklyLoadHTML = weeklyLoad.some(w => w.value > 0) ? `
+    <div class="month-report-card" style="margin-top:14px;">
+      <div class="month-report-card-title">Trainingslast (sRPE)</div>
+      ${buildBarChart(weeklyLoad, color, true, 120)}
+      ${loadWarning ? `<div class="history-empty" style="margin-top:8px; padding:8px 4px; text-align:left; background:none; border:none;"><span style="font-size:11px; color:var(--accent-2);">Diese Woche deutlich höher als der Schnitt der letzten 4 Wochen — im Blick behalten.</span></div>` : ''}
+    </div>
+  ` : '';
+
+  // Ermüdungskurve: Ø RPE nach Satz-Position innerhalb einer Übung, über den gewählten Zeitraum.
+  const fatiguePoints = computeRpeFatigueBySetIndex(periodSessions);
+  const fatigueHTML = fatiguePoints.length >= 2 ? `
+    <div class="month-report-card" style="margin-top:14px;">
+      <div class="month-report-card-title">Ermüdung im Satzverlauf</div>
+      ${buildBarChart(fatiguePoints, color, true, 120)}
+    </div>
+  ` : '';
+
+  // RPE je Muskelgruppe — dieselbe Legenden-Optik wie die Intensitäts-Verteilung oben, nur
+  // ohne Prozent-Balken (hier ist der Ø-Wert selbst die Aussage, keine Anteile).
+  const muscleRpe = computeRpeByMuscleGroup(periodSessions);
+  const muscleRpeHTML = muscleRpe.length ? `
+    <div class="month-report-card" style="margin-top:14px;">
+      <div class="month-report-card-title">Ø Intensität je Muskelgruppe</div>
+      ${muscleRpe.map(m => `
+        <div class="month-report-highlight-row">
+          <span class="month-report-highlight-label">${m.group}</span>
+          <span class="month-report-highlight-value" style="color:${intensityBandForRpe(m.avg).color};">${fmtRpe(m.avg)}</span>
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+
+  // Härteste Übungen — Top 5, nur ab 3 erfassten RPE-Werten (siehe computeHardestExercises()).
+  const hardest = computeHardestExercises(periodSessions, 3).slice(0, 5);
+  const hardestHTML = hardest.length ? `
+    <div class="month-report-card" style="margin-top:14px;">
+      <div class="month-report-card-title">Härteste Übungen</div>
+      ${hardest.map(h => `
+        <div class="month-report-highlight-row">
+          <span class="month-report-highlight-label">${h.name}</span>
+          <span class="month-report-highlight-value" style="color:${intensityBandForRpe(h.avg).color};">${fmtRpe(h.avg)}</span>
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+
+  // Effizienz-Trend: bewegtes Gewicht pro RPE-Punkt je Einheit — der ehrlichste
+  // Fortschrittsindikator aus diesen beiden Werten (mehr Gewicht bei gleicher empfundener
+  // Anstrengung statt nur mehr Gewicht UND mehr Anstrengung).
+  const efficiencyPoints = computeEfficiencyPoints(periodSessions);
+  const efficiencyHTML = efficiencyPoints.length >= 2 ? chartAccordionHTML(
+    intensityChartOpen, 'efficiency', 'Effizienz (kg je RPE-Punkt)', efficiencyPoints, color,
+    v => v.toLocaleString('de-DE'), buildLineChart(efficiencyPoints, color, v => v.toLocaleString('de-DE'))
+  ) : '';
+
   app.innerHTML = `
     <div class="back-row" style="margin-top:0;"><button class="back-btn-icon" id="btnBack" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button></div>
     <div class="progress-summary" style="margin-top:18px;">
@@ -577,6 +642,11 @@ function renderIntensityStats(){
       <div class="month-report-muscle-legend">${bandRowsHTML}</div>
     </div>
     ` : `<div class="history-empty" style="margin-top:14px;">Für diesen Zeitraum liegen noch keine RPE-Werte vor.</div>`}
+    ${weeklyLoadHTML}
+    ${fatigueHTML}
+    ${muscleRpeHTML}
+    ${hardestHTML}
+    ${efficiencyHTML}
   `;
 
   document.getElementById('btnBack').onclick = () => history.back();
@@ -633,6 +703,60 @@ function renderKcalStats(){
   const avgKcal = chartPoints.length ? Math.round(totalKcal / chartPoints.length) : null;
   const kcalFormatter = v => Math.round(v).toLocaleString('de-DE');
 
+  // kcal pro Minute je Trainingsart — sagt, wie "dicht" eine Trainingsart im Schnitt ist,
+  // unabhängig von der Gesamtdauer (z. B. Laufband vs. klassisches Krafttraining).
+  const perMinute = computeKcalPerMinuteByCategory(periodSessions);
+  const perMinuteHTML = perMinute.length ? `
+    <div class="month-report-card" style="margin-top:14px;">
+      <div class="month-report-card-title">kcal pro Minute je Trainingsart</div>
+      ${perMinute.map(c => `
+        <div class="month-report-highlight-row">
+          <span class="month-report-highlight-label">${c.label}</span>
+          <span class="month-report-highlight-value">${c.perMinute.toLocaleString('de-DE')}</span>
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+
+  // Verbrauch je Muskelgruppe — dieselbe Balken-/Legenden-Optik wie die RPE-Verteilung im
+  // Intensitäts-Screen, hier aber als Anteil am geschätzten Gesamtverbrauch des Zeitraums.
+  const muscleKcal = computeKcalByMuscleGroup(periodSessions);
+  const muscleKcalHTML = muscleKcal.length ? `
+    <div class="month-report-card" style="margin-top:14px;">
+      <div class="month-report-card-title">Verbrauch je Muskelgruppe</div>
+      <div class="month-report-muscle-bar">${muscleKcal.map(m => `<div class="month-report-muscle-bar-seg" style="width:${m.pct}%; background:${muscleGroupColor(m.group)};"></div>`).join('')}</div>
+      <div class="month-report-muscle-legend">
+        ${muscleKcal.map(m => `
+          <div class="month-report-muscle-legend-item">
+            <span class="month-report-muscle-dot" style="background:${muscleGroupColor(m.group)};"></span>
+            <span class="month-report-muscle-legend-name">${m.group}</span>
+            <span class="month-report-muscle-legend-pct">${m.pct}%</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  // Trainingstage vs. Ruhetage: Ø kcal-Zufuhr gegenübergestellt — nur wenn der Essenstracker
+  // aktiv ist, sonst gibt es keine Zufuhr-Seite zum Vergleichen. Braucht keinen geschätzten
+  // Trainings-Verbrauch, nur die reine Ja/Nein-Info "war das ein Trainingstag" aus sessions.
+  const trainingVsRest = isFoodTrackerEnabled() ? computeTrainingVsRestDayIntake(days || 36500) : null;
+  const trainingVsRestHTML = (trainingVsRest && (trainingVsRest.trainingCount > 0 || trainingVsRest.restCount > 0)) ? `
+    <div class="month-report-card" style="margin-top:14px;">
+      <div class="month-report-card-title">Ø Zufuhr: Trainingstage vs. Ruhetage</div>
+      ${trainingVsRest.trainingAvg != null ? `
+      <div class="month-report-highlight-row">
+        <span class="month-report-highlight-label">Trainingstage (${trainingVsRest.trainingCount})</span>
+        <span class="month-report-highlight-value">${trainingVsRest.trainingAvg.toLocaleString('de-DE')} kcal</span>
+      </div>` : ''}
+      ${trainingVsRest.restAvg != null ? `
+      <div class="month-report-highlight-row">
+        <span class="month-report-highlight-label">Ruhetage (${trainingVsRest.restCount})</span>
+        <span class="month-report-highlight-value">${trainingVsRest.restAvg.toLocaleString('de-DE')} kcal</span>
+      </div>` : ''}
+    </div>
+  ` : '';
+
   app.innerHTML = `
     <div class="back-row" style="margin-top:0;"><button class="back-btn-icon" id="btnBack" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button></div>
     <div class="progress-summary" style="margin-top:18px;">
@@ -646,6 +770,9 @@ function renderKcalStats(){
     </div>
     ${chartAccordionHTML(kcalChartOpen, 'main', 'Verlauf je Einheit', chartPoints, color, v => kcalFormatter(v) + ' kcal', buildLineChart(chartPoints, color, kcalFormatter))}
     ${!chartPoints.length ? `<div class="history-empty" style="margin-top:14px;">Für diesen Zeitraum liegt noch keine Schätzung vor — dafür muss unter Einstellungen → Körperdaten ein Körpergewicht hinterlegt sein.</div>` : ''}
+    ${perMinuteHTML}
+    ${muscleKcalHTML}
+    ${trainingVsRestHTML}
   `;
 
   document.getElementById('btnBack').onclick = () => history.back();

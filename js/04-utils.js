@@ -6,7 +6,7 @@
 // (sw.js, Cache-First) nach einem Update oft noch mehrere Starts lang die ALTE Fassung —
 // ohne diesen Stempel ist "der Fix wirkt nicht" nicht von "der Fix ist nie angekommen" zu
 // unterscheiden. Bei jeder Änderung zusammen mit CACHE_NAME in sw.js erhöhen.
-const BUILD_STAMP = '44';
+const BUILD_STAMP = '45';
 /* ---------------------------------------------------
    Wake Lock (Bildschirm bei laufendem Training nicht abschalten)
    ---------------------------------------------------
@@ -139,6 +139,16 @@ function bodyCompositionKcalFactor(bw, heightCm, sex){
 // braucht es zwingend, ein geratener Standardwert wäre hier eher irreführend als hilfreich —
 // siehe auch die bestehende needsBodyWeightWarning-Logik im aktiven Training).
 function estimateSessionKcal(session){
+  const breakdown = estimateSessionKcalBreakdown(session);
+  if (!breakdown) return null;
+  return Math.round(breakdown.reduce((a, b) => a + b.kcal, 0));
+}
+// Wie estimateSessionKcal(), aber pro Übung statt nur als Gesamtsumme — Grundlage für
+// Auswertungen, die wissen müssen, WOHER die kcal kommen (z. B. Verbrauch je Muskelgruppe oder
+// je Trainingsart, siehe computeKcalByMuscleGroup()/computeKcalPerMinuteByCategory() weiter
+// unten). estimateSessionKcal() selbst summiert nur noch das Ergebnis davon, damit die
+// eigentliche MET-/Faktor-Rechnung an genau einer Stelle steht.
+function estimateSessionKcalBreakdown(session){
   if (!kcalEstimateEnabled()) return null;
   const bw = plan && plan.bodyWeight;
   if (!bw || !session || !session.entries || !session.entries.length) return null;
@@ -147,16 +157,177 @@ function estimateSessionKcal(session){
   const fallbackSecPerEntry = entriesWithoutOwnTime.length
     ? (session.durationSec || 0) / entriesWithoutOwnTime.length
     : 0;
-  let totalKcal = 0;
+  const out = [];
   session.entries.forEach(e => {
     const planEx = plan.exercises.find(x => x.id === e.exerciseId);
     const sec = e.timeSpentSec || fallbackSecPerEntry;
     if (!sec) return;
     const met = metForEntry(e, planEx);
     const rpeFactor = rpeEnabled() ? rpeIntensityFactor(avgRpeForSessions([{ entries: [e] }])) : 1;
-    totalKcal += met * rpeFactor * bodyFactor * 3.5 * bw / 200 * (sec / 60);
+    const kcal = met * rpeFactor * bodyFactor * 3.5 * bw / 200 * (sec / 60);
+    out.push({ entry: e, planEx, sec, kcal });
   });
-  return Math.round(totalKcal);
+  return out;
+}
+// Kategorie-Label für "kcal pro Minute je Trainingsart" — dieselbe Unterscheidung, die auch
+// metForEntry() für die MET-Wahl trifft (Kardiogerät/Eigengewicht/Krafttraining), nur als
+// sprechender Text statt als Rechenwert.
+function kcalCategoryLabel(planEx){
+  if (planEx && planEx.cardioMachine){
+    return planEx.cardioMachine === 'laufband' ? 'Laufband' : (CARDIO_MACHINES[planEx.cardioMachine]?.label || 'Kardiogerät');
+  }
+  if (planEx && (planEx.bodyweightExercise || planEx.noWeight)) return 'Eigengewicht';
+  return 'Krafttraining';
+}
+// kcal pro Minute je Trainingsart, gemittelt über alle Übungen einer Kategorie im Zeitraum —
+// sagt aus, wie "dicht" eine Trainingsart im Schnitt ist, unabhängig von der Gesamtdauer.
+function computeKcalPerMinuteByCategory(sessionList){
+  const buckets = {};
+  (sessionList || []).forEach(s => {
+    const breakdown = estimateSessionKcalBreakdown(s);
+    if (!breakdown) return;
+    breakdown.forEach(({ entry, planEx, sec, kcal }) => {
+      const label = kcalCategoryLabel(planEx);
+      if (!buckets[label]) buckets[label] = { kcal: 0, sec: 0 };
+      buckets[label].kcal += kcal;
+      buckets[label].sec += sec;
+    });
+  });
+  return Object.entries(buckets)
+    .map(([label, b]) => ({ label, perMinute: Math.round((b.kcal / (b.sec / 60)) * 10) / 10 }))
+    .sort((a, b) => b.perMinute - a.perMinute);
+}
+// Geschätzter Verbrauch je Muskelgruppe im Zeitraum (Summe, nicht Ø) — Kardiogeräte fallen
+// unter die eigene Kategorie "Kardio" (schon Teil von MUSCLE_GROUP_ORDER), nicht unter die
+// Muskelgruppe des jeweiligen Geräte-Übungseintrags.
+function computeKcalByMuscleGroup(sessionList){
+  const buckets = {};
+  (sessionList || []).forEach(s => {
+    const breakdown = estimateSessionKcalBreakdown(s);
+    if (!breakdown) return;
+    breakdown.forEach(({ planEx, kcal }) => {
+      const group = (planEx && planEx.cardioMachine) ? 'Kardio' : ((planEx && planEx.muscleGroup) || 'Sonstige');
+      buckets[group] = (buckets[group] || 0) + kcal;
+    });
+  });
+  const total = Object.values(buckets).reduce((a, v) => a + v, 0);
+  return MUSCLE_GROUP_ORDER.filter(g => buckets[g] > 0).map(g => ({
+    group: g, kcal: Math.round(buckets[g]), pct: total ? Math.round(buckets[g] / total * 100) : 0,
+  }));
+}
+
+/* ---------------------------------------------------
+   Weitere RPE-Auswertungen (Trainingslast, Ermüdungskurve, Muskelgruppen, härteste Übungen,
+   Effizienz) — reine Datenfunktionen, Darstellung siehe renderIntensityStats() (08c-stats-
+   progress-list.js). Alle arbeiten auf einer bereits nach Zeitraum gefilterten sessionList.
+--------------------------------------------------- */
+// sRPE-Trainingslast (Session-RPE × Dauer in Minuten) — etablierte, einfache Kennzahl für die
+// Gesamtbelastung einer Einheit (nicht nur "wie hart", sondern "wie viel harte Arbeit
+// insgesamt"). null, wenn kein RPE oder keine Dauer vorliegt.
+function sessionTrainingLoad(session){
+  const avg = avgRpeForSessions([session]);
+  if (avg == null || !session.durationSec) return null;
+  return Math.round(avg * (session.durationSec / 60));
+}
+// Wöchentliche Trainingslast (Summe der sRPE-Werte aller Einheiten dieser Woche) für die
+// letzten `weeks` Wochen bis heute, älteste zuerst. Jede Woche startet Montag.
+function computeWeeklyTrainingLoad(sessionList, weeks){
+  const now = new Date();
+  const day = (now.getDay() + 6) % 7; // Montag = 0
+  const thisMonday = new Date(now); thisMonday.setHours(0,0,0,0); thisMonday.setDate(now.getDate() - day);
+  const buckets = [];
+  for (let i = weeks - 1; i >= 0; i--){
+    const start = new Date(thisMonday); start.setDate(thisMonday.getDate() - i * 7);
+    const end = new Date(start); end.setDate(start.getDate() + 7);
+    buckets.push({ start, end, load: 0 });
+  }
+  (sessionList || []).forEach(s => {
+    const load = sessionTrainingLoad(s);
+    if (load == null) return;
+    const d = new Date(s.date);
+    const b = buckets.find(b => d >= b.start && d < b.end);
+    if (b) b.load += load;
+  });
+  return buckets.map(b => ({ label: `${b.start.getDate()}.${b.start.getMonth()+1}.`, value: Math.round(b.load), date: b.start.toISOString() }));
+}
+// Ø RPE nach Position des Satzes INNERHALB einer Übung (1. Satz, 2. Satz, …) über alle Einträge
+// im Zeitraum hinweg — zeigt, ob die Anstrengung über eine Übung hinweg typischerweise ansteigt
+// (normal) oder schon früh hoch ist (evtl. zu wenig Aufwärmen/zu ambitionierter Einstieg). Nur
+// Positionen mit mindestens ein paar Datenpunkten werden gezeigt, sonst wäre "Satz 6" nach nur
+// einer einzigen Übung mit 6 Sätzen ein Wert ohne jede Aussagekraft.
+function computeRpeFatigueBySetIndex(sessionList){
+  const buckets = {};
+  (sessionList || []).forEach(s => (s.entries || []).forEach(e => (e.sets || []).forEach((st, i) => {
+    if (typeof st.rpe !== 'number') return;
+    if (!buckets[i]) buckets[i] = { sum: 0, count: 0 };
+    buckets[i].sum += st.rpe; buckets[i].count++;
+  })));
+  const maxIdx = Math.max(-1, ...Object.keys(buckets).map(Number));
+  const points = [];
+  for (let i = 0; i <= maxIdx; i++){
+    if (!buckets[i] || buckets[i].count < 3) continue;
+    points.push({ label: 'Satz ' + (i + 1), value: Math.round((buckets[i].sum / buckets[i].count) * 10) / 10 });
+  }
+  return points;
+}
+// Ø RPE je Muskelgruppe im Zeitraum, absteigend nach Anstrengung sortiert.
+function computeRpeByMuscleGroup(sessionList){
+  const buckets = {};
+  (sessionList || []).forEach(s => (s.entries || []).forEach(e => {
+    const planEx = plan.exercises.find(x => x.id === e.exerciseId);
+    const group = (planEx && planEx.cardioMachine) ? 'Kardio' : ((planEx && planEx.muscleGroup) || 'Sonstige');
+    (e.sets || []).forEach(st => {
+      if (typeof st.rpe !== 'number') return;
+      if (!buckets[group]) buckets[group] = { sum: 0, count: 0 };
+      buckets[group].sum += st.rpe; buckets[group].count++;
+    });
+  }));
+  return Object.entries(buckets)
+    .map(([group, b]) => ({ group, avg: Math.round((b.sum / b.count) * 10) / 10, count: b.count }))
+    .sort((a, b) => b.avg - a.avg);
+}
+// Übungen mit der höchsten Ø-Anstrengung im Zeitraum — nur Übungen mit mindestens `minSets`
+// erfassten RPE-Werten (Standard 3), damit nicht eine einzelne, zufällig hart empfundene
+// Übung mit nur einem Satz das Ranking anführt.
+function computeHardestExercises(sessionList, minSets){
+  const threshold = minSets || 3;
+  const buckets = {};
+  (sessionList || []).forEach(s => (s.entries || []).forEach(e => {
+    (e.sets || []).forEach(st => {
+      if (typeof st.rpe !== 'number') return;
+      if (!buckets[e.name]) buckets[e.name] = { sum: 0, count: 0 };
+      buckets[e.name].sum += st.rpe; buckets[e.name].count++;
+    });
+  }));
+  return Object.entries(buckets)
+    .filter(([, b]) => b.count >= threshold)
+    .map(([name, b]) => ({ name, avg: Math.round((b.sum / b.count) * 10) / 10, count: b.count }))
+    .sort((a, b) => b.avg - a.avg);
+}
+// Bewegtes Gewicht (kg) einer Session, unabhängig von Rekorden/Anzeigefiltern — reiner
+// Rohwert Wdh × Gewicht über alle Sätze, Basis für den Effizienz-Trend unten.
+function sessionVolumeKgRaw(session){
+  let vol = 0;
+  (session.entries || []).forEach(e => (e.sets || []).forEach(st => {
+    if (typeof st.reps === 'number' && typeof st.weight === 'number') vol += st.reps * st.weight;
+  }));
+  return vol;
+}
+// Effizienz-Trend: bewegtes Gewicht PRO RPE-Punkt, je Einheit — steigt dieser Wert über die
+// Zeit, bewegt man bei gleicher empfundener Anstrengung mehr Gewicht (echter Fortschritt,
+// unabhängig von reiner Zunahme der Trainingshärte). Nur Einheiten mit sowohl Volumen als auch
+// erfasstem RPE fließen ein.
+function computeEfficiencyPoints(sessionList){
+  return (sessionList || [])
+    .slice()
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .map(s => {
+      const avg = avgRpeForSessions([s]);
+      const vol = sessionVolumeKgRaw(s);
+      if (avg == null || !vol) return null;
+      return { label: shortDate(s.date), value: Math.round(vol / avg), date: s.date };
+    })
+    .filter(Boolean);
 }
 
 // von unterstützten Übungen (z. B. Klimmzugmaschine: Körpergewicht - eingestelltes Gewicht)
