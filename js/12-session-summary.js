@@ -99,6 +99,15 @@ function renderSessionSummary(session){
   // Ab 1h wird aus "MM:SS" ein "H:MM:SS" — spürbar breiter, daher kleinere Schrift in der Pill
   // (siehe .summary-pill-value-long), damit die Ziffern nicht über die Trennlinie laufen.
   const durationValueClass = `summary-pill-value${session.durationSec >= 3600 ? ' summary-pill-value-long' : ''}`;
+  // Wie viele Kennzahlen zeigt die Leiste tatsächlich? Dauer und Serie sind immer dabei, der
+  // Rest nur bei vorhandenen Werten bzw. aktivierter Einstellung (RPE/kcal). Ab 5 Feldern wird
+  // es auf schmalen Bildschirmen zu gedrängt (Zahlen liefen sichtbar in die Trennlinien und die
+  // Labels umbrachen zweizeilig ineinander) — dann greift .summary-pill-compact: kleinere
+  // Zahlen/Icons und alle grauen Labels ausgeblendet AUSSER "≈ kcal" (die einzige Zahl, die
+  // ohne Beschriftung nicht selbsterklärend wäre; Serie/Rekorde/Verbessert haben ihr Icon,
+  // Dauer ihr Doppelpunkt-Format, RPE seine Farbe).
+  const pillItemCount = 2 + (starCount > 0 ? 1 : 0) + (improvedCount > 0 ? 1 : 0)
+    + (sessionAvgRpe != null ? 1 : 0) + (sessionKcal != null ? 1 : 0);
 
   const rowsHTML = exerciseHighlights.map(h => {
     const planEx = plan.exercises.find(x => x.id === h.exerciseId);
@@ -132,7 +141,7 @@ function renderSessionSummary(session){
       <div class="summary-badge-label">Einheit</div>
     </div>`}
     <div class="summary-print-meta">${fmtDate(session.date)}</div>
-    <div class="summary-pill">
+    <div class="summary-pill${pillItemCount >= 5 ? ' summary-pill-compact' : ''}">
       <div class="summary-pill-item">
         <div class="summary-pill-top"><span class="${durationValueClass}">${durationDisplay}</span></div>
         <div class="summary-pill-label">Dauer</div>
@@ -164,7 +173,7 @@ function renderSessionSummary(session){
       <div class="summary-pill-divider"></div>
       <div class="summary-pill-item">
         <div class="summary-pill-top"><span class="summary-pill-value">${sessionKcal.toLocaleString('de-DE')}</span></div>
-        <div class="summary-pill-label">≈ kcal</div>
+        <div class="summary-pill-label summary-pill-label-keep">≈ kcal</div>
       </div>` : ''}
     </div>
     ${rowsHTML ? `
