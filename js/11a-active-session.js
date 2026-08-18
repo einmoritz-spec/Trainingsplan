@@ -91,8 +91,11 @@ function startSession(exerciseList, importedSession, mode, variant){
   persistActiveSession();
   // Berechtigung erst hier anfragen (siehe ensureTrainingNotificationPermission()) und danach
   // sofort die erste Benachrichtigung setzen. Absichtlich NICHT awaited, damit sich der
-  // Trainingsstart nicht hinter einem Berechtigungsdialog verzögert.
-  ensureTrainingNotificationPermission().then(ok => { if (ok) syncActiveTrainingNotification(true); });
+  // Trainingsstart nicht hinter einem Berechtigungsdialog verzögert. Ist die Benachrichtigung
+  // in den Einstellungen deaktiviert, wird gar nicht erst nach der Berechtigung gefragt.
+  if (trainingNotificationEnabled()){
+    ensureTrainingNotificationPermission().then(ok => { if (ok) syncActiveTrainingNotification(true); });
+  }
 }
 
 // Startet ein neues Training mit denselben Übungen wie eine vergangene Einheit.
@@ -157,6 +160,16 @@ function notificationsUsable(){
     && 'serviceWorker' in navigator;
 }
 
+// Standard AN (Nutzer, die die Berechtigung schon erteilt haben, sollen die Benachrichtigung
+// nicht plötzlich verlieren) — explizit über Einstellungen → Training abschaltbar, für alle,
+// bei denen sie (v. a. auf iOS/Apple, siehe Nutzer-Feedback) bei jeder Übung erneut ganz oben
+// aufploppt statt sich nur unauffällig zu aktualisieren. Ein einmal erteilter Berechtigungs-
+// Status bleibt davon unberührt — der Schalter steuert nur, ob showActiveTrainingNotification()
+// die Berechtigung überhaupt NUTZT.
+function trainingNotificationEnabled(){
+  return !(plan && plan.trainingNotificationEnabled === false);
+}
+
 // Fragt die Berechtigung an — bewusst NICHT beim App-Start, sondern erst beim ersten
 // Trainingsstart: dort ist der Zusammenhang für den Nutzer offensichtlich, ein Prompt direkt
 // beim Öffnen der App wirkt dagegen willkürlich und wird meist abgelehnt. Ein einmal
@@ -184,7 +197,7 @@ function currentTrainingExerciseName(){
 // Erklärung oben) — ohne Zeitangabe entsteht dieser falsche Eindruck gar nicht erst. Zeigt
 // stattdessen nur die aktuelle Übung, aktualisiert sich also nur bei echtem Übungswechsel.
 async function showActiveTrainingNotification(force){
-  if (!active || !notificationsUsable()) return;
+  if (!active || !notificationsUsable() || !trainingNotificationEnabled()) return;
   const title = active.pausedAt ? 'Training pausiert' : 'Training läuft';
   const exName = currentTrainingExerciseName();
   const body = exName || 'Zum Training zurückkehren';

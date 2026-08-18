@@ -1008,6 +1008,13 @@ function renderSettings(){
     </div>
 
     <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
+      <span class="mg-name">Trainingsbenachrichtigung</span>
+      <button class="toggle-switch ${trainingNotificationEnabled() ? 'on' : ''}" id="trainingNotificationToggle" type="button" role="switch" aria-checked="${trainingNotificationEnabled()}" aria-label="Benachrichtigung mit aktueller Übung anzeigen">
+        <span class="toggle-knob"></span>
+      </button>
+    </div>
+
+    <div class="muscle-group-header settings-static-row" style="margin-top:10px;">
       <span class="mg-name">Geschätzter Kalorienverbrauch</span>
       <button class="toggle-switch ${kcalEstimateEnabled() ? 'on' : ''}" id="kcalEstimateToggle" type="button" role="switch" aria-checked="${kcalEstimateEnabled()}" aria-label="Geschätzten Kalorienverbrauch anzeigen">
         <span class="toggle-knob"></span>
@@ -1220,6 +1227,21 @@ function renderSettings(){
     if (active){
       if (willBeOn) requestTrainingWakeLock();
       else releaseTrainingWakeLock();
+    }
+    await saveJSON('plan', plan);
+    renderSettings();
+  };
+
+  const trainingNotificationToggleEl = document.getElementById('trainingNotificationToggle');
+  if (trainingNotificationToggleEl) trainingNotificationToggleEl.onclick = async () => {
+    const wasEnabled = trainingNotificationEnabled(); // Standard AN (undefined zählt als an)
+    plan.trainingNotificationEnabled = !wasEnabled;
+    // Direkt reagieren, falls gerade ein Training läuft: beim Ausschalten die gerade
+    // angezeigte Benachrichtigung sofort entfernen, beim Einschalten sofort neu setzen —
+    // sonst würde die Änderung erst beim nächsten Trainingsstart wirksam.
+    if (active){
+      if (plan.trainingNotificationEnabled) syncActiveTrainingNotification(true);
+      else clearActiveTrainingNotification();
     }
     await saveJSON('plan', plan);
     renderSettings();

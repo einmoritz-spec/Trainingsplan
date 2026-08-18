@@ -268,6 +268,46 @@ function findIncompleteDoneSets(){
 // Warn-Popup vor "Training beenden", wenn findIncompleteDoneSets() etwas findet — listet die
 // betroffenen Übung/Satz-Kombinationen auf. "Ergänzen" schließt nur das Popup (zurück zum
 // Training, Werte nachtragen), "Trotzdem beenden" macht mit der übergebenen proceedFn weiter.
+// Bestätigungs-Abfrage vor "Training beenden" (immer, unabhängig davon ob man gerade bei der
+// letzten Übung ist) — vorher gab es nur ein natives confirm() und auch das nur, wenn man noch
+// nicht bei der letzten Übung war. Gleiches Baukasten-Muster wie openResetConfirmPrompt()
+// (02-state-theme.js)/openIncompleteSetsPrompt() unten, für eine einheitliche Optik statt eines
+// System-Dialogs.
+function openEndSessionConfirmPrompt(onConfirm){
+  const existing = document.getElementById('endSessionConfirmOverlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'add-exercise-overlay centered-overlay';
+  overlay.id = 'endSessionConfirmOverlay';
+  overlay.innerHTML = `
+    <div class="add-exercise-modal" style="max-height:none;">
+      <div class="add-exercise-modal-header">
+        <div class="add-exercise-modal-title">Training beenden?</div>
+        <button class="add-exercise-modal-close" id="endSessionConfirmClose" aria-label="Abbrechen">✕</button>
+      </div>
+      <div class="new-exercise-modal-body">
+        <label class="justify-text" style="display:block; font-size:12px; color:var(--muted);">
+          Die Einheit wird gespeichert, danach geht's zur Zusammenfassung.
+        </label>
+      </div>
+      <div class="add-exercise-modal-header" style="border-top:1px solid var(--border); border-bottom:none; gap:10px;">
+        <button class="btn btn-ghost" id="endSessionConfirmCancel" style="flex:1;">Abbrechen</button>
+        <button class="btn btn-primary" id="endSessionConfirmOk" style="flex:1;">Beenden</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  pushOverlayState(remove);
+
+  function remove(){ const el = document.getElementById('endSessionConfirmOverlay'); if (el) el.remove(); }
+  const close = () => { popOverlayStateIfOpen(); remove(); };
+  document.getElementById('endSessionConfirmClose').onclick = close;
+  document.getElementById('endSessionConfirmCancel').onclick = close;
+  overlay.onclick = (ev) => { if (ev.target === overlay) close(); };
+  document.getElementById('endSessionConfirmOk').onclick = () => { close(); onConfirm(); };
+}
+
 function openIncompleteSetsPrompt(problems, proceedFn){
   const existing = document.getElementById('incompleteSetsOverlay');
   if (existing) existing.remove();

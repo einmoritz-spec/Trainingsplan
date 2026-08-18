@@ -731,14 +731,14 @@ function renderActive(){
   });
 
   document.getElementById('btnEnd').onclick = () => {
-    const isLastExercise = ei === active.entries.length - 1;
-    if (!isLastExercise && !confirm('Training wirklich beenden? Du bist noch nicht bei der letzten Übung.')) return;
-    const problems = findIncompleteDoneSets();
-    if (problems.length){
-      openIncompleteSetsPrompt(problems, () => endSession());
-      return;
-    }
-    endSession();
+    openEndSessionConfirmPrompt(() => {
+      const problems = findIncompleteDoneSets();
+      if (problems.length){
+        openIncompleteSetsPrompt(problems, () => endSession());
+        return;
+      }
+      endSession();
+    });
   };
   // Normaler Tap startet die feste Pausenzeit wie gehabt; Long-Press auf einen der drei
   // Buttons öffnet stattdessen ein Popup für eine frei eingegebene Pausendauer (siehe

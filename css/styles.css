@@ -2011,6 +2011,17 @@ table.detail-table tbody tr:first-child td{ border-top:none; }
    passen (z.B. sehr kleine Bildschirme, viele Nachkommastellen) — dann ist der Rest wenigstens
    erreichbar statt einfach abgeschnitten zu sein. */
 .detail-table-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+/* Kleiner grauer "+"-Button unter der Tabelle in "Gesamtes Training anzeigen" (aufgeklappt) —
+   öffnet openAddExerciseToSessionPrompt() (13-session-detail-pdf.js), um nachträglich eine
+   Übung zu einer bereits gespeicherten Einheit hinzuzufügen. Bewusst dezent (grau, dünner
+   Rahmen, kein Akzent) statt wie der große blaue "+"-Button im aktiven Training — hier ist es
+   eine seltene Korrektur im Nachhinein, kein zentraler Trainings-Workflow. */
+.detail-table-add-btn{
+  display:flex; align-items:center; justify-content:center; width:32px; height:32px;
+  margin:10px auto 0; background:none; border:1px solid var(--border); border-radius:8px;
+  color:var(--muted); font-size:18px; line-height:1;
+}
+.detail-table-add-btn:active{ background:var(--surface-2); }
 .detail-actions{ display:flex; gap:8px; margin-top: 22px; justify-content:center; }
 .detail-actions .btn{ flex:0 1 auto; padding:12px 14px; font-size:13.5px; }
 

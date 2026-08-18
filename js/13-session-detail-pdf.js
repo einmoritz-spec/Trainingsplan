@@ -108,6 +108,7 @@ function renderSessionDetail(id){
           <tbody>${rows}</tbody>
         </table>
         </div>
+        <button class="detail-table-add-btn no-print" id="btnAddPastExercise" type="button" aria-label="Übung nachtragen">+</button>
       </div>
     </div>
     <div class="detail-actions no-print">
@@ -134,6 +135,9 @@ function renderSessionDetail(id){
     arrow.textContent = isOpen ? '▸' : '▾';
     btn.setAttribute('aria-expanded', String(!isOpen));
   };
+
+  const btnAddPastExercise = document.getElementById('btnAddPastExercise');
+  if (btnAddPastExercise) btnAddPastExercise.onclick = () => openAddExerciseToSessionPrompt(s);
 
   app.querySelectorAll('.summary-row[data-exerciseid]').forEach(row => {
     row.onclick = () => goExerciseSessionDetail(s.id, row.dataset.exerciseid);
@@ -259,11 +263,17 @@ function wireSessionRowLongPress(session){
 // Mal" über lastPerformance) — es gibt keinen separaten Cache. Ein Speichern hier schreibt
 // direkt in session.entries, persistiert über saveSessionAt() und baut lastPerformance neu
 // auf (rebuildLastPerformance()), wodurch die Änderung automatisch überall korrekt ankommt.
-function openSessionEntryEditor(session, exerciseId){
-  const entryIndex = session.entries.findIndex(e => e.exerciseId === exerciseId);
-  if (entryIndex < 0) return;
+// Zwei Modi in einer Oberfläche: Bearbeiten einer VORHANDENEN Übung der Einheit (exerciseId
+// gesetzt, wie bisher) ODER nachträgliches Hinzufügen einer NEUEN Übung (exerciseId null,
+// newEntry liefert die per openSessionEntryExercisePicker() gewählte Übung mit leeren Sätzen,
+// siehe openAddExerciseToSessionPrompt() weiter unten) — beide teilen sich dieselbe Sätze-
+// Eingabe und den Übung-wählen/-austauschen-Picker, daher hier zusammengefasst statt dupliziert.
+function openSessionEntryEditor(session, exerciseId, newEntry){
+  const isNew = !exerciseId;
+  const entryIndex = isNew ? -1 : session.entries.findIndex(e => e.exerciseId === exerciseId);
+  if (!isNew && entryIndex < 0) return;
   // Auf einer Kopie arbeiten, damit Abbrechen (✕/Zurück/Tap daneben) nichts verändert.
-  let draftEntry = JSON.parse(JSON.stringify(session.entries[entryIndex]));
+  let draftEntry = JSON.parse(JSON.stringify(isNew ? newEntry : session.entries[entryIndex]));
 
   const existingOverlay = document.getElementById('sessionEntryEditorOverlay');
   if (existingOverlay) existingOverlay.remove();
@@ -324,7 +334,7 @@ function openSessionEntryEditor(session, exerciseId){
           <button class="add-exercise-modal-close" id="sessionEntryEditorClose" aria-label="Abbrechen">✕</button>
         </div>
         <div class="new-exercise-modal-body">
-          <button class="btn btn-ghost" id="sessionEntryEditorSwap" style="width:100%; margin-bottom:14px;">Übung austauschen</button>
+          <button class="btn btn-ghost" id="sessionEntryEditorSwap" style="width:100%; margin-bottom:14px;">${isNew ? 'Andere Übung wählen' : 'Übung austauschen'}</button>
           ${setsHeaderHTML}
           <div class="sets" id="sessionEntryEditorSets">${setsHTML}</div>
           <div class="add-set-row">
@@ -332,7 +342,7 @@ function openSessionEntryEditor(session, exerciseId){
           </div>
         </div>
         <div class="add-exercise-modal-header" style="border-top:1px solid var(--border); border-bottom:none; gap:10px;">
-          <button class="btn btn-primary" id="sessionEntryEditorSave" style="flex:1;">Speichern</button>
+          <button class="btn btn-primary" id="sessionEntryEditorSave" style="flex:1;">${isNew ? 'Hinzufügen' : 'Speichern'}</button>
         </div>
       </div>
     `;
@@ -343,10 +353,10 @@ function openSessionEntryEditor(session, exerciseId){
     document.getElementById('sessionEntryEditorClose').onclick = close;
     overlay.onclick = (ev) => { if (ev.target === overlay) close(); };
     document.getElementById('sessionEntryEditorSwap').onclick = () => {
-      openSessionEntryExercisePicker(draftEntry, (newEntry) => {
-        draftEntry = newEntry;
+      openSessionEntryExercisePicker(draftEntry, (picked) => {
+        draftEntry = picked;
         render();
-      });
+      }, isNew ? 'Übung wählen' : 'Übung austauschen');
     };
     document.getElementById('sessionEntryEditorAddSet').onclick = () => {
       draftEntry.sets.push(draftEntry.type === 'time' ? { seconds: null, done: true } : { reps: null, weight: null, done: true });
@@ -368,7 +378,18 @@ function openSessionEntryEditor(session, exerciseId){
     });
     document.getElementById('sessionEntryEditorSave').onclick = async () => {
       const cleanedSets = draftEntry.sets.filter(s => Object.entries(s).some(([k,v]) => k !== 'done' && v !== null && v !== undefined && v !== ''));
-      if (!cleanedSets.length){
+      if (isNew){
+        // Nichts eingetragen: einfach ohne Rückfrage abbrechen, statt eine leere Übung
+        // anzulegen — anders als beim Bearbeiten gibt es hier noch nichts zu verlieren.
+        if (!cleanedSets.length){ close(); return; }
+        session.entries.push({
+          exerciseId: draftEntry.exerciseId,
+          name: draftEntry.name,
+          type: draftEntry.type,
+          target: draftEntry.target,
+          sets: cleanedSets.map(s => ({ ...s, done: true }))
+        });
+      } else if (!cleanedSets.length){
         if (!confirm('Keine Sätze mehr übrig — diese Übung komplett aus der Einheit entfernen?')) return;
         session.entries.splice(entryIndex, 1);
       } else {
@@ -391,13 +412,24 @@ function openSessionEntryEditor(session, exerciseId){
   render();
 }
 
+// Öffnet den Übung-wählen-Picker und danach direkt die (auf neue Übungen erweiterte, siehe
+// oben) Sätze-Eingabe — erreichbar über das kleine "+" unten in "Gesamtes Training anzeigen"
+// (renderSessionDetail()). draftEntry startet mit leeren Sätzen, damit der Picker die
+// Standard-Satzanzahl der gewählten Übung nimmt (ex.sets), statt eine vorhandene Satzzahl
+// zu übernehmen — hier gibt es ja noch keine.
+function openAddExerciseToSessionPrompt(session){
+  openSessionEntryExercisePicker({ type: 'reps', sets: [] }, (newEntry) => {
+    openSessionEntryEditor(session, null, newEntry);
+  }, 'Übung hinzufügen');
+}
+
 // Übungsauswahl beim Austauschen einer Übung in einer bereits gespeicherten Einheit (siehe
 // openSessionEntryEditor). Zeigt bewusst ALLE Planübungen (kein Ausschluss bereits in der
 // Einheit vorhandener Übungen wie beim "Übung hinzufügen"-Picker im laufenden Training) —
 // ein Tausch auf eine anderswo in derselben Einheit schon vorhandene Übung ist erlaubt.
 // Nach Auswahl liefert onPick(newEntry) eine frische Übung mit leeren kg/Wdh-Feldern (bzw.
 // Sekunden), Anzahl Sätze wird von der bisherigen Übung übernommen.
-function openSessionEntryExercisePicker(draftEntry, onPick){
+function openSessionEntryExercisePicker(draftEntry, onPick, title){
   const existingOverlay = document.getElementById('sessionEntrySwapOverlay');
   if (existingOverlay) existingOverlay.remove();
 
@@ -432,7 +464,7 @@ function openSessionEntryExercisePicker(draftEntry, onPick){
   overlay.innerHTML = `
     <div class="add-exercise-modal">
       <div class="add-exercise-modal-header">
-        <div class="add-exercise-modal-title">Übung austauschen</div>
+        <div class="add-exercise-modal-title">${title || 'Übung austauschen'}</div>
         <button class="add-exercise-modal-close" id="sessionEntrySwapClose" aria-label="Schließen">✕</button>
       </div>
       <div class="add-exercise-modal-body">

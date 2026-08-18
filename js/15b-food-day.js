@@ -87,12 +87,7 @@ function renderFoodTracker(navDirection){
     const splitBtn = document.getElementById('splitBtn_'+meal);
     if (splitBtn) splitBtn.onclick = (ev)=>{ ev.stopPropagation(); ftOpenSplitMealPrompt(meal); };
     const headEl = document.getElementById('mealHead_'+meal);
-    if (headEl) headEl.onclick = ()=>{
-      const key = ftCurrentDate + '_' + meal;
-      ftMealCollapseOverride[key] = !ftMealIsCollapsed(meal, ftCurrentDate);
-      saveJSON('food:mealCollapse', ftMealCollapseOverride).catch(() => {});
-      renderFoodTracker();
-    };
+    if (headEl) ftWireMealHeadPressHandlers(headEl, meal);
     ftGetDay(ftCurrentDate)[meal].forEach(e=>{
       const delBtn = document.getElementById('del_'+e.id);
       if(delBtn) delBtn.onclick = (ev)=>{ ev.stopPropagation(); ftRemoveEntry(meal, e.id); };
@@ -388,6 +383,95 @@ function ftWireFoodRowPressHandlers(row, meal){
   }, { passive: true });
   row.addEventListener('touchend', cancelPress);
   row.addEventListener('touchcancel', cancelPress);
+}
+
+// Long-Press auf den MAHLZEITEN-KOPF (nicht auf eine einzelne Zutat) öffnet
+// ftOpenCopyMealPrompt() — kopiert die GESAMTE Mahlzeit (alle Zutaten auf einmal) auf einen
+// anderen Tag/eine andere Mahlzeit. Normaler Tap klappt wie gehabt nur auf/zu. Eigene Buttons
+// im Kopf (Aufteilen-✂, Plus, Pfeil) lösen bewusst KEINEN Long-Press aus, sonst würde z. B.
+// ein etwas zu langes Antippen des "+"-Buttons zusätzlich das Kopier-Fenster öffnen.
+function ftWireMealHeadPressHandlers(headEl, meal){
+  const LONG_PRESS_MS = 450;
+  const MOVE_CANCEL_PX = 10;
+  let pressTimer = null, startX = 0, startY = 0, longPressFired = false;
+  const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
+
+  headEl.onclick = () => {
+    if (longPressFired){ longPressFired = false; return; }
+    const key = ftCurrentDate + '_' + meal;
+    ftMealCollapseOverride[key] = !ftMealIsCollapsed(meal, ftCurrentDate);
+    saveJSON('food:mealCollapse', ftMealCollapseOverride).catch(() => {});
+    renderFoodTracker();
+  };
+
+  headEl.addEventListener('contextmenu', (ev) => ev.preventDefault());
+  headEl.addEventListener('touchstart', (ev) => {
+    if (ev.target.closest('.meal-add, .meal-split-btn')) return; // eigene Buttons, nicht überlagern
+    if (!ftGetDay(ftCurrentDate)[meal].length) return; // nichts zum Kopieren da
+    longPressFired = false;
+    const t = ev.touches[0];
+    startX = t.clientX; startY = t.clientY;
+    pressTimer = setTimeout(() => {
+      longPressFired = true;
+      if (navigator.vibrate) navigator.vibrate(15);
+      ftOpenCopyMealPrompt(meal);
+    }, LONG_PRESS_MS);
+  }, { passive: true });
+  headEl.addEventListener('touchmove', (ev) => {
+    const t = ev.touches[0];
+    if (Math.abs(t.clientX - startX) > MOVE_CANCEL_PX || Math.abs(t.clientY - startY) > MOVE_CANCEL_PX) cancelPress();
+  }, { passive: true });
+  headEl.addEventListener('touchend', cancelPress);
+  headEl.addEventListener('touchcancel', cancelPress);
+}
+
+// Kopiert ALLE Zutaten der gewählten Mahlzeit auf einmal in eine andere Mahlzeit/einen anderen
+// Tag — gleiches Auswahl-Fenster (Datum + Mahlzeit) wie ftOpenCopyEntryPrompt() oben, nur für
+// die ganze Mahlzeit statt für ein einzelnes Lebensmittel. Das Original bleibt unverändert
+// stehen, jede kopierte Zutat bekommt eine frische id.
+function ftOpenCopyMealPrompt(meal){
+  const entries = ftGetDay(ftCurrentDate)[meal];
+  if (!entries.length) return;
+  let targetDate = ftCurrentDate;
+
+  function bodyHTML(){
+    return `
+      <div class="field-label" style="margin-top:0;">Zu welchem Tag?</div>
+      <input type="date" id="ftCopyMealDateInput" value="${targetDate}" style="width:100%; padding:12px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:15px;">
+      <div class="field-label" style="margin-top:16px;">Zu welcher Mahlzeit?</div>
+      ${FT_MEAL_KEYS.map(k => `<button class="ft-btn-ghost ft-copy-meal-target" data-target-meal="${k}" type="button">${FT_MEAL_LABELS[k]}${k === meal && targetDate === ftCurrentDate ? ' (diese)' : ''}</button>`).join('')}
+    `;
+  }
+
+  ftOpenOverlay(`
+    <div class="modal" id="ftCopyMealModal">
+      <div class="modal-head"><div class="modal-title">${FT_MEAL_LABELS[meal]} kopieren</div><button class="sheet-close" id="ftCopyMealClose">${ftIconX()}</button></div>
+      <div class="modal-body" id="ftCopyMealBody">${bodyHTML()}</div>
+    </div>
+  `, {type:'modal'});
+
+  function wire(){
+    const dateInput = document.getElementById('ftCopyMealDateInput');
+    if (dateInput) dateInput.onchange = () => { targetDate = dateInput.value; refresh(); };
+    document.querySelectorAll('.ft-copy-meal-target').forEach(btn => {
+      btn.onclick = async () => {
+        const targetMeal = btn.dataset.targetMeal;
+        const copies = entries.map(e => { const c = JSON.parse(JSON.stringify(e)); c.id = uid(); return c; });
+        const day = ftGetDay(targetDate);
+        day[targetMeal] = [...day[targetMeal], ...copies];
+        await ftSaveDays(targetDate);
+        ftCloseOverlay();
+        if (targetDate === ftCurrentDate) renderFoodTracker();
+        ftToast(`${copies.length} Lebensmittel kopiert nach ${FT_MEAL_LABELS[targetMeal]}${targetDate !== ftCurrentDate ? ', ' + ftFmtDateGerman(targetDate) : ''}`);
+      };
+    });
+  }
+  function refresh(){
+    document.getElementById('ftCopyMealBody').innerHTML = bodyHTML();
+    wire();
+  }
+  document.getElementById('ftCopyMealClose').onclick = ftCloseOverlay;
+  wire();
 }
 
 // Kopiert einen Eintrag (einzelnes Lebensmittel ODER eine gruppierte Mahlzeit, kind:'mealGroup')
