@@ -277,7 +277,52 @@ function ftSearchLocal(query){
   };
 }
 
-const FT_OFF_HEADERS = {'User-Agent':'Essenstracker/1.0 (privat)'};
+const FT_OFF_HEADERS = {};
+
+/* ---------------------------------------------------
+   Schonender Umgang mit dem Open-Food-Facts-Suchlimit
+   ---------------------------------------------------
+   OFF erlaubt laut offizieller Doku nur 10 SUCHANFRAGEN pro Minute pro IP und weist
+   ausdrücklich darauf hin, die Suche NICHT für "Suche während des Tippens" zu verwenden, weil
+   man sonst sehr schnell gesperrt wird (Barcode-/Produktabrufe haben ein eigenes, höheres
+   Limit von 15/min). Genau das war hier der Grund für die scheinbar zufälligen
+   "nicht erreichbar"-Meldungen: eine MEHRWORT-Suche feuerte bisher die Phrase PLUS bis zu 4
+   Einzelwort-Anfragen gleichzeitig los (= 5 Anfragen für eine einzige Eingabe) und bei einem
+   Fehlschlag wurde der ganze Block sofort noch einmal wiederholt (= bis zu 10). Damit war das
+   Minutenlimit nach zwei, drei Suchen erschöpft und ab dann kam gar nichts mehr durch — bei
+   Einwort-Suchen (1 Anfrage) fiel das kaum auf, bei mehreren Wörtern ständig. Das erklärt,
+   warum es "irgendwie" von der Eingabe abhing.
+   Gegenmaßnahmen hier:
+   1. Eigener Zähler (ftOffSearchTimestamps) hält uns mit Sicherheitsabstand unter dem Limit.
+      Ist das Budget aufgebraucht, wird gar nicht erst gefeuert, sondern ehrlich 'ratelimited'
+      gemeldet — besser ein klarer Hinweis als eine Anfrage, die die Sperre weiter verlängert.
+   2. Mehrwort-Suchen laufen NACHEINANDER und nur so weit wie nötig (siehe
+      ftOffMultiWordSearchAttempt) statt alles parallel.
+   3. HTTP 429/503 werden explizit als Limit-Treffer erkannt statt als "nicht erreichbar", und
+      in diesem Fall wird NICHT sofort erneut versucht (das würde die Sperre nur verschärfen).
+   4. Ergebnisse werden pro Suchbegriff im Speicher gemerkt (ftOffQueryCache), damit Tippen,
+      Löschen und erneutes Tippen desselben Begriffs keine neue Anfrage kostet.
+--------------------------------------------------- */
+const FT_OFF_SEARCH_LIMIT = 8;          // Sicherheitsabstand zum offiziellen Limit von 10/min
+const FT_OFF_SEARCH_WINDOW_MS = 60000;
+let ftOffSearchTimestamps = [];
+function ftOffSearchBudgetLeft(){
+  const now = Date.now();
+  ftOffSearchTimestamps = ftOffSearchTimestamps.filter(t => now - t < FT_OFF_SEARCH_WINDOW_MS);
+  return FT_OFF_SEARCH_LIMIT - ftOffSearchTimestamps.length;
+}
+function ftOffNoteSearchRequest(){ ftOffSearchTimestamps.push(Date.now()); }
+// Zwischenspeicher für bereits gesuchte Begriffe (nur für die Laufzeit der Seite, absichtlich
+// NICHT persistiert — Suchtreffer sollen bei einem späteren Besuch wieder aktuell geholt werden).
+const ftOffQueryCache = new Map();
+const FT_OFF_QUERY_CACHE_MAX = 40;
+function ftOffQueryCacheGet(key){ return ftOffQueryCache.get(key.toLowerCase()); }
+function ftOffQueryCacheSet(key, results){
+  if (ftOffQueryCache.size >= FT_OFF_QUERY_CACHE_MAX){
+    ftOffQueryCache.delete(ftOffQueryCache.keys().next().value); // ältesten Eintrag verwerfen
+  }
+  ftOffQueryCache.set(key.toLowerCase(), results);
+}
 
 // Deckelt ftOffCache auf FT_OFF_CACHE_LIMIT Einträge — ohne das würde die Datei über Jahre mit
 // jedem einzelnen online abgefragten/gescannten Produkt weiterwachsen, obwohl die meisten davon
@@ -405,11 +450,20 @@ function ftRound1(n){ return Math.round(n*10)/10; }
 // Hinweise, statt jeden Fetch-Fehler pauschal als "kein Internet" darzustellen.
 async function ftOffSearchAttempt(query, pageSize){
   const size = pageSize || 15;
+  // Budget vorher prüfen — ohne freies Budget lieber gar nicht feuern (siehe Kommentar zum
+  // OFF-Suchlimit oben), sonst verlängert man die Sperre nur und wartet dabei auf einen
+  // Fehlschlag, der ohnehin absehbar ist.
+  if (ftOffSearchBudgetLeft() <= 0) return {results: [], reason: 'ratelimited'};
   // Primär: Search-a-licious. Fallback: legacy search.pl.
   let requestFailed = true;
+  let rateLimited = false;
   try{
     const url = `https://search.openfoodfacts.org/search?q=${encodeURIComponent(query)}&langs=de&page_size=${size}&fields=code,product_name,brands,nutriments`;
+    ftOffNoteSearchRequest();
     const res = await fetch(url, {headers:FT_OFF_HEADERS});
+    // 429 = zu viele Anfragen, 503 = globales Limit/Überlast (siehe OFF-Doku) — das ist etwas
+    // anderes als "nicht erreichbar" und darf NICHT sofort erneut versucht werden.
+    if(res.status === 429 || res.status === 503) rateLimited = true;
     if(res.ok){
       requestFailed = false;
       const data = await res.json();
@@ -427,9 +481,19 @@ async function ftOffSearchAttempt(query, pageSize){
       }
     }
   }catch(e){ /* weiter zu Fallback */ }
+  if (rateLimited) return {results: [], reason: 'ratelimited'};
+  if (ftOffSearchBudgetLeft() <= 0) return {results: [], reason: 'ratelimited'};
   try{
     const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=${size}&fields=code,product_name,brands,nutriments`;
+    ftOffNoteSearchRequest();
     const res = await fetch(url, {headers:FT_OFF_HEADERS});
+    if(res.status === 429 || res.status === 503) return {results: [], reason: 'ratelimited'};
+    // BUGFIX: requestFailed wurde hier früher schon VOR der res.ok-Prüfung auf false gesetzt.
+    // Bei einer Fehlerantwort (z.B. 500 oder eine HTML-Fehlerseite statt JSON) warf danach
+    // res.json() — und weil requestFailed dann fälschlich false war, meldete die Funktion
+    // "Suche erfolgreich, 0 Treffer" statt eines Fehlers. Ergebnis: der Nutzer sah "Keine
+    // Online-Treffer", obwohl die Anfrage überhaupt nicht durchgekommen war.
+    if(!res.ok) return {results: [], reason: navigator.onLine ? 'unreachable' : 'offline'};
     requestFailed = false;
     const data = await res.json();
     const out = [];
@@ -484,28 +548,69 @@ function ftOffMatchScore(food, tokensNorm){
   return total;
 }
 async function ftOffSearch(query){
-  const tokens = query.trim().split(/\s+/).filter(Boolean);
-  if(tokens.length <= 1){
-    const first = await ftOffSearchAttempt(query);
-    if(!first.reason) return first;
-    await ftDelay(700);
-    return ftOffSearchAttempt(query);
+  const cached = ftOffQueryCacheGet(query.trim());
+  if (cached){
+    cached.forEach(f => { ftOffMemCache[f.id] = f; }); // Klick auf einen Treffer muss weiterhin funktionieren
+    return {results: cached, reason: null};
   }
-  const first = await ftOffMultiWordSearchAttempt(query, tokens);
-  if(!first.reason) return first;
+  const tokens = query.trim().split(/\s+/).filter(Boolean);
+  const run = tokens.length <= 1
+    ? (() => ftOffSearchAttempt(query))
+    : (() => ftOffMultiWordSearchAttempt(query, tokens));
+  const first = await run();
+  if(!first.reason){
+    // Auch ein Ergebnis von 0 Treffern ist eine ERFOLGREICHE Suche und wird gemerkt — sonst
+    // würde derselbe, tatsächlich ergebnislose Begriff bei jedem erneuten Tippen wieder
+    // Anfragen kosten und das Minutenbudget unnötig aufbrauchen.
+    ftOffQueryCacheSet(query.trim(), first.results);
+    return first;
+  }
+  // Bei einem Limit-Treffer NICHT erneut versuchen — das würde die Sperre nur verlängern.
+  if(first.reason === 'ratelimited') return first;
   await ftDelay(700);
-  return ftOffMultiWordSearchAttempt(query, tokens);
+  const second = await run();
+  if(!second.reason) ftOffQueryCacheSet(query.trim(), second.results);
+  return second;
 }
 async function ftOffMultiWordSearchAttempt(query, tokens){
-  const tokenQueries = tokens.filter(t => t.length >= 2).slice(0, FT_OFF_TOKEN_QUERY_CAP);
-  const queries = [query, ...tokenQueries].filter((q, i, arr) =>
-    arr.findIndex(x => x.toLowerCase() === q.toLowerCase()) === i // Dubletten raus (z.B. Ein-Wort-Rest)
-  );
-  const attempts = await Promise.all(queries.map(q =>
-    ftOffSearchAttempt(q, q === query ? 15 : FT_OFF_TOKEN_PAGE_SIZE)
-  ));
+  // NACHEINANDER statt parallel und nur so weit wie nötig (siehe Kommentar zum OFF-Suchlimit
+  // oben): erst die volle Phrase — liefert die schon Treffer, ist gar keine weitere Anfrage
+  // nötig (das ist der häufige Fall). Erst wenn nichts zurückkommt, werden einzelne Wörter
+  // nachgefragt, und auch dann höchstens FT_OFF_TOKEN_QUERY_CAP viele und nur solange noch
+  // Budget übrig ist. Vorher liefen ALLE Anfragen gleichzeitig los, auch wenn die erste bereits
+  // gereicht hätte — das war der Hauptgrund für die schnell erschöpfte Minutenquote.
+  const phrase = await ftOffSearchAttempt(query, 15);
+  if (phrase.results.length){
+    const tokensNorm = tokens.map(ftNormalizeSearchText);
+    const filtered = phrase.results
+      .map(f => ({f, s: ftOffMatchScore(f, tokensNorm)}))
+      .filter(x => x.s > 0)
+      .sort((a,b) => b.s - a.s)
+      .map(x => x.f);
+    if (filtered.length) return {results: filtered, reason: null};
+  }
+  if (phrase.reason === 'ratelimited') return {results: [], reason: 'ratelimited'};
+
+  const tokenQueries = tokens
+    .filter(t => t.length >= 3) // sehr kurze Wörter ("mit", "g") bringen einzeln nichts, kosten aber Budget
+    .filter(t => t.toLowerCase() !== query.trim().toLowerCase())
+    .slice(0, FT_OFF_TOKEN_QUERY_CAP);
   const merged = new Map();
-  attempts.forEach(a => a.results.forEach(f => merged.set(f.id, f)));
+  phrase.results.forEach(f => merged.set(f.id, f));
+  const reasons = [phrase.reason];
+  for (const q of tokenQueries){
+    if (ftOffSearchBudgetLeft() <= 0){ reasons.push('ratelimited'); break; }
+    const a = await ftOffSearchAttempt(q, FT_OFF_TOKEN_PAGE_SIZE);
+    reasons.push(a.reason);
+    a.results.forEach(f => merged.set(f.id, f));
+    if (a.reason === 'ratelimited') break;
+    // Sobald genug lokal passende Treffer zusammengekommen sind, aufhören — weitere Wörter
+    // würden das Ergebnis kaum verbessern, aber weiter Budget verbrauchen.
+    const tokensNormEarly = tokens.map(ftNormalizeSearchText);
+    const goodSoFar = [...merged.values()].filter(f => ftOffMatchScore(f, tokensNormEarly) > 0);
+    if (goodSoFar.length >= 5) break;
+  }
+
   const tokensNorm = tokens.map(ftNormalizeSearchText);
   const filtered = [...merged.values()]
     .map(f => ({f, s: ftOffMatchScore(f, tokensNorm)}))
@@ -516,8 +621,9 @@ async function ftOffMultiWordSearchAttempt(query, tokens){
   // Suche als Ganzes erfolgreich, auch wenn z.B. der Phrasen-Versuch für sich allein
   // fehlgeschlagen war und nur ein Ein-Wort-Versuch etwas geliefert hat.
   if(filtered.length) return {results: filtered, reason: null};
-  const reasons = attempts.map(a => a.reason);
-  const reason = reasons.includes('offline') ? 'offline' : (reasons.includes('unreachable') ? 'unreachable' : null);
+  const reason = reasons.includes('ratelimited') ? 'ratelimited'
+    : (reasons.includes('offline') ? 'offline'
+    : (reasons.includes('unreachable') ? 'unreachable' : null));
   return {results: [], reason};
 }
 

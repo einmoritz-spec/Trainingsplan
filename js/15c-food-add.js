@@ -92,7 +92,11 @@ function renderFtAddFood(meal){
     const value = input.value;
     if(!value.trim()){ ftHandleSearchInput(value); return; } // sofort zurück zur Startansicht
     ftShowLocalResultsOnly(value); // Basisliste/Eigene sofort, kein Warten
-    searchDebounceTimer = setTimeout(()=>ftHandleSearchInput(value), 350);
+    // 600ms statt 350ms: Open Food Facts erlaubt nur 10 Suchanfragen pro Minute und warnt
+    // ausdrücklich vor Suche-während-des-Tippens (siehe Kommentar in 15a-food-core.js). Eine
+    // längere Pause bündelt Tippen zu deutlich weniger Anfragen — lokale Treffer erscheinen ja
+    // ohnehin sofort ohne Wartezeit, spürbar langsamer fühlt es sich dadurch nicht an.
+    searchDebounceTimer = setTimeout(()=>ftHandleSearchInput(value), 600);
   });
   ftRenderDefaultResults();
 }
@@ -390,6 +394,11 @@ async function ftHandleSearchInput(q){
   } else if(reason === 'offline'){
     // Echtes "kein Internet" (navigator.onLine meldet false, siehe ftOffSearch()).
     loadingRow.outerHTML = `<div class="no-results">Offline — nur lokale Treffer verfügbar.</div>`;
+  } else if(reason === 'ratelimited'){
+    // Open Food Facts erlaubt nur 10 Suchanfragen pro Minute (siehe Kommentar in
+    // 15a-food-core.js) — ehrlicher Hinweis samt Wartezeit statt "nicht erreichbar", das den
+    // Nutzer sonst fälschlich einen Verbindungsfehler suchen lässt.
+    loadingRow.outerHTML = `<div class="no-results">Zu viele Suchanfragen — kurz warten (ca. 1 Min.), dann geht's wieder.</div>`;
   } else if(reason === 'unreachable'){
     // Anfrage kam nicht durch, OBWOHL der Browser eine Verbindung meldet (z. B. CORS-Hänger,
     // kurzzeitiger API-Ausfall, DNS-Filterung einzelner Subdomains) — das fälschlich als

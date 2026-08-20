@@ -191,6 +191,19 @@ const FT_GROUP_STOPWORDS = new Set([
   'der','die','das','mit','und','ohne','aus','im','in','von','zum','zur','fuer','für',
   'gr','ml','kcal','stueck','stück','packung','portion','classic','original','typ','sorte',
 ]);
+// Generische Sammelbegriffe, die für sich allein NIEMALS eine Gruppe bilden dürfen — sie
+// kommen in sehr vielen, inhaltlich völlig verschiedenen Produkten vor. Ohne diese Sperre
+// landeten z. B. Proteinpudding, Proteinriegel und Proteinshake gemeinsam unter "Protein",
+// oder mehrere völlig verschiedene Gerichte unter "Burger"/"Sauce"/"Nudeln" — dann sieht man
+// zwar eine große Zahl, aber nicht mehr, was man eigentlich gegessen hat. Sie dürfen weiterhin
+// TEIL eines Gruppennamens sein, wenn zusätzlich ein aussagekräftiges Wort geteilt wird
+// (z. B. "Isoclear Whey" bleibt über "isoclear" gruppiert).
+const FT_GROUP_GENERIC_WORDS = new Set([
+  'protein','proteine','whey','shake','riegel','bar','drink','getraenk','getränk','pulver',
+  'burger','sauce','sosse','soße','dressing','dip','nudel','pasta','reis','brot','broetchen',
+  'brötchen','salat','suppe','pudding','joghurt','quark','kaese','käse','wrap','bowl','pizza',
+  'snack','mix','fertig','gericht','menu','menü','vegan','veggie','fitness','high','low',
+]);
 function ftGroupToken(word){
   const w = word.toLowerCase().replace(/[^a-zäöüß0-9]/g, '');
   if (!w || FT_GROUP_STOPWORDS.has(w)) return null;
@@ -201,30 +214,71 @@ function ftGroupToken(word){
   if (w.length > 3 && (w.endsWith('e') || w.endsWith('s') || w.endsWith('n'))) return w.slice(0, -1);
   return w;
 }
+// Die generischen Wörter müssen durch DENSELBEN Stemmer laufen wie die Produktnamen, sonst
+// greift die Sperre nicht: aus "protein" wird beim Zerlegen "protei", aus "burger" "burg" —
+// ein Vergleich gegen die ungestemmte Liste ginge dadurch immer ins Leere.
+const FT_GROUP_GENERIC_STEMS = new Set([...FT_GROUP_GENERIC_WORDS].map(w => ftGroupToken(w)).filter(Boolean));
+function ftIsGenericToken(tok){ return FT_GROUP_GENERIC_STEMS.has(tok); }
 function ftGroupWordsOf(name){
   // Markenangabe in Klammern fliegt raus — sie unterscheidet gerade die Varianten, die wir
   // zusammenfassen wollen ("Tofu Geräuchert (REWE Bio)" vs. "Tofu (Alnatura)").
   const withoutBrand = name.replace(/\([^)]*\)/g, ' ');
   return withoutBrand.split(/[\s,\/&+–-]+/).filter(Boolean);
 }
+// Dürfen zwei Namen in dieselbe Gruppe? Bewusst STRENG, damit lieber einmal zu wenig als
+// einmal falsch zusammengefasst wird (siehe Kommentar zu FT_GROUP_GENERIC_WORDS):
+//   1. Es muss mindestens ein gemeinsames, NICHT generisches Wort geben.
+//   2. Die gemeinsamen Wörter müssen mindestens die Hälfte des kürzeren Namens ausmachen —
+//      ein einzelnes zufällig geteiltes Wort in zwei langen Namen reicht also nicht.
+// Beispiele: "Isoclear Grapefruit"+"Isoclear Blue Raspberry" → ja (isoclear, 1 von 2 Wörtern).
+// "Knoblauch Chili Crunch"+"Sesam Chili Crunch" → ja (2 von 3). "Protein Pudding"+"Protein
+// Riegel" → NEIN (nur das generische "protein" geteilt).
+function ftNamesBelongTogether(tokensA, tokensB){
+  return ftGroupMatchRatio(tokensA, tokensB) > 0;
+}
+// Liefert 0 (passt nicht zusammen) oder den Anteil gemeinsamer Wörter am kürzeren Namen —
+// dieser Wert dient zugleich als Rangfolge, wenn ein Name zu MEHREREN bestehenden Gruppen
+// passen würde (siehe ftGroupNamesByKey unten).
+function ftGroupMatchRatio(tokensA, tokensB){
+  const setA = new Set(tokensA.map(x => x.tok));
+  const setB = new Set(tokensB.map(x => x.tok));
+  if (!setA.size || !setB.size) return 0;
+  const shared = [...setA].filter(t => setB.has(t));
+  if (!shared.length) return 0;
+  if (!shared.some(t => !ftIsGenericToken(t))) return 0;
+  const minSize = Math.min(setA.size, setB.size);
+  const ratio = shared.length / minSize;
+  return ratio >= 0.5 ? ratio : 0;
+}
 function ftGroupNamesByKey(names){
-  const wordsByName = {}, tokensByName = {};
+  const tokensByName = {};
   names.forEach(n => {
     const words = ftGroupWordsOf(n);
-    wordsByName[n] = words;
     tokensByName[n] = words.map(w => ({ raw: w, tok: ftGroupToken(w) })).filter(x => x.tok);
   });
-  const freq = {};
-  names.forEach(n => {
-    new Set(tokensByName[n].map(x => x.tok)).forEach(t => { freq[t] = (freq[t] || 0) + 1; });
-  });
+  // Namen absteigend nach Beitrag verarbeiten (der Aufrufer übergibt sie bereits in dieser
+  // Reihenfolge) und jeden entweder einer schon bestehenden Gruppe zuordnen, wenn er zu deren
+  // ERSTEM (größtem) Mitglied passt, oder eine neue Gruppe eröffnen. Der Abgleich läuft
+  // bewusst nur gegen das jeweils erste Gruppenmitglied statt gegen alle — so können sich
+  // keine Ketten bilden, bei denen über Umwege am Ende alles in einem Topf landet.
   const keyByName = {};
+  const groupAnchors = []; // { key, tokens }
   names.forEach(n => {
     const toks = tokensByName[n];
-    if (!toks.length){ keyByName[n] = n.toLowerCase(); return; }
-    let best = toks[0].tok;
-    toks.forEach(x => { if (freq[x.tok] > freq[best]) best = x.tok; });
-    keyByName[n] = best;
+    // Nicht die ERSTE passende Gruppe nehmen, sondern die am besten passende — sonst landet
+    // z. B. "Sesam Chili Crunch" bei "Sesam Sauce" (ein gemeinsames Wort), obwohl es viel
+    // deutlicher zu "Knoblauch Chili Crunch" gehört (zwei gemeinsame Wörter).
+    let best = null, bestRatio = 0;
+    if (toks.length){
+      groupAnchors.forEach(a => {
+        const r = ftGroupMatchRatio(a.tokens, toks);
+        if (r > bestRatio){ bestRatio = r; best = a; }
+      });
+    }
+    if (best){ keyByName[n] = best.key; return; }
+    const key = n.toLowerCase();
+    keyByName[n] = key;
+    groupAnchors.push({ key, tokens: toks });
   });
   return { keyByName, tokensByName };
 }
@@ -265,9 +319,9 @@ function ftFoodMacroBreakdown(macroKey, periodDays){
     }));
   });
   // Gleiche Produkte in verschiedenen Sorten/Marken zu einem Posten zusammenfassen (siehe
-  // ausführlicher Kommentar oben). Innerhalb einer Gruppe wird nach Beitrag sortiert, damit der
-  // größte Vertreter den Gruppennamen prägt.
-  const names = Object.keys(map);
+  // ausführlicher Kommentar oben). Absteigend nach Beitrag verarbeitet, damit der größte
+  // Vertreter jeweils die Gruppe eröffnet und ihren Namen prägt.
+  const names = Object.keys(map).sort((a,b) => map[b] - map[a]);
   const { keyByName, tokensByName } = ftGroupNamesByKey(names);
   const groups = {};
   names.forEach(n => {
@@ -623,10 +677,17 @@ function ftWireMacroDonut(segments, periodDays){
 
     const rows = shown.map((e, i) => {
       const pct = subTotal ? Math.round(e.val / subTotal * 100) : 0;
+      // Fasst diese Zeile mehrere Produkte zusammen (z. B. verschiedene Isoclear-Sorten), werden
+      // die einzelnen Namen als kleine Unterzeile mitgezeigt — sonst sieht man zwar die Summe,
+      // aber nicht mehr, was tatsächlich gegessen wurde.
+      const members = (e.members && e.members.length > 1) ? e.members : null;
       return `
-        <div class="muscle-balance-legend-row">
+        <div class="muscle-balance-legend-row${members ? ' ft-breakdown-row-grouped' : ''}">
           <span class="muscle-balance-swatch-static" style="color:${shadeMuscleColor(seg.color, i)};">${pct}%</span>
-          <span class="muscle-balance-legend-label">${ftEscapeHTML(e.name)}</span>
+          <span class="muscle-balance-legend-label">
+            ${ftEscapeHTML(e.name)}
+            ${members ? `<span class="ft-breakdown-members">${ftEscapeHTML(members.join(' · '))}</span>` : ''}
+          </span>
           <span class="muscle-balance-legend-value">${Math.round(e.val)} g</span>
         </div>
       `;

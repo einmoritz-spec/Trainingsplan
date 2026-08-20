@@ -1388,13 +1388,15 @@ function ftOpenAddIngredientToSavedMeal(mealId){
         loadingRow.outerHTML = offResults.map(ftEsmPickerRowHTML).join('');
       } else if(reason === 'offline'){
         loadingRow.outerHTML = `<div class="no-results">Offline — nur lokale Treffer verfügbar.</div>`;
+      } else if(reason === 'ratelimited'){
+        loadingRow.outerHTML = `<div class="no-results">Zu viele Suchanfragen — kurz warten.</div>`;
       } else if(reason === 'unreachable'){
         loadingRow.outerHTML = `<div class="no-results">Online-Datenbank gerade nicht erreichbar.</div>`;
       } else {
         loadingRow.outerHTML = `<div class="no-results">Keine Online-Treffer.</div>`;
       }
       wirePicker();
-    }, 350);
+    }, 600);
   });
 }
 

@@ -1026,6 +1026,15 @@ html[data-theme="light"] .bodyweight-warning-icon{ filter: none; }
   font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:700; text-align:center;
 }
 .muscle-balance-legend-label{ flex:1; min-width:0; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Zusammengefasste Zeile in der Makro-Aufschlüsselung (siehe ftFoodMacroBreakdown()/
+   ftGroupNamesByKey(), 15d-food-stats.js): unter dem Gruppennamen stehen klein die einzelnen
+   Produkte, aus denen die Summe besteht. Die Zeile darf dafür zweizeilig werden, deshalb hier
+   white-space/overflow der Basisklasse gezielt aufgehoben. */
+.ft-breakdown-row-grouped .muscle-balance-legend-label{ white-space:normal; }
+.ft-breakdown-members{
+  display:block; font-size:11px; font-weight:400; color:var(--muted); margin-top:2px;
+  line-height:1.35; overflow:hidden; text-overflow:ellipsis;
+}
 .muscle-balance-legend-values{
   display:flex; flex-direction:column; align-items:flex-end; gap:1px; flex-shrink:0;
 }
