@@ -309,9 +309,11 @@ function ftMealHTML(meal){
   `;
 }
 function ftFoodRowHTML(meal, e){
-  const qty = e.unitMode === 'piece' ? `${ftFormatNum(e.pieceCount)} × ${e.pieceLabel}` : `${e.amountG} g`;
+  // Manueller Schnelleintrag (siehe ftOpenQuickMacroEntryPrompt()) hat kein Gramm/Stück — dafür
+  // gibt es kein "Lebensmittel pro 100g", auf das amountG sich beziehen könnte.
+  const qty = e.kind === 'manual' ? 'Manuell eingetragen' : (e.unitMode === 'piece' ? `${ftFormatNum(e.pieceCount)} × ${e.pieceLabel}` : `${e.amountG} g`);
   return `
-    <div class="food-row" data-entry-id="${e.id}" data-meal="${meal}">
+    <div class="food-row" data-entry-id="${e.id}" data-meal="${meal}"${e.kind === 'manual' ? ' data-manual="1"' : ''}>
       <div class="food-row-main">
         <div class="food-row-name">${ftEscapeHTML(e.name)}</div>
         <div class="food-row-sub">${qty}</div>
@@ -362,6 +364,7 @@ function ftWireFoodRowPressHandlers(row, meal){
   row.onclick = () => {
     if (longPressFired){ longPressFired = false; return; }
     if (row.dataset.group === '1') ftOpenMealGroupDetail(meal, row.dataset.entryId);
+    else if (row.dataset.manual === '1') ftOpenEditManualEntryPrompt(meal, row.dataset.entryId);
     else ftOpenEditEntryModal(meal, row.dataset.entryId);
   };
 
@@ -407,14 +410,18 @@ function ftWireMealHeadPressHandlers(headEl, meal){
   headEl.addEventListener('contextmenu', (ev) => ev.preventDefault());
   headEl.addEventListener('touchstart', (ev) => {
     if (ev.target.closest('.meal-add, .meal-split-btn')) return; // eigene Buttons, nicht überlagern
-    if (!ftGetDay(ftCurrentDate)[meal].length) return; // nichts zum Kopieren da
     longPressFired = false;
     const t = ev.touches[0];
     startX = t.clientX; startY = t.clientY;
     pressTimer = setTimeout(() => {
       longPressFired = true;
       if (navigator.vibrate) navigator.vibrate(15);
-      ftOpenCopyMealPrompt(meal);
+      // Leere Mahlzeit: Kopieren ergibt nichts (nichts zum Kopieren da) — stattdessen die
+      // Schnelleingabe für direkt eingeschätzte Gesamtwerte (z. B. Restaurant-Essen, wo sich
+      // einzelne Zutaten schlecht trennen lassen), siehe ftOpenQuickMacroEntryPrompt() unten.
+      const entries = ftGetDay(ftCurrentDate)[meal];
+      if (entries.length) ftOpenCopyMealPrompt(meal);
+      else ftOpenQuickMacroEntryPrompt(meal);
     }, LONG_PRESS_MS);
   }, { passive: true });
   headEl.addEventListener('touchmove', (ev) => {
@@ -472,6 +479,94 @@ function ftOpenCopyMealPrompt(meal){
   }
   document.getElementById('ftCopyMealClose').onclick = ftCloseOverlay;
   wire();
+}
+
+// Long-Press auf eine LEERE Mahlzeit (siehe ftWireMealHeadPressHandlers oben) — direkte
+// Gesamtwerte eintragen, ohne einzelne Zutaten suchen/eingeben zu müssen. Gedacht für Fälle wie
+// Restaurant-Essen oder Kuchenstücke, wo sich die Bestandteile schlecht einzeln tracken lassen
+// und nur eine Schätzung der Gesamtsumme sinnvoll ist. Erzeugt einen ganz normalen Eintrag
+// (kind:'manual' statt eines sourceFoodId-Bezugs) — Bearbeiten später über
+// ftOpenEditManualEntryPrompt() (siehe dort und die entsprechende Weiche in
+// ftWireFoodRowPressHandlers), da es kein "Lebensmittel pro 100g" gibt, auf das man zurückgreifen
+// könnte.
+function ftOpenQuickMacroEntryPrompt(meal){
+  ftOpenOverlay(`
+    <div class="modal" id="ftQuickMacroModal">
+      <div class="modal-head"><div class="modal-title">${FT_MEAL_LABELS[meal]} · Gesamtwerte eintragen</div><button class="sheet-close" id="ftQuickMacroClose">${ftIconX()}</button></div>
+      <div class="modal-body">
+        <div class="field-label" style="margin-top:0;">Bezeichnung</div>
+        <input class="text-input" id="ftQuickMacroName" placeholder="z. B. Restaurant-Essen">
+        <div class="field-label">kcal</div>
+        <input class="text-input" id="ftQuickMacroKcal" type="number" inputmode="decimal" enterkeyhint="next">
+        <div class="field-label">Protein (g)</div>
+        <input class="text-input" id="ftQuickMacroP" type="number" inputmode="decimal" enterkeyhint="next">
+        <div class="field-label">Kohlenhydrate (g)</div>
+        <input class="text-input" id="ftQuickMacroC" type="number" inputmode="decimal" enterkeyhint="next">
+        <div class="field-label">Fett (g)</div>
+        <input class="text-input" id="ftQuickMacroF" type="number" inputmode="decimal" enterkeyhint="done">
+        <button class="ft-btn-primary" id="ftQuickMacroSave" style="margin-top:18px">Hinzufügen</button>
+      </div>
+    </div>
+  `, {type:'modal'});
+  document.getElementById('ftQuickMacroClose').onclick = ftCloseOverlay;
+  document.getElementById('ftQuickMacroName').focus();
+  document.getElementById('ftQuickMacroSave').onclick = async () => {
+    const kcal = parseFloat(document.getElementById('ftQuickMacroKcal').value);
+    if (!kcal || kcal <= 0){ ftToast('Bitte kcal eintragen.'); return; }
+    const name = document.getElementById('ftQuickMacroName').value.trim() || FT_MEAL_LABELS[meal];
+    const p = parseFloat(document.getElementById('ftQuickMacroP').value) || 0;
+    const c = parseFloat(document.getElementById('ftQuickMacroC').value) || 0;
+    const f = parseFloat(document.getElementById('ftQuickMacroF').value) || 0;
+    const entry = { id: 'e_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), name, kind: 'manual', kcal, p, c, f, ts: Date.now() };
+    const day = ftGetDay(ftCurrentDate);
+    day[meal].push(entry);
+    await ftSaveDays(ftCurrentDate);
+    ftCloseOverlay();
+    renderFoodTracker();
+  };
+}
+// Nachträgliches Bearbeiten eines per ftOpenQuickMacroEntryPrompt() angelegten Eintrags (siehe
+// Weiche in ftWireFoodRowPressHandlers, 15b-food-day.js) — gleiche Felder wie beim Anlegen,
+// nur vorausgefüllt, plus Löschen-Möglichkeit direkt hier statt nur über das ✕ in der Zeile.
+function ftOpenEditManualEntryPrompt(meal, entryId){
+  const entry = ftGetDay(ftCurrentDate)[meal].find(e => e.id === entryId);
+  if (!entry) return;
+  ftOpenOverlay(`
+    <div class="modal" id="ftQuickMacroEditModal">
+      <div class="modal-head"><div class="modal-title">Eintrag bearbeiten</div><button class="sheet-close" id="ftQuickMacroEditClose">${ftIconX()}</button></div>
+      <div class="modal-body">
+        <div class="field-label" style="margin-top:0;">Bezeichnung</div>
+        <input class="text-input" id="ftQuickMacroName" value="${ftEscapeHTML(entry.name)}">
+        <div class="field-label">kcal</div>
+        <input class="text-input" id="ftQuickMacroKcal" type="number" inputmode="decimal" value="${ftFormatNum(entry.kcal)}">
+        <div class="field-label">Protein (g)</div>
+        <input class="text-input" id="ftQuickMacroP" type="number" inputmode="decimal" value="${ftFormatNum(entry.p)}">
+        <div class="field-label">Kohlenhydrate (g)</div>
+        <input class="text-input" id="ftQuickMacroC" type="number" inputmode="decimal" value="${ftFormatNum(entry.c)}">
+        <div class="field-label">Fett (g)</div>
+        <input class="text-input" id="ftQuickMacroF" type="number" inputmode="decimal" value="${ftFormatNum(entry.f)}">
+        <button class="ft-btn-primary" id="ftQuickMacroSave" style="margin-top:18px">Speichern</button>
+        <button class="ft-btn-ghost" id="ftQuickMacroDelete" style="color:var(--accent-2); border-color:var(--accent-2);">Löschen</button>
+      </div>
+    </div>
+  `, {type:'modal'});
+  document.getElementById('ftQuickMacroEditClose').onclick = ftCloseOverlay;
+  document.getElementById('ftQuickMacroSave').onclick = async () => {
+    const kcal = parseFloat(document.getElementById('ftQuickMacroKcal').value);
+    if (!kcal || kcal <= 0){ ftToast('Bitte kcal eintragen.'); return; }
+    entry.name = document.getElementById('ftQuickMacroName').value.trim() || entry.name;
+    entry.kcal = kcal;
+    entry.p = parseFloat(document.getElementById('ftQuickMacroP').value) || 0;
+    entry.c = parseFloat(document.getElementById('ftQuickMacroC').value) || 0;
+    entry.f = parseFloat(document.getElementById('ftQuickMacroF').value) || 0;
+    await ftSaveDays(ftCurrentDate);
+    ftCloseOverlay();
+    renderFoodTracker();
+  };
+  document.getElementById('ftQuickMacroDelete').onclick = async () => {
+    ftRemoveEntry(meal, entryId);
+    ftCloseOverlay();
+  };
 }
 
 // Kopiert einen Eintrag (einzelnes Lebensmittel ODER eine gruppierte Mahlzeit, kind:'mealGroup')
@@ -1425,6 +1520,7 @@ function ftSessionsOnDay(iso){
   });
 }
 function ftEntryQtyText(e){
+  if (e.kind === 'manual') return 'manuell';
   return e.unitMode === 'piece' ? `${ftFormatNum(e.pieceCount)} × ${e.pieceLabel}` : `${e.amountG} g`;
 }
 async function ftExportDaySnapshotPdf(){
