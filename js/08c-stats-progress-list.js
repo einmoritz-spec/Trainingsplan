@@ -529,7 +529,9 @@ function renderIntensityStats(){
   if (!rpeEnabled()) return goProgressList(false); // Sicherheitsnetz, falls über Zurück/Vorwärts erreicht, während RPE inzwischen deaktiviert wurde
   const days = statsPeriodToDays(intensityStatsPeriod);
   const cutoff = days ? Date.now() - days * 86400000 : null;
-  const periodSessions = sessions.filter(s => !cutoff || new Date(s.date).getTime() >= cutoff);
+  // sessionsForStats(): als "Anderes Gym"/"Verletzt" markierte Einheiten fließen in keine der
+  // RPE-Auswertungen auf dieser Seite ein (siehe 04-utils.js).
+  const periodSessions = sessionsForStats().filter(s => !cutoff || new Date(s.date).getTime() >= cutoff);
   const overview = computeRpeOverview(periodSessions);
   const color = cssVar('--accent-2');
 
@@ -563,7 +565,7 @@ function renderIntensityStats(){
   // gängiger Frühindikator für zu schnell gesteigerte Belastung. Nutzt bewusst ALLE Sessions
   // (nicht nur periodSessions), da 8 Wochen Verlauf unabhängig vom oben gewählten
   // Zeitraum-Filter immer sinnvoll ist — sonst würde "Woche" hier nur 1 Balken zeigen.
-  const weeklyLoad = computeWeeklyTrainingLoad(sessions, 8);
+  const weeklyLoad = computeWeeklyTrainingLoad(sessionsForStats(), 8);
   const last = weeklyLoad[weeklyLoad.length - 1];
   const prev4 = weeklyLoad.slice(-5, -1);
   const prev4Avg = prev4.length ? prev4.reduce((a,w) => a+w.value, 0) / prev4.length : 0;
@@ -687,7 +689,9 @@ function renderKcalStats(){
   if (!kcalEstimateEnabled()) return goProgressList(false); // Sicherheitsnetz, falls über Zurück/Vorwärts erreicht, während die Funktion inzwischen deaktiviert wurde
   const days = statsPeriodToDays(kcalStatsPeriod);
   const cutoff = days ? Date.now() - days * 86400000 : null;
-  const periodSessions = sessions.filter(s => !cutoff || new Date(s.date).getTime() >= cutoff);
+  // sessionsForStats(): als "Anderes Gym"/"Verletzt" markierte Einheiten fließen nicht in die
+  // Kalorienschätzung ein (siehe 04-utils.js).
+  const periodSessions = sessionsForStats().filter(s => !cutoff || new Date(s.date).getTime() >= cutoff);
   const color = '#e08b3a'; // warmer Farbton (Energie/Feuer-Assoziation), bewusst weder --accent-3 (Gewicht) noch --accent-2 (RPE) noch die frei wählbare --accent (Zeit), damit sich die drei "neuen" Statistik-Screens optisch unterscheiden
 
   const chartPoints = periodSessions

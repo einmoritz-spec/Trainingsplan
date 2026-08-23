@@ -17,7 +17,9 @@ function computeWeekStreak(){
 }
 
 function computeSessionTrends(session){
-  const priorSessions = sessions
+  // sessionsForStats(): als "Anderes Gym"/"Verletzt" markierte Einheiten fließen nicht als
+  // Vergleichsbasis ein (siehe 04-utils.js).
+  const priorSessions = sessionsForStats()
     .filter(s => s.id !== session.id && new Date(s.date) < new Date(session.date))
     .sort((a,b) => new Date(b.date) - new Date(a.date)); // neueste zuerst
 

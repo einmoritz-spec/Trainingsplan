@@ -86,7 +86,9 @@ function buildInteractiveDonut(segments, displaySize, metric, centerValue, cente
 function computeExerciseBreakdownForGroup(group, periodDays){
   const cutoff = periodDays ? Date.now() - periodDays * 86400000 : null;
   const map = {};
-  sessions.forEach(s => {
+  // sessionsForStats(): als "Anderes Gym"/"Verletzt" markierte Einheiten fließen nicht in die
+  // Muskelgruppen-Verteilung ein (siehe 04-utils.js).
+  sessionsForStats().forEach(s => {
     if (cutoff && new Date(s.date).getTime() < cutoff) return;
     s.entries.forEach(e => {
       const planEx = plan.exercises.find(x => x.id === e.exerciseId);
@@ -332,7 +334,8 @@ function computeMuscleGroupSetCountsForSessions(sessionList){
 function computeMuscleGroupSetCounts(periodDays){
   const cutoff = periodDays ? Date.now() - periodDays * 86400000 : null;
   const counts = {};
-  sessions.forEach(s => {
+  // sessionsForStats(): als "Anderes Gym"/"Verletzt" markierte Einheiten fließen hier nicht ein.
+  sessionsForStats().forEach(s => {
     if (cutoff && new Date(s.date).getTime() < cutoff) return;
     s.entries.forEach(e => {
       const planEx = plan.exercises.find(x => x.id === e.exerciseId);
@@ -369,7 +372,8 @@ let muscleBalanceOutsideClickHandler = null;
 function computeMuscleGroupVolumeSums(periodDays){
   const cutoff = periodDays ? Date.now() - periodDays * 86400000 : null;
   const sums = {};
-  sessions.forEach(s => {
+  // sessionsForStats(): als "Anderes Gym"/"Verletzt" markierte Einheiten fließen hier nicht ein.
+  sessionsForStats().forEach(s => {
     if (cutoff && new Date(s.date).getTime() < cutoff) return;
     s.entries.forEach(e => {
       const planEx = plan.exercises.find(x => x.id === e.exerciseId);
@@ -388,7 +392,8 @@ function computeMuscleGroupVolumeSums(periodDays){
 function computeMuscleGroupTimeSums(periodDays){
   const cutoff = periodDays ? Date.now() - periodDays * 86400000 : null;
   const sums = {};
-  sessions.forEach(s => {
+  // sessionsForStats(): als "Anderes Gym"/"Verletzt" markierte Einheiten fließen hier nicht ein.
+  sessionsForStats().forEach(s => {
     if (cutoff && new Date(s.date).getTime() < cutoff) return;
     s.entries.forEach(e => {
       const sec = e.timeSpentSec || 0;
@@ -406,7 +411,8 @@ function computeMuscleGroupTimeSums(periodDays){
 function computeExerciseTimeBreakdownForGroup(group, periodDays){
   const cutoff = periodDays ? Date.now() - periodDays * 86400000 : null;
   const map = {};
-  sessions.forEach(s => {
+  // sessionsForStats(): als "Anderes Gym"/"Verletzt" markierte Einheiten fließen hier nicht ein.
+  sessionsForStats().forEach(s => {
     if (cutoff && new Date(s.date).getTime() < cutoff) return;
     s.entries.forEach(e => {
       const sec = e.timeSpentSec || 0;
@@ -429,7 +435,8 @@ function computeExerciseTimeBreakdownForGroup(group, periodDays){
 function computeMuscleGroupsWithWeightField(periodDays){
   const cutoff = periodDays ? Date.now() - periodDays * 86400000 : null;
   const groups = new Set();
-  sessions.forEach(s => {
+  // sessionsForStats(): als "Anderes Gym"/"Verletzt" markierte Einheiten fließen hier nicht ein.
+  sessionsForStats().forEach(s => {
     if (cutoff && new Date(s.date).getTime() < cutoff) return;
     s.entries.forEach(e => {
       if (e.type === 'time') return; // Zeit-Sätze haben nie ein Gewichtsfeld

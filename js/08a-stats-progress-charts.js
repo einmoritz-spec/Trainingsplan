@@ -12,10 +12,13 @@
    von 08b/08c weiterverwendet werden.
 --------------------------------------------------- */
 function totalTrainingSeconds(){
-  return sessions.reduce((a,s)=> a + s.durationSec, 0);
+  // sessionsForStats(): als "Anderes Gym"/"Verletzt" markierte Einheiten (siehe 04-utils.js)
+  // fließen hier nicht ein — diese Gesamtwerte sind echte Statistik, kein reiner
+  // Trainingstag-Zähler.
+  return sessionsForStats().reduce((a,s)=> a + s.durationSec, 0);
 }
 function totalVolumeKg(){
-  return sessions.reduce((a,s)=>
+  return sessionsForStats().reduce((a,s)=>
     a + s.entries.reduce((a2,e)=>{
       const planEx = plan.exercises.find(x => x.id === e.exerciseId);
       return a2 + e.sets.reduce((a3,st)=> a3 + ((st.reps && st.weight) ? st.reps*effectiveSetWeight(planEx, st.weight) : 0), 0);
@@ -99,7 +102,7 @@ function bucketedCumulativePoints(sorted, getValue){
 function aggregateSessions(getValue, period){
   const days = statsPeriodToDays(period);
   const cutoff = days ? Date.now() - days * 86400000 : null;
-  const sorted = sessions
+  const sorted = sessionsForStats()
     .filter(s => !cutoff || new Date(s.date).getTime() >= cutoff)
     .slice()
     .sort((a,b) => new Date(a.date) - new Date(b.date));
@@ -134,7 +137,7 @@ function sessionTrainsGroup(s, group){
 function aggregateSessionsForGroup(group, getValue, period){
   const days = statsPeriodToDays(period);
   const cutoff = days ? Date.now() - days * 86400000 : null;
-  const sorted = sessions
+  const sorted = sessionsForStats()
     .filter(s => (!cutoff || new Date(s.date).getTime() >= cutoff) && sessionTrainsGroup(s, group))
     .slice()
     .sort((a,b) => new Date(a.date) - new Date(b.date));
@@ -222,11 +225,15 @@ function renderStatsChart(metric){
     .map(e => ({ label: shortDate(e.date), value: e.weight, date: e.date }));
   const bodyWeightTrendHTML = (isTime || !bodyWeightLog.length) ? '' : chartAccordionHTML(statsChartOpen, 'bodyweight', 'Körpergewicht', bodyWeightPoints, cssVar('--accent-3'), bodyWeightFormatter,
     buildLineChart(bodyWeightPoints, cssVar('--accent-3'), bodyWeightFormatter));
+  // Konsistent mit der gefilterten Summe direkt daneben (totalLabel, aus dem oben bereits
+  // gefilterten chartPoints/aggregateSessions() abgeleitet) — als "Anderes Gym"/"Verletzt"
+  // markierte Einheiten zählen hier ebenfalls nicht mit, siehe sessionsForStats().
+  const statsSessionCount = sessionsForStats().length;
 
   app.innerHTML = `
     <div class="back-row" style="margin-top:0;"><button class="back-btn-icon" id="btnBack" aria-label="Zurück"><img src="${ICON_BACK_ARROW}" alt=""></button></div>
     <div class="progress-summary" style="margin-top:18px;">
-      <span>${sessions.length} ${sessions.length === 1 ? 'Einheit' : 'Einheiten'} gesamt</span>
+      <span>${statsSessionCount} ${statsSessionCount === 1 ? 'Einheit' : 'Einheiten'} gesamt</span>
       <span>Gesamt: ${totalLabel}</span>
     </div>
     <div class="period-row">
@@ -315,7 +322,9 @@ function exerciseHistory(name){
   // truthy), wodurch komplette Sätze ohne Zusatzgewicht (der Normalfall bei reinem Körper-
   // gewicht) nie in Rekorden/Statistiken auftauchten.
   const bodyweightType = !!(planEx && (planEx.noWeight || planEx.bodyweightExercise));
-  return sessions
+  // sessionsForStats(): eine als "Anderes Gym"/"Verletzt" markierte Einheit darf hier weder
+  // als Rekord noch als Vergleichsbasis für die nächste Einheit auftauchen.
+  return sessionsForStats()
     .filter(s => s.entries.some(e => e.name === name && e.sets.some(st => isTime ? st.seconds : (st.reps && (bodyweightType || st.weight)))))
     .map(s => {
       const e = s.entries.find(e => e.name === name);
@@ -448,7 +457,9 @@ function computeExerciseMetricComparison(session, exerciseId){
   if (!entry) return null;
   const current = computeExerciseMetrics(entry, planEx);
 
-  const priorSessions = sessions
+  // sessionsForStats(): eine als "Anderes Gym"/"Verletzt" markierte Einheit darf nicht als
+  // Vergleichsbasis für "letztes Mal"/Rekorde einer ANDEREN Einheit dienen (siehe 04-utils.js).
+  const priorSessions = sessionsForStats()
     .filter(s => s.id !== session.id && new Date(s.date) < new Date(session.date))
     .sort((a,b) => new Date(b.date) - new Date(a.date)); // neueste zuerst
 

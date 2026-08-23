@@ -19,8 +19,14 @@ function rebuildLastPerformance(){
   const rebuilt = {};
   // sessions liegt chronologisch aufsteigend vor (siehe endSession(): sessions.push(...)),
   // daher rückwärts iterieren, um "neueste zuerst" pro Übung aufzubauen.
-  for (let i = sessions.length - 1; i >= 0; i--){
-    const session = sessions[i];
+  // sessionsForStats() statt sessions: als "Anderes Gym"/"Verletzt" markierte Einheiten (siehe
+  // 04-utils.js) sollen nicht als "letztes Mal"-Referenz bzw. Vorbelegung (buildEntry()) oder
+  // für Steigerungs-Vorschläge (checkPerformanceSuggestion()) zählen — genau wie beim Löschen
+  // einer Einheit fällt eine Übung, die ausschließlich in einer markierten Einheit vorkam,
+  // dadurch wieder auf "noch nie durchgeführt" zurück.
+  const eligible = sessionsForStats();
+  for (let i = eligible.length - 1; i >= 0; i--){
+    const session = eligible[i];
     if (!session || !session.entries) continue;
     session.entries.forEach(e => {
       if (!e.exerciseId || !e.sets || !e.sets.length) return;

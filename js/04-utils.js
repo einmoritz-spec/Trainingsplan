@@ -6,7 +6,7 @@
 // (sw.js, Cache-First) nach einem Update oft noch mehrere Starts lang die ALTE Fassung —
 // ohne diesen Stempel ist "der Fix wirkt nicht" nicht von "der Fix ist nie angekommen" zu
 // unterscheiden. Bei jeder Änderung zusammen mit CACHE_NAME in sw.js erhöhen.
-const BUILD_STAMP = '53';
+const BUILD_STAMP = '54';
 /* ---------------------------------------------------
    Wake Lock (Bildschirm bei laufendem Training nicht abschalten)
    ---------------------------------------------------
@@ -467,6 +467,27 @@ function pdfImageFormatFor(dataUrl){
    Performancemodus-Vorschläge ein (siehe checkPerformanceSuggestion(), 11a-active-session.js) —
    das Verhalten ist dann exakt wie vorher.
 --------------------------------------------------- */
+/* ---------------------------------------------------
+   Einheiten aus den Statistiken ausschließen ("Anderes Gym"/"Verletzt")
+   ---------------------------------------------------
+   Per Long-Press auf ein Training in der Kalenderübersicht (siehe wireDayPopupSessionPress()/
+   openSessionExclusionPrompt(), 05-calendar.js) markierbar: session.excludeFromStats + ein
+   Grund (session.exclusionReason, 'gym' oder 'injured'). Zweck: ein Training in einem fremden
+   Gym (andere Geräte/Gewichtsraster) oder unter Verletzung (bewusst reduziertes Gewicht) soll
+   NICHT als echter Rückschritt/Fortschritt in die persönliche Statistik einfließen — zählt aber
+   weiterhin ganz normal als Trainingstag (Kalender-Punkt, Workouts-Zähler, Serie/Streak,
+   Verlaufsliste bleiben komplett unberührt, siehe jeweilige Kommentare an den Aufrufstellen).
+   sessionsForStats() ist die zentrale Filterfunktion — ÜBERALL dort verwendet, wo aus
+   sessions echte Kennzahlen abgeleitet werden (bewegtes Gewicht, Trainingszeit-Charts,
+   Muskelgruppen-Verteilung, RPE-Auswertungen, Rekorde, "letztes Mal"/Steigerungsvorschläge,
+   Kalorienschätzung) — NICHT dort, wo es nur um "ist an dem Tag trainiert worden" geht
+   (Kalenderpunkte, Wochen-/Monats-Workout-Zähler, Serie, Verlaufsliste, Split-Rotation).
+--------------------------------------------------- */
+function sessionsForStats(list){
+  return (list || sessions).filter(s => !s.excludeFromStats);
+}
+const SESSION_EXCLUSION_LABELS = { gym: 'Anderes Gym', injured: 'Verletzt' };
+
 function rpeEnabled(){
   return !!(plan && plan.rpeEnabled === true);
 }

@@ -228,10 +228,13 @@ function monthOverviewBlockHTML(year, month){
   // Warm-up-Sätze (set.warmup=true, siehe Trainingstools-Popup) und Deload-Einheiten
   // (session.deloadUsed, siehe endSession()) für diesen Monat zusammengezählt — nur
   // angezeigt, wenn im Monat tatsächlich mindestens eins von beidem vorkam.
-  const monthSessions = sessions.filter(s => {
+  // sessionsForStats(): als "Anderes Gym"/"Verletzt" markierte Einheiten fließen hier NICHT
+  // ein (anders als monthCount oben, das bewusst ALLE Einheiten zählt — "X Workouts" ist der
+  // reine Trainingstag-Zähler, diese Zeile darunter sind echte Trainings-Kennzahlen).
+  const monthSessions = sessionsForStats(sessions.filter(s => {
     const sd = new Date(s.date);
     return sd.getFullYear() === year && sd.getMonth() === month;
-  });
+  }));
   const monthWarmupCount = monthSessions.reduce((sum, s) => sum + (s.entries || []).reduce((esum, e) => esum + (e.sets || []).filter(st => st.warmup).length, 0), 0);
   const monthDeloadCount = monthSessions.filter(s => s.deloadUsed).length;
   const monthAvgRpe = rpeEnabled() ? avgRpeForSessions(monthSessions) : null;
@@ -330,7 +333,7 @@ function foodDayPopupBlockHTML(totals){
   `;
 }
 
-function openDayTrainingPopup(year, month, day){
+function openDayTrainingPopup(year, month, day, skipPush){
   const sessionsOnDay = sessions.filter(s => {
     const sd = new Date(s.date);
     return sd.getFullYear() === year && sd.getMonth() === month && sd.getDate() === day;
@@ -368,9 +371,15 @@ function openDayTrainingPopup(year, month, day){
         <div class="day-popup-stat-label">${s.label}</div>
       </div>
     `).join('');
+    // Badge bei per Long-Press ausgeschlossenen Einheiten (siehe openSessionExclusionPrompt()
+    // unten) — macht sichtbar, dass diese Einheit zwar als Trainingstag zählt, aber aus
+    // Rekorden/"letztes Mal"/Gewichts-, Zeit- und RPE-Statistiken herausgehalten wird.
+    const exclusionBadgeHTML = session.excludeFromStats
+      ? `<span class="day-popup-exclusion-badge">${SESSION_EXCLUSION_LABELS[session.exclusionReason] || 'Ausgeschlossen'}</span>`
+      : '';
     return `
-      <div class="day-popup-block">
-        <div class="day-popup-tile-name">${modeDisplayLabel(session.mode)}</div>
+      <div class="day-popup-block day-popup-session-block" data-session-id="${session.id}">
+        <div class="day-popup-tile-name">${modeDisplayLabel(session.mode)}${exclusionBadgeHTML}</div>
         <div class="day-popup-stats">
           ${statsHTML}
         </div>
@@ -410,7 +419,17 @@ function openDayTrainingPopup(year, month, day){
     </div>
   `;
   document.body.appendChild(overlay);
-  pushOverlayState(remove);
+  // skipPush: zum Aktualisieren des Inhalts nach openSessionExclusionPrompt() (siehe unten)
+  // aufgerufen — dort liegt bereits ein History-Eintrag für dieses Popup vor, ein zweiter
+  // würde die Zurück-Taste doppelt "verbrauchen". Ersetzt stattdessen nur die im
+  // overlayCloseStack hinterlegte remove()-Referenz durch die des NEUEN DOM-Elements (das
+  // alte wurde oben bereits entfernt, eine alte Referenz wäre sonst verwaist).
+  if (skipPush){
+    if (overlayCloseStack.length) overlayCloseStack[overlayCloseStack.length - 1] = remove;
+    else overlayCloseStack.push(remove);
+  } else {
+    pushOverlayState(remove);
+  }
 
   function remove(){ const el = document.getElementById('dayTrainingPopupOverlay'); if (el) el.remove(); }
   const close = () => { popOverlayStateIfOpen(); remove(); };
@@ -437,6 +456,105 @@ function openDayTrainingPopup(year, month, day){
       renderWorkoutsOverview();
     }
   };
+
+  // Long-Press auf einen Trainingsblock (nicht auf den Ernährungs-Block) öffnet
+  // openSessionExclusionPrompt() — "Anderes Gym"/"Verletzt" markieren bzw. wieder aufheben.
+  // Gleiches Timer+Bewegungstoleranz-Muster wie ftWireFoodRowPressHandlers()/
+  // ftWireMealHeadPressHandlers() (15b-food-day.js), hier ohne eigenen Tap-Effekt (der Block
+  // ist sonst nicht antippbar, es gibt also nichts, das ein Long-Press überlagern könnte).
+  overlay.querySelectorAll('.day-popup-session-block').forEach(block => {
+    const session = sessionsOnDay.find(s => s.id === block.dataset.sessionId);
+    if (!session) return;
+    const LONG_PRESS_MS = 450, MOVE_CANCEL_PX = 10;
+    let pressTimer = null, startX = 0, startY = 0;
+    const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
+    block.addEventListener('contextmenu', (ev) => ev.preventDefault());
+    block.addEventListener('touchstart', (ev) => {
+      const t = ev.touches[0];
+      startX = t.clientX; startY = t.clientY;
+      pressTimer = setTimeout(() => {
+        if (navigator.vibrate) navigator.vibrate(15);
+        openSessionExclusionPrompt(session, () => {
+          openDayTrainingPopup(year, month, day, true); // skipPush: nur Inhalt aktualisieren, siehe dort
+        });
+      }, LONG_PRESS_MS);
+    }, { passive: true });
+    block.addEventListener('touchmove', (ev) => {
+      const t = ev.touches[0];
+      if (Math.abs(t.clientX - startX) > MOVE_CANCEL_PX || Math.abs(t.clientY - startY) > MOVE_CANCEL_PX) cancelPress();
+    }, { passive: true });
+    block.addEventListener('touchend', cancelPress);
+    block.addEventListener('touchcancel', cancelPress);
+  });
+}
+
+// "Anderes Gym"/"Verletzt" markieren (oder wieder aufheben) — siehe SESSION_EXCLUSION_LABELS/
+// sessionsForStats() (04-utils.js). Betrifft NUR die Statistik-Berechnung: die Einheit bleibt
+// in Kalenderpunkten, Workout-Zählern, Serie und Verlaufsliste ganz normal sichtbar/gezählt.
+function openSessionExclusionPrompt(session, onDone){
+  const existing = document.getElementById('sessionExclusionOverlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'add-exercise-overlay centered-overlay';
+  overlay.id = 'sessionExclusionOverlay';
+  const reasons = Object.keys(SESSION_EXCLUSION_LABELS);
+  overlay.innerHTML = `
+    <div class="add-exercise-modal" style="max-height:none;">
+      <div class="add-exercise-modal-header">
+        <div class="add-exercise-modal-title">Aus Statistiken ausschließen?</div>
+        <button class="add-exercise-modal-close" id="sessionExclusionClose" aria-label="Abbrechen">✕</button>
+      </div>
+      <div class="new-exercise-modal-body">
+        <label class="justify-text" style="display:block; font-size:12px; color:var(--muted); margin-bottom:14px;">
+          Zählt weiterhin als Trainingstag, beeinflusst aber keine Rekorde, "letztes Mal",
+          Gewichts-/Zeit-/RPE-Statistiken mehr.
+        </label>
+        ${reasons.map(r => `<button class="btn ${session.exclusionReason === r ? 'btn-primary' : 'btn-ghost'}" data-exclusion-reason="${r}" style="width:100%; margin-bottom:8px;">${SESSION_EXCLUSION_LABELS[r]}</button>`).join('')}
+        ${session.excludeFromStats ? `<button class="btn btn-ghost" id="sessionExclusionClear" style="width:100%; margin-top:4px;">Wieder normal werten</button>` : ''}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Liegt ÜBER dem bereits offenen Tages-Popup — bewusst KEIN eigener pushOverlayState() (wie
+  // schon bei openSessionEntryExercisePicker(), 13-session-detail-pdf.js, aus demselben Grund):
+  // ein zusätzlicher History-Eintrag hier, gefolgt von einem sofortigen history.back() beim
+  // Anwenden/Schließen UND direkt danach einem Neuaufbau des darunterliegenden Popups, wäre
+  // die altbekannte Race Condition zwischen dem asynchronen back() und einem synchron direkt
+  // folgenden pushState(). Stattdessen wird nur der oberste Zurück-Handler vorübergehend
+  // ersetzt und beim Schließen/Anwenden wiederhergestellt — die Zurück-Taste betrifft während
+  // dieses Popups also weiterhin genau einen History-Schritt (den des Tages-Popups).
+  const parentCloseFn = overlayCloseStack.length ? overlayCloseStack[overlayCloseStack.length - 1] : null;
+  function restoreParent(){
+    if (parentCloseFn){
+      if (overlayCloseStack.length) overlayCloseStack[overlayCloseStack.length - 1] = parentCloseFn;
+      else overlayCloseStack.push(parentCloseFn);
+    }
+  }
+  function remove(){ const el = document.getElementById('sessionExclusionOverlay'); if (el) el.remove(); }
+  function close(){ remove(); restoreParent(); }
+  if (overlayCloseStack.length) overlayCloseStack[overlayCloseStack.length - 1] = close;
+  else overlayCloseStack.push(close);
+
+  async function apply(reason){
+    session.excludeFromStats = !!reason;
+    session.exclusionReason = reason || null;
+    await saveSessionAt(session);
+    rebuildLastPerformance();
+    await saveJSON('lastPerformance', lastPerformance);
+    remove();
+    restoreParent();
+    onDone();
+  }
+
+  document.getElementById('sessionExclusionClose').onclick = close;
+  overlay.onclick = (ev) => { if (ev.target === overlay) close(); };
+  overlay.querySelectorAll('[data-exclusion-reason]').forEach(btn => {
+    btn.onclick = () => apply(btn.dataset.exclusionReason);
+  });
+  const clearBtn = document.getElementById('sessionExclusionClear');
+  if (clearBtn) clearBtn.onclick = () => apply(null);
 }
 
 // Baut ein eingeklapptes Akkordeon für ein VOLLSTÄNDIG abgeschlossenes Kalenderjahr (alle
@@ -602,14 +720,21 @@ function monthWeeklyTrainingPoints(year, month){
 }
 
 function computeMonthReportData(year, month){
-  const monthSessions = sessions.filter(s => {
+  // "Workouts" (count) und die Trainingsserie (longestStreak, unten) sind bewusst reine
+  // Trainingstag-Signale und bleiben UNGEFILTERT — alles andere in diesem Bericht sind echte
+  // Leistungs-/Fortschrittskennzahlen und nutzt daher monthSessions (gefiltert via
+  // sessionsForStats(), siehe 04-utils.js). Als "Anderes Gym"/"Verletzt" markierte Einheiten
+  // zählen also weiterhin als Workout und für die Serie, tauchen aber nirgends sonst im
+  // Bericht auf.
+  const monthSessionsAll = sessions.filter(s => {
     const sd = new Date(s.date);
     return sd.getFullYear() === year && sd.getMonth() === month;
   });
+  const monthSessions = sessionsForStats(monthSessionsAll);
 
-  const count = monthSessions.length;
-  const avgDurationSec = count
-    ? Math.round(monthSessions.reduce((a, s) => a + (s.durationSec || 0), 0) / count)
+  const count = monthSessionsAll.length;
+  const avgDurationSec = monthSessions.length
+    ? Math.round(monthSessions.reduce((a, s) => a + (s.durationSec || 0), 0) / monthSessions.length)
     : 0;
 
   const weeklyPoints = monthWeeklyTrainingPoints(year, month);
@@ -651,19 +776,21 @@ function computeMonthReportData(year, month){
   // anzeigen, um keine irreführenden "+3"-Sprünge ab dem allerersten Monat zu zeigen).
   let prevYear = year, prevMonth = month - 1;
   if (prevMonth < 0){ prevMonth = 11; prevYear -= 1; }
-  const prevMonthSessions = sessions.filter(s => {
+  const prevMonthSessionsAll = sessions.filter(s => {
     const sd = new Date(s.date);
     return sd.getFullYear() === prevYear && sd.getMonth() === prevMonth;
   });
+  const prevMonthSessions = sessionsForStats(prevMonthSessionsAll);
   const earliestSessionDate = sessions.length ? new Date(sessions[0].date) : null;
   const hasPrevData = !!earliestSessionDate && (prevYear > earliestSessionDate.getFullYear() ||
     (prevYear === earliestSessionDate.getFullYear() && prevMonth >= earliestSessionDate.getMonth()));
-  const countDelta = count - prevMonthSessions.length;
+  const countDelta = count - prevMonthSessionsAll.length;
   const volumeDelta = Math.round(totalVolume - prevMonthSessions.reduce((a, s) => a + sessionVolumeKg(s), 0));
 
   // Längste zusammenhängende Trainings-Serie (aufeinanderfolgende Kalendertage) innerhalb
-  // des Monats — anhand der distinct Trainingstage, nicht der Einheiten-Anzahl.
-  const trainedDays = [...new Set(monthSessions.map(s => new Date(s.date).getDate()))].sort((a, b) => a - b);
+  // des Monats — anhand ALLER Trainingstage (auch markierte, siehe Kommentar oben), nicht nur
+  // der für Statistiken zählenden Einheiten.
+  const trainedDays = [...new Set(monthSessionsAll.map(s => new Date(s.date).getDate()))].sort((a, b) => a - b);
   let longestStreak = 0, curStreak = 0, prevDay = null;
   trainedDays.forEach(d => {
     curStreak = (prevDay !== null && d === prevDay + 1) ? curStreak + 1 : 1;
