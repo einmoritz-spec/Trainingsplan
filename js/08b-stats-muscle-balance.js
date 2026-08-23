@@ -275,6 +275,7 @@ function renderWorkoutsOverview(){
       </select>
     </div>
 
+    ${compareModePillHTML()}
     ${bodyHTML || `<div class="history-empty">${filtered.length === 0 && allSorted.length > 0 ? 'Keine Einheiten für diese Filter.' : 'Noch keine Einheit protokolliert.'}</div>`}
   `;
 
@@ -303,6 +304,7 @@ function renderWorkoutsOverview(){
   });
   wireHistoryRowClicks();
   wireHistoryLongPress();
+  wireCompareModePill();
 }
 
 let progressGroupOpen = new Set();

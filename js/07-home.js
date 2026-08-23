@@ -221,6 +221,25 @@ function removeCompareBanner(){
   const el = document.getElementById('compareBanner');
   if (el) el.remove();
 }
+// Zusätzlich zum Banner unten (rein optisches Signal, kann beim Scrollen leicht übersehen
+// werden) noch ein deutlicher Hinweis-Balken direkt IM Verlaufsscreen selbst — sowohl im
+// kompakten Home-Verlauf als auch in der vollen Workouts-Übersicht (siehe beide
+// renderHome()/renderWorkoutsOverview()). Muss nach jedem Rendern per
+// wireCompareModePill() extra verkabelt werden, da app.innerHTML die Buttons jedes Mal
+// neu erzeugt.
+function compareModePillHTML(){
+  if (!compareSessionA) return '';
+  return `
+    <div class="compare-mode-pill">
+      <span>Vergleichen: ${modeDisplayLabel(compareSessionA.mode)} · ${fmtDate(compareSessionA.date)}</span>
+      <button id="compareModePillCancel" type="button" aria-label="Abbrechen">✕</button>
+    </div>
+  `;
+}
+function wireCompareModePill(){
+  const btn = document.getElementById('compareModePillCancel');
+  if (btn) btn.onclick = () => cancelSessionCompare();
+}
 
 // Zentrale Klick-Weiche für ALLE `.history-row`-Elemente im aktuell gerenderten DOM — ersetzt
 // die frühere, an beiden Aufrufstellen (renderHome()/renderWorkoutsOverview()) identisch
@@ -313,9 +332,9 @@ function openSessionComparePrompt(a, b){
     const vb = mb ? (mb.volKg || mb.sec || 0) : null;
     const better = (va == null || vb == null || va === vb) ? null : (va > vb ? 'a' : 'b');
     return `
-      <div class="compare-stat-row">
+      <div class="compare-stat-row compare-stat-row-clickable" data-compare-exercise="${ftEscapeHTML(name)}" role="button" tabindex="0">
         <span class="compare-stat-val compare-stat-val-ex ${better === 'a' ? 'compare-stat-better' : ''}">${formatAmount(ma)}</span>
-        <span class="compare-stat-label compare-stat-label-ex">${ftEscapeHTML(name)}</span>
+        <span class="compare-stat-label compare-stat-label-ex">${ftEscapeHTML(name)} ›</span>
         <span class="compare-stat-val compare-stat-val-ex ${better === 'b' ? 'compare-stat-better' : ''}">${formatAmount(mb)}</span>
       </div>
     `;
@@ -351,6 +370,82 @@ function openSessionComparePrompt(a, b){
   function remove(){ const el = document.getElementById('sessionCompareOverlay'); if (el) el.remove(); }
   const close = () => { popOverlayStateIfOpen(); remove(); };
   document.getElementById('sessionCompareClose').onclick = close;
+  overlay.onclick = (ev) => { if (ev.target === overlay) close(); };
+  overlay.querySelectorAll('[data-compare-exercise]').forEach(row => {
+    row.onclick = () => openExerciseCompareDetail(a, b, row.dataset.compareExercise);
+  });
+}
+
+// Satz-für-Satz-Detailvergleich EINER Übung (siehe data-compare-exercise-Zeilen oben) — liegt
+// über der bereits offenen Vergleichsansicht, daher bewusst KEIN eigener pushOverlayState()
+// (gleiches "obersten Zurück-Handler ersetzen"-Muster wie openSessionEntryExercisePicker()/
+// openSessionExclusionPrompt(), aus demselben Grund: Race Condition zwischen dem asynchronen
+// history.back() und einem sofort folgenden synchronen pushState()).
+function openExerciseCompareDetail(a, b, name){
+  const entryA = a.entries.find(e => e.name === name);
+  const entryB = b.entries.find(e => e.name === name);
+  const isTime = (entryA && entryA.type === 'time') || (entryB && entryB.type === 'time');
+  const setsA = entryA ? entryA.sets : [];
+  const setsB = entryB ? entryB.sets : [];
+  const maxSets = Math.max(setsA.length, setsB.length);
+  const fmtSet = (s) => {
+    if (!s) return '–';
+    if (isTime) return s.seconds != null ? fmtDuration(s.seconds) : '–';
+    if (s.reps == null && s.weight == null) return '–';
+    return `${s.reps ?? '–'} × ${s.weight != null ? s.weight.toLocaleString('de-DE') + ' kg' : '–'}`;
+  };
+  let rowsHTML = '';
+  for (let i = 0; i < maxSets; i++){
+    rowsHTML += `
+      <div class="compare-stat-row">
+        <span class="compare-stat-val">${fmtSet(setsA[i])}</span>
+        <span class="compare-stat-label">Satz ${i+1}</span>
+        <span class="compare-stat-val">${fmtSet(setsB[i])}</span>
+      </div>
+    `;
+  }
+
+  const existing = document.getElementById('exerciseCompareDetailOverlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'add-exercise-overlay centered-overlay';
+  overlay.id = 'exerciseCompareDetailOverlay';
+  overlay.innerHTML = `
+    <div class="add-exercise-modal">
+      <div class="add-exercise-modal-header">
+        <div class="add-exercise-modal-title">${exerciseNameHTML(name)}</div>
+        <button class="add-exercise-modal-close" id="exerciseCompareDetailClose" aria-label="Zurück">✕</button>
+      </div>
+      <div class="new-exercise-modal-body">
+        <div class="compare-header-row">
+          <div class="compare-header-col">
+            <div class="compare-header-mode">${modeDisplayLabel(a.mode)}</div>
+            <div class="compare-header-date">${fmtDate(a.date)}</div>
+          </div>
+          <div class="compare-header-col">
+            <div class="compare-header-mode">${modeDisplayLabel(b.mode)}</div>
+            <div class="compare-header-date">${fmtDate(b.date)}</div>
+          </div>
+        </div>
+        ${rowsHTML || '<div class="history-empty">Keine Sätze protokolliert.</div>'}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const parentCloseFn = overlayCloseStack.length ? overlayCloseStack[overlayCloseStack.length - 1] : null;
+  function restoreParent(){
+    if (parentCloseFn){
+      if (overlayCloseStack.length) overlayCloseStack[overlayCloseStack.length - 1] = parentCloseFn;
+      else overlayCloseStack.push(parentCloseFn);
+    }
+  }
+  function remove(){ const el = document.getElementById('exerciseCompareDetailOverlay'); if (el) el.remove(); }
+  function close(){ remove(); restoreParent(); }
+  if (overlayCloseStack.length) overlayCloseStack[overlayCloseStack.length - 1] = close;
+  else overlayCloseStack.push(close);
+
+  document.getElementById('exerciseCompareDetailClose').onclick = close;
   overlay.onclick = (ev) => { if (ev.target === overlay) close(); };
 }
 
@@ -490,6 +585,7 @@ function renderHome(){
   // darunter. Ohne aktivierten Essenstracker bleibt exakt das bisherige, feste Verhalten
   // (Kopfzeile direkt klickbar → Workouts-Übersicht, Liste immer sichtbar).
   const historyBodyInnerHTML = `
+    ${compareModePillHTML()}
     <div class="history">
       ${recentHTML || '<div class="history-empty">Noch keine Einheit protokolliert.</div>'}
     </div>
@@ -607,6 +703,7 @@ function renderHome(){
   wireHistoryRowClicks();
   wireHistoryLongPress();
   wireStartButtonLongPress();
+  wireCompareModePill();
 }
 
 // 3 Sekunden gedrückt halten auf "Training starten" öffnet als schneller Zugriff ein
