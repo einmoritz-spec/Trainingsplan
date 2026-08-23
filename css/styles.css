@@ -2634,3 +2634,17 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
 .compare-stat-better{ color: var(--accent); font-weight:700; }
 .compare-stat-label{ flex-shrink:0; width:38%; text-align:center; font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; }
 .compare-stat-label-ex{ width:44%; text-transform:none; letter-spacing:normal; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.compare-stat-row-clickable{ cursor:pointer; }
+.compare-stat-row-clickable:active{ background: var(--surface-2); }
+/* Hinweis-Balken direkt im Verlaufsscreen (siehe compareModePillHTML(), 07-home.js) —
+   zusätzlich zum Banner unten, damit der aktive Vergleichsmodus nicht übersehen wird. */
+.compare-mode-pill{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  background: var(--surface-2); border:1px solid var(--accent); border-radius:12px;
+  padding:10px 14px; margin-bottom:10px; font-size:13px; font-weight:600; color:var(--accent);
+}
+.compare-mode-pill button{
+  flex-shrink:0; width:26px; height:26px; border-radius:50%; background:none;
+  border:1px solid var(--accent); color:var(--accent); font-size:13px; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+}
