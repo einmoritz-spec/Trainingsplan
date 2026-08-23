@@ -224,6 +224,13 @@ html[data-theme="light"] #btnSummaryShare{ color:#000; border-color:#000; }
 .history-row *{ -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
 .history-row:last-child{ border-bottom:none; }
 .history-row:active{ background: var(--surface-2); }
+/* Vergleichsmodus (siehe startSessionCompare(), 07-home.js): Zustände der Verlauf-Zeilen,
+   solange eine erste Einheit als Vergleichsbasis gewählt ist. transition sorgt für einen
+   sanften Übergang beim Starten/Beenden des Modus statt eines harten Umschaltens. */
+.history-row{ transition: opacity .15s ease, background-color .15s ease; }
+.history-row-compare-a{ background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+.history-row-compare-similar{ box-shadow: inset 3px 0 0 var(--accent); }
+.history-row-compare-dim{ opacity:0.4; }
 .history-date{ font-weight:600; }
 .history-meta{ font-family:'JetBrains Mono', monospace; font-size:12px; color: var(--muted); margin-top:2px; }
 /* Dezenter grauer Hinweis-Tag bei Einheiten, die über die "Frei"-Kachel liefen (siehe
@@ -1260,6 +1267,8 @@ html[data-theme="light"] .bodyweight-warning-icon{ filter: none; }
   width:22px; height:22px; display:block; -webkit-user-select:none; user-select:none;
   pointer-events:none; -webkit-touch-callout:none;
 }
+.history-context-icon-btn.compare{ color: var(--text); }
+.history-context-icon-btn.compare svg{ pointer-events:none; }
 
 /* Löschen (rotes X) und Schließen (graues X): zwei rotierte Linien statt Textzeichen,
    damit Android den Long-Press nicht als Textauswahl interpretiert. */
@@ -2612,3 +2621,16 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
   transition: opacity .2s ease, transform .2s ease;
 }
 .top-toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ---------- Trainings-Vergleich (openSessionComparePrompt(), 07-home.js) ---------- */
+.compare-header-row{ display:flex; justify-content:space-between; gap:10px; padding-bottom:14px; margin-bottom:6px; border-bottom:1px solid var(--border); }
+.compare-header-col{ flex:1; min-width:0; text-align:center; }
+.compare-header-mode{ font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.compare-header-date{ font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--muted); margin-top:2px; }
+.compare-stat-row{ display:flex; align-items:center; padding:9px 0; border-bottom:1px solid var(--border); gap:8px; }
+.compare-stat-row:last-child{ border-bottom:none; }
+.compare-stat-val{ flex:1; min-width:0; text-align:center; font-family:'JetBrains Mono', monospace; font-size:14px; font-weight:600; color:var(--text); }
+.compare-stat-val-ex{ font-size:12.5px; }
+.compare-stat-better{ color: var(--accent); font-weight:700; }
+.compare-stat-label{ flex-shrink:0; width:38%; text-align:center; font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; }
+.compare-stat-label-ex{ width:44%; text-transform:none; letter-spacing:normal; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
