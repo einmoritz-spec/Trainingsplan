@@ -159,6 +159,9 @@ function openHistoryContextMenu(sessionId){
       Antippen von A selbst bricht ab, ohne etwas zu öffnen.
 --------------------------------------------------- */
 let compareSessionA = null;
+// Siehe Kommentar bei refreshVisibleHistoryLists() weiter unten — synchron von
+// renderHome()/renderWorkoutsOverview() gesetzt, unabhängig vom (asynchronen) history.state.
+let lastRenderedHistoryView = 'home';
 
 // Zwei Einheiten gelten als "ähnlich", wenn sie denselben Trainings-Modus haben (z. B. beide
 // "unterkoerper", unabhängig von A/B-Variante — genau das macht aus "Unterkörper A" und
@@ -192,8 +195,16 @@ function cancelSessionCompare(){
 // Rendert die gerade sichtbare Liste neu, damit die Ähnlich/Abgeblendet-Markierung sofort
 // erscheint bzw. beim Abbrechen wieder verschwindet — unabhängig davon, ob man sich gerade auf
 // der Startseite oder in der Workouts-Übersicht befindet.
+// BUGFIX: history.state.view war hier unzuverlässig — "Vergleichen" wird über
+// openHistoryContextMenu() ausgelöst, dessen close() zuerst popOverlayStateIfOpen() aufruft
+// (ein ASYNCHRONES history.back()) und DIREKT DANACH synchron diese Funktion. Zu diesem
+// Zeitpunkt hatte das back() den History-State oft noch nicht auf "workoutsOverview"
+// zurückgesetzt (stand noch auf dem zwischenzeitlich gepushten '__overlay__' des Kontext-
+// menüs) — dadurch landete man beim Vergleichen-Button fälschlich auf der Startseite statt in
+// der Workouts-Übersicht zu bleiben. lastRenderedHistoryView wird stattdessen SYNCHRON von
+// renderHome()/renderWorkoutsOverview() selbst gesetzt, ganz unabhängig von der History-API.
 function refreshVisibleHistoryLists(){
-  if (history.state && history.state.view === 'workoutsOverview') renderWorkoutsOverview();
+  if (lastRenderedHistoryView === 'workoutsOverview') renderWorkoutsOverview();
   else renderHome();
 }
 
@@ -554,6 +565,7 @@ function homeMealsAccordionBodyHTML(){
   }).join('');
 }
 function renderHome(){
+  lastRenderedHistoryView = 'home';
   const allSorted = sessions.slice().reverse();
   const recent = allSorted.slice(0, 5);
   const rest = allSorted.slice(5);

@@ -6,7 +6,7 @@
 // (sw.js, Cache-First) nach einem Update oft noch mehrere Starts lang die ALTE Fassung —
 // ohne diesen Stempel ist "der Fix wirkt nicht" nicht von "der Fix ist nie angekommen" zu
 // unterscheiden. Bei jeder Änderung zusammen mit CACHE_NAME in sw.js erhöhen.
-const BUILD_STAMP = '57';
+const BUILD_STAMP = '58';
 /* ---------------------------------------------------
    Wake Lock (Bildschirm bei laufendem Training nicht abschalten)
    ---------------------------------------------------

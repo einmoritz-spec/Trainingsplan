@@ -181,6 +181,7 @@ function sessionMatchesFilter(session, filterId){
 }
 
 function renderWorkoutsOverview(){
+  lastRenderedHistoryView = 'workoutsOverview';
   const allSorted = sessions.slice().reverse();
 
   const years = [...new Set(allSorted.map(s => new Date(s.date).getFullYear()))].sort((a,b) => b-a);
