@@ -301,9 +301,7 @@ function renderWorkoutsOverview(){
       renderWorkoutsOverview();
     };
   });
-  app.querySelectorAll('.history-row').forEach(row => {
-    row.onclick = () => goSessionDetail(row.dataset.id);
-  });
+  wireHistoryRowClicks();
   wireHistoryLongPress();
 }
 

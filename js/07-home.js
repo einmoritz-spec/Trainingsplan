@@ -101,6 +101,9 @@ function openHistoryContextMenu(sessionId){
       <button class="history-context-icon-btn share" id="historyContextShare" aria-label="Teilen">
         <img src="${ICON_SHARE}" alt="" draggable="false">
       </button>
+      <button class="history-context-icon-btn compare" id="historyContextCompare" aria-label="Vergleichen">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v14"></path><path d="M4 13l4 4 4-4"></path><path d="M16 21V7"></path><path d="M20 11l-4-4-4 4"></path></svg>
+      </button>
       <button class="history-context-icon-btn delete" id="historyContextDelete" aria-label="Löschen"></button>
     </div>
   `;
@@ -113,6 +116,10 @@ function openHistoryContextMenu(sessionId){
   document.getElementById('historyContextShare').onclick = () => {
     close();
     shareSession(s, {});
+  };
+  document.getElementById('historyContextCompare').onclick = () => {
+    close();
+    startSessionCompare(s);
   };
   document.getElementById('historyContextDelete').onclick = () => {
     close();
@@ -138,14 +145,233 @@ function openHistoryContextMenu(sessionId){
   };
 }
 
+/* ---------------------------------------------------
+   TRAININGS-VERGLEICH
+   ---------------------------------------------------
+   Gestartet über "Vergleichen" im Long-Press-Kontextmenü einer Verlauf-Zeile
+   (openHistoryContextMenu() oben). Läuft in zwei Schritten:
+   1. compareSessionA gesetzt → dauerhaftes Banner unten (wie der Mini-Player beim laufenden
+      Training) + betroffene Listen (Home-Verlauf/Workouts-Übersicht) markieren ähnliche
+      Einheiten farblich, alle anderen werden dezent abgeblendet (siehe historyRowHTML()).
+   2. Antippen einer ZWEITEN Verlauf-Zeile (egal ob hervorgehoben oder nicht — die Markierung
+      ist nur eine Hilfe, keine Einschränkung) beendet den Auswahlmodus und öffnet
+      openSessionComparePrompt() mit beiden Einheiten. Antippen des X im Banner oder erneutes
+      Antippen von A selbst bricht ab, ohne etwas zu öffnen.
+--------------------------------------------------- */
+let compareSessionA = null;
+
+// Zwei Einheiten gelten als "ähnlich", wenn sie denselben Trainings-Modus haben (z. B. beide
+// "unterkoerper", unabhängig von A/B-Variante — genau das macht aus "Unterkörper A" und
+// "Unterkörper B" bereits ähnliche Einheiten). Frei-Einheiten haben keinen aussagekräftigen
+// Modus zum Vergleichen; dort (und als generischer Fallback) wird stattdessen die Überschneidung
+// der trainierten Muskelgruppen herangezogen — ab der Hälfte gemeinsamer Gruppen gilt das als
+// ähnlich genug.
+function sessionsAreSimilar(a, b){
+  if (!a || !b || a.id === b.id) return false;
+  if (a.mode && b.mode && a.mode !== 'frei' && a.mode === b.mode) return true;
+  const groupsOf = (s) => new Set(s.entries.map(e => {
+    const planEx = plan.exercises.find(x => x.id === e.exerciseId);
+    return (planEx && planEx.muscleGroup) || null;
+  }).filter(Boolean));
+  const ga = groupsOf(a), gb = groupsOf(b);
+  if (!ga.size || !gb.size) return false;
+  const shared = [...ga].filter(g => gb.has(g)).length;
+  return shared / Math.min(ga.size, gb.size) >= 0.5;
+}
+
+function startSessionCompare(session){
+  compareSessionA = session;
+  renderCompareBanner();
+  refreshVisibleHistoryLists();
+}
+function cancelSessionCompare(){
+  compareSessionA = null;
+  removeCompareBanner();
+  refreshVisibleHistoryLists();
+}
+// Rendert die gerade sichtbare Liste neu, damit die Ähnlich/Abgeblendet-Markierung sofort
+// erscheint bzw. beim Abbrechen wieder verschwindet — unabhängig davon, ob man sich gerade auf
+// der Startseite oder in der Workouts-Übersicht befindet.
+function refreshVisibleHistoryLists(){
+  if (history.state && history.state.view === 'workoutsOverview') renderWorkoutsOverview();
+  else renderHome();
+}
+
+function renderCompareBanner(){
+  removeCompareBanner();
+  if (!compareSessionA) return;
+  const el = document.createElement('div');
+  el.className = 'mini-player';
+  el.id = 'compareBanner';
+  // Läuft gerade zusätzlich ein Training, sitzt dessen eigenes Mini-Banner bereits auf
+  // bottom:0 — dann rutscht dieses hier eine Bannerhöhe weiter nach oben, statt sich zu
+  // überlappen (kommt praktisch selten vor, aber schadet nicht, das abzufangen).
+  if (typeof active !== 'undefined' && active) el.style.bottom = '60px';
+  el.innerHTML = `
+    <div class="mini-player-mid">
+      <div class="mini-player-time">Vergleichen</div>
+      <div class="mini-player-exercise">${modeDisplayLabel(compareSessionA.mode)} · ${fmtDate(compareSessionA.date)} — zweites Training antippen</div>
+    </div>
+    <button class="mini-player-cancel" id="compareBannerCancel" aria-label="Abbrechen">✕</button>
+  `;
+  document.body.appendChild(el);
+  document.getElementById('compareBannerCancel').onclick = () => cancelSessionCompare();
+}
+function removeCompareBanner(){
+  const el = document.getElementById('compareBanner');
+  if (el) el.remove();
+}
+
+// Zentrale Klick-Weiche für ALLE `.history-row`-Elemente im aktuell gerenderten DOM — ersetzt
+// die frühere, an beiden Aufrufstellen (renderHome()/renderWorkoutsOverview()) identisch
+// duplizierte "row.onclick = () => goSessionDetail(...)"-Zeile. Im Vergleichsmodus navigiert
+// ein Tap NICHT mehr zur Detailseite, sondern wählt die Zeile als zweite Einheit.
+function wireHistoryRowClicks(){
+  app.querySelectorAll('.history-row').forEach(row => {
+    row.onclick = () => {
+      if (compareSessionA){
+        if (row.dataset.id === compareSessionA.id){ cancelSessionCompare(); return; }
+        const b = sessions.find(x => x.id === row.dataset.id);
+        if (!b) return;
+        const a = compareSessionA;
+        cancelSessionCompare();
+        openSessionComparePrompt(a, b);
+        return;
+      }
+      goSessionDetail(row.dataset.id);
+    };
+  });
+}
+
+// Bewegtes Gewicht (kg) bzw. Gesamtzeit (Sek.) je Übungsname EINER Einheit — Grundlage für den
+// Übungs-für-Übungs-Vergleich in openSessionComparePrompt(). Gewicht wird bevorzugt gezeigt
+// (Kraftübungen), Zeit nur als Rückfalloption für reine Zeit-/Kardio-Übungen ohne Gewichtsfeld.
+function exerciseAmountsForCompare(session){
+  const map = {};
+  session.entries.forEach(e => {
+    let volKg = 0, sec = 0;
+    (e.sets || []).forEach(st => {
+      if (st.reps && st.weight) volKg += st.reps * st.weight;
+      if (st.seconds) sec += st.seconds;
+    });
+    if (!map[e.name]) map[e.name] = { volKg: 0, sec: 0 };
+    map[e.name].volKg += volKg;
+    map[e.name].sec += sec;
+  });
+  return map;
+}
+
+// Vergleichsansicht für zwei Einheiten (siehe startSessionCompare() oben) — Gesamtwerte
+// nebeneinander plus eine Übung-für-Übung-Gegenüberstellung, sortiert nach dem größten
+// gemeinsamen Beitrag. Nur ein einfaches Popup wie die übrigen Bestätigungs-/Auswahl-Dialoge,
+// kein eigener History-Eintrag nötig (kein verschachteltes Popup dahinter, das kollidieren
+// könnte) — daher hier bewusst normales pushOverlayState() statt des "Eltern-Popup"-Musters.
+function openSessionComparePrompt(a, b){
+  const existing = document.getElementById('sessionCompareOverlay');
+  if (existing) existing.remove();
+
+  const statRow = (label, va, vb, formatter, higherIsBetter) => {
+    const fa = formatter(va), fb = formatter(vb);
+    const better = (va == null || vb == null || va === vb) ? null
+      : (higherIsBetter ? (va > vb ? 'a' : 'b') : (va < vb ? 'a' : 'b'));
+    return `
+      <div class="compare-stat-row">
+        <span class="compare-stat-val ${better === 'a' ? 'compare-stat-better' : ''}">${fa ?? '–'}</span>
+        <span class="compare-stat-label">${label}</span>
+        <span class="compare-stat-val ${better === 'b' ? 'compare-stat-better' : ''}">${fb ?? '–'}</span>
+      </div>
+    `;
+  };
+
+  const volA = sessionVolumeKgRaw(a), volB = sessionVolumeKgRaw(b);
+  const kcalA = estimateSessionKcal(a), kcalB = estimateSessionKcal(b);
+  const rpeA = rpeEnabled() ? avgRpeForSessions([a]) : null;
+  const rpeB = rpeEnabled() ? avgRpeForSessions([b]) : null;
+
+  const statsHTML = [
+    statRow('Dauer', a.durationSec, b.durationSec, v => fmtDuration(v), false),
+    statRow('Bewegtes Gewicht', volA, volB, v => Math.round(v).toLocaleString('de-DE') + ' kg', true),
+    (kcalA != null || kcalB != null) ? statRow('≈ kcal', kcalA, kcalB, v => v == null ? null : v.toLocaleString('de-DE'), true) : '',
+    (rpeA != null || rpeB != null) ? statRow('Ø Intensität', rpeA, rpeB, v => v == null ? null : fmtRpe(v), true) : '',
+  ].join('');
+
+  // Übung-für-Übung: alle Namen aus BEIDEN Einheiten (Vereinigung), absteigend nach dem
+  // größeren der beiden Beiträge sortiert — die aussagekräftigsten Vergleiche stehen oben.
+  const amtA = exerciseAmountsForCompare(a), amtB = exerciseAmountsForCompare(b);
+  const names = [...new Set([...Object.keys(amtA), ...Object.keys(amtB)])]
+    .sort((x, y) => Math.max(amtB[y]?.volKg || amtB[y]?.sec || 0, amtA[y]?.volKg || amtA[y]?.sec || 0)
+                  - Math.max(amtB[x]?.volKg || amtB[x]?.sec || 0, amtA[x]?.volKg || amtA[x]?.sec || 0));
+  const formatAmount = (m) => {
+    if (!m) return '–';
+    if (m.volKg > 0) return Math.round(m.volKg).toLocaleString('de-DE') + ' kg';
+    if (m.sec > 0) return fmtDuration(m.sec);
+    return '✓';
+  };
+  const exerciseRowsHTML = names.map(name => {
+    const ma = amtA[name], mb = amtB[name];
+    const va = ma ? (ma.volKg || ma.sec || 0) : null;
+    const vb = mb ? (mb.volKg || mb.sec || 0) : null;
+    const better = (va == null || vb == null || va === vb) ? null : (va > vb ? 'a' : 'b');
+    return `
+      <div class="compare-stat-row">
+        <span class="compare-stat-val compare-stat-val-ex ${better === 'a' ? 'compare-stat-better' : ''}">${formatAmount(ma)}</span>
+        <span class="compare-stat-label compare-stat-label-ex">${ftEscapeHTML(name)}</span>
+        <span class="compare-stat-val compare-stat-val-ex ${better === 'b' ? 'compare-stat-better' : ''}">${formatAmount(mb)}</span>
+      </div>
+    `;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'add-exercise-overlay centered-overlay';
+  overlay.id = 'sessionCompareOverlay';
+  overlay.innerHTML = `
+    <div class="add-exercise-modal">
+      <div class="add-exercise-modal-header">
+        <div class="add-exercise-modal-title">Vergleich</div>
+        <button class="add-exercise-modal-close" id="sessionCompareClose" aria-label="Schließen">✕</button>
+      </div>
+      <div class="new-exercise-modal-body">
+        <div class="compare-header-row">
+          <div class="compare-header-col">
+            <div class="compare-header-mode">${modeDisplayLabel(a.mode)}</div>
+            <div class="compare-header-date">${fmtDate(a.date)}</div>
+          </div>
+          <div class="compare-header-col">
+            <div class="compare-header-mode">${modeDisplayLabel(b.mode)}</div>
+            <div class="compare-header-date">${fmtDate(b.date)}</div>
+          </div>
+        </div>
+        ${statsHTML}
+        ${exerciseRowsHTML ? `<div class="section-label" style="margin-top:16px;">Je Übung</div>${exerciseRowsHTML}` : ''}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  pushOverlayState(remove);
+  function remove(){ const el = document.getElementById('sessionCompareOverlay'); if (el) el.remove(); }
+  const close = () => { popOverlayStateIfOpen(); remove(); };
+  document.getElementById('sessionCompareClose').onclick = close;
+  overlay.onclick = (ev) => { if (ev.target === overlay) close(); };
+}
+
 function historyRowHTML(s){
   const totalSets = s.entries.reduce((a,e)=>a+e.sets.length,0);
   // Kleiner, unauffälliger Hinweis bei Einheiten, die über die "Frei"-Kachel liefen — vor allem
   // relevant, wenn diese Zeile gerade wegen sessionMatchesFilter()'s Cross-Listing unter einem
   // ANDEREN Kachel-Filter (z. B. "Push") auftaucht, aber auch sonst eine nützliche Info.
   const freiTag = s.mode === 'frei' ? `<span class="history-free-tag">frei</span>` : '';
+  // Während des Vergleichsmodus (siehe startSessionCompare() unten): die als Vergleichsbasis
+  // gewählte Einheit selbst bekommt eine eigene Markierung, ähnliche Einheiten (gleiche
+  // Trainingsart, z. B. beide "Unterkörper") werden hervorgehoben, alle anderen dezent
+  // abgeblendet — so fällt sofort auf, wo ein sinnvoller zweiter Vergleichspartner steht.
+  let compareClass = '';
+  if (compareSessionA){
+    if (compareSessionA.id === s.id) compareClass = ' history-row-compare-a';
+    else if (sessionsAreSimilar(compareSessionA, s)) compareClass = ' history-row-compare-similar';
+    else compareClass = ' history-row-compare-dim';
+  }
   return `
-    <div class="history-row" data-id="${s.id}" role="button" tabindex="0" style="-webkit-user-select:none; user-select:none; -webkit-touch-callout:none; touch-action:manipulation;">
+    <div class="history-row${compareClass}" data-id="${s.id}" role="button" tabindex="0" style="-webkit-user-select:none; user-select:none; -webkit-touch-callout:none; touch-action:manipulation;">
       <div style="-webkit-user-select:none; user-select:none;">
         <div class="history-date" style="-webkit-user-select:none; user-select:none;">${fmtDate(s.date)}</div>
         <div class="history-meta" style="-webkit-user-select:none; user-select:none;">${s.entries.length} Übungen · ${totalSets} Sätze</div>
@@ -378,9 +604,7 @@ function renderHome(){
   if (document.getElementById('btnHistoryToggle')){
     document.getElementById('btnHistoryToggle').onclick = () => goWorkoutsOverview();
   }
-  app.querySelectorAll('.history-row').forEach(row=>{
-    row.onclick = () => goSessionDetail(row.dataset.id);
-  });
+  wireHistoryRowClicks();
   wireHistoryLongPress();
   wireStartButtonLongPress();
 }
