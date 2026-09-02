@@ -105,8 +105,11 @@ function wireWeekStrip(){
 
 /* ---------------------------------------------------
    MONATSÜBERSICHT (geöffnet per Klick auf den Wochenstreifen der Startseite)
-   Zeigt fortlaufend Kalendermonate (zunächst Vormonat + aktueller Monat, beim
-   Runterscrollen werden per IntersectionObserver weitere Folgemonate nachgeladen).
+   Zeigt fortlaufend Kalendermonate: alle bisherigen Monate des laufenden Jahres
+   (Januar bis aktueller Monat) werden gerendert, die Ansicht springt beim Öffnen
+   automatisch zum aktuellen Monat — nach oben scrollen zeigt die Vormonate, beim
+   Runterscrollen werden per IntersectionObserver weitere Folgemonate nachgeladen.
+   Noch ältere, abgeschlossene Jahre liegen als eingeklappte Akkordeons ganz oben.
    Trainingstage werden wie im Wochenstreifen als gefüllte, abgerundete Kästen um
    die Datumszahl markiert (Kachel-Rahmenfarbe bzw. Akzentfarbe, heutiger Tag
    zusätzlich mit grauem Rahmen). "{Monat} Bericht"-Button unter jedem Monat öffnet
@@ -277,6 +280,10 @@ function appendMonthOverviewMonth(offset){
   list.insertAdjacentHTML('beforeend', monthOverviewBlockHTML(year, month));
   const block = list.lastElementChild;
   if (block){
+    // Offset-Markierung, damit renderMonthOverview() nach dem Rendern gezielt zum
+    // aktuellen Monat (offset 0) scrollen kann — die davor liegenden Monate bleiben
+    // darüber stehen und sind durch Hochscrollen erreichbar.
+    block.dataset.monthOffset = String(offset);
     block.querySelectorAll('[data-day-popup]').forEach(btn => {
       btn.onclick = () => {
         const [y, m, d] = btn.dataset.dayPopup.split('-').map(Number);
@@ -626,10 +633,15 @@ function renderMonthOverview(){
     };
   });
 
-  // Start: aktueller Monat (keine Vormonate mehr — siehe Nutzerwunsch); künftige Monate
-  // kommen per Infinite-Scroll hinzu. Man landet beim Öffnen also immer automatisch beim
-  // gerade laufenden Monat, egal ob/wie viele abgeschlossene Jahre oben eingeklappt liegen.
-  appendMonthOverviewMonth(0);
+  // Start: alle bereits vergangenen Monate des laufenden Jahres (Januar bis Vormonat)
+  // werden mitgerendert und stehen ÜBER dem aktuellen Monat — man kann also nach oben
+  // scrollen, um sie zu sehen. Direkt nach dem Rendern wird trotzdem automatisch zum
+  // aktuellen Monat gesprungen (siehe scrollToCurrentMonth() unten), sodass man beim
+  // Öffnen wie gewohnt sofort beim laufenden Monat landet. Künftige Monate kommen
+  // weiterhin per Infinite-Scroll nach unten hinzu.
+  for (let offset = -monthOverviewBase.month; offset <= 0; offset++){
+    appendMonthOverviewMonth(offset);
+  }
 
   const sentinel = document.getElementById('monthOverviewSentinel');
   monthOverviewObserver = new IntersectionObserver((entries) => {
@@ -640,7 +652,22 @@ function renderMonthOverview(){
   }, { rootMargin: '600px 0px' });
   monthOverviewObserver.observe(sentinel);
 
-  window.scrollTo(0, 0);
+  scrollToCurrentMonth();
+}
+
+// Springt (ohne Animation) so weit nach unten, dass der aktuelle Monat direkt unter der
+// sticky Zurück-Zeile beginnt. Die Vormonate darüber bleiben erhalten und sind durch
+// Hochscrollen erreichbar. Zwei requestAnimationFrame-Durchläufe, damit Layout/Bilder-
+// Platzhalter gesetzt sind, bevor die Zielposition berechnet wird.
+function scrollToCurrentMonth(){
+  const jump = () => {
+    const target = document.querySelector('#monthOverviewList [data-month-offset="0"]');
+    if (!target){ window.scrollTo(0, 0); return; }
+    const stickyH = document.querySelector('.month-overview-back-sticky')?.offsetHeight || 0;
+    const top = target.getBoundingClientRect().top + window.scrollY - stickyH;
+    window.scrollTo(0, Math.max(0, top));
+  };
+  requestAnimationFrame(() => requestAnimationFrame(jump));
 }
 
 /* ---------------------------------------------------
