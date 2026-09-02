@@ -142,11 +142,9 @@ function monthOverviewDayMarker(year, month, day){
   const isToday = d.getTime() === today.getTime();
   // Essenstracker-Einträge an diesem Tag (falls schon geladen, siehe initFoodTracker()-Aufruf
   // vor renderMonthOverview()/openDayTrainingPopup() weiter unten) — eigenes "hasFood"-Flag
-  // statt die Kachelfarbe zu überschreiben, da ein Trainingstag weiterhin klar per Kachelfarbe
-  // erkennbar bleiben soll; ein zusätzlicher kleiner Punkt (siehe monthGridHTML()/CSS
-  // .month-overview-day-num-hasfood) zeigt UNABHÄNGIG davon an, ob an diesem Tag auch Essen
-  // protokolliert wurde — auch an trainingsfreien Tagen, damit reine Ernährungstage im Monat
-  // ebenfalls sichtbar und antippbar sind (siehe openDayTrainingPopup()).
+  // statt die Kachelfarbe zu überschreiben. Es wird NICHT mehr optisch dargestellt (der frühere
+  // kleine Punkt unter der Tageszahl ist entfernt), sorgt aber weiterhin dafür, dass reine
+  // Ernährungstage ohne Training antippbar bleiben (siehe openDayTrainingPopup()).
   const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
   const hasFood = typeof ftDays !== 'undefined' && !!ftDays[iso] && FT_MEAL_KEYS.some(k => (ftDays[iso][k]||[]).length);
   return { color, isToday, hasFood };
@@ -180,13 +178,12 @@ function monthGridHTML(year, month, markerFn, dayAttrFn, allDaysClickable){
     const ringStyle = marker.selected
       ? `box-shadow:0 0 0 2px var(--accent);`
       : (marker.isToday ? `box-shadow:0 0 0 2px var(--border);` : '');
-    // marker.hasFood (siehe monthOverviewDayMarker()) markiert unabhängig von der
-    // Trainings-Kachelfarbe zusätzlich einen kleinen Punkt unter der Tageszahl, wenn an
-    // diesem Tag auch im Essenstracker etwas protokolliert wurde — macht reine
-    // Ernährungstage (ohne Training) im Trainingskalender sichtbar UND antippbar.
+    // marker.hasFood (siehe monthOverviewDayMarker()) wird NICHT mehr optisch markiert — der
+    // kleine Punkt unter der Tageszahl ist auf Wunsch entfernt, das Raster zeigt jetzt
+    // ausschließlich Trainingstage. Das Flag bleibt erhalten, damit reine Ernährungstage
+    // weiterhin ANTIPPBAR sind und ihr Tages-Popup öffnen (siehe unten).
     const cls = 'month-overview-day-num'
-      + (marker.color ? ' month-overview-day-num-filled' : '')
-      + (marker.hasFood ? ' month-overview-day-num-hasfood' : '');
+      + (marker.color ? ' month-overview-day-num-filled' : '');
     if (marker.color || marker.hasFood || allDaysClickable){
       return `
         <div class="month-overview-day">
@@ -284,6 +281,13 @@ function appendMonthOverviewMonth(offset){
     // aktuellen Monat (offset 0) scrollen kann — die davor liegenden Monate bleiben
     // darüber stehen und sind durch Hochscrollen erreichbar.
     block.dataset.monthOffset = String(offset);
+    // Der Platzhalter unter dem Sentinel (siehe scrollToCurrentMonth()) wird um die Höhe des
+    // neu geladenen Monats kleiner — sobald echte Folgemonate da sind, braucht es keinen
+    // künstlichen Scrollweg mehr und am Seitenende bleibt keine leere Fläche zurück.
+    const spacer = document.getElementById('monthOverviewSpacer');
+    if (spacer && spacer.offsetHeight){
+      spacer.style.height = `${Math.max(0, spacer.offsetHeight - block.offsetHeight)}px`;
+    }
     block.querySelectorAll('[data-day-popup]').forEach(btn => {
       btn.onclick = () => {
         const [y, m, d] = btn.dataset.dayPopup.split('-').map(Number);
@@ -607,6 +611,7 @@ function renderMonthOverview(){
     ${yearAccordionsHTML}
     <div id="monthOverviewList"></div>
     <div class="month-overview-sentinel" id="monthOverviewSentinel"></div>
+    <div id="monthOverviewSpacer"></div>
   `;
   document.getElementById('btnBack').onclick = () => history.back();
 
@@ -657,15 +662,28 @@ function renderMonthOverview(){
 
 // Springt (ohne Animation) so weit nach unten, dass der aktuelle Monat direkt unter der
 // sticky Zurück-Zeile beginnt. Die Vormonate darüber bleiben erhalten und sind durch
-// Hochscrollen erreichbar. Zwei requestAnimationFrame-Durchläufe, damit Layout/Bilder-
-// Platzhalter gesetzt sind, bevor die Zielposition berechnet wird.
+// Hochscrollen erreichbar.
+//
+// BUGFIX "landet ganz unten": Der aktuelle Monat ist beim Öffnen der LETZTE Block der Seite.
+// Unter ihm steht nur der winzige Sentinel — die Seite ist also gar nicht weit genug scrollbar,
+// um seinen Titel an den oberen Rand zu bringen. window.scrollTo() klemmt die Zielposition dann
+// stillschweigend auf das Seitenende ab, und man landete mitten/unten im Monat statt an dessen
+// Anfang. Deshalb wird vorher ein Platzhalter (#monthOverviewSpacer) genau so hoch gemacht, wie
+// noch Scrollweg fehlt. Er schrumpft wieder, sobald echte Folgemonate nachgeladen werden
+// (siehe appendMonthOverviewMonth()).
 function scrollToCurrentMonth(){
   const jump = () => {
     const target = document.querySelector('#monthOverviewList [data-month-offset="0"]');
     if (!target){ window.scrollTo(0, 0); return; }
     const stickyH = document.querySelector('.month-overview-back-sticky')?.offsetHeight || 0;
-    const top = target.getBoundingClientRect().top + window.scrollY - stickyH;
-    window.scrollTo(0, Math.max(0, top));
+    const top = Math.max(0, target.getBoundingClientRect().top + window.scrollY - stickyH);
+    const spacer = document.getElementById('monthOverviewSpacer');
+    if (spacer){
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      const missing = top - maxScroll;
+      if (missing > 0) spacer.style.height = `${Math.ceil(missing)}px`;
+    }
+    window.scrollTo(0, top);
   };
   requestAnimationFrame(() => requestAnimationFrame(jump));
 }
