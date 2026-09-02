@@ -364,15 +364,8 @@ html[data-theme="light"] .week-strip-arrow-inline img{ filter:none; }
   font-size:15px; font-weight:600; color:var(--text); box-sizing:border-box;
   border:none; font-family:inherit; padding:0; position:relative;
 }
-/* Kleiner Punkt unter der Tageszahl, unabhängig von einer evtl. Trainings-Kachelfarbe —
-   zeigt an, dass an diesem Tag (auch) im Essenstracker etwas protokolliert wurde, siehe
-   monthOverviewDayMarker()/monthGridHTML() (05-calendar.js). row-gap:22px auf .month-overview-
-   grid lässt genug Platz darunter, ohne die nächste Zeile zu berühren. */
-.month-overview-day-num-hasfood::after{
-  content:''; position:absolute; left:50%; bottom:-7px; transform:translateX(-50%);
-  width:5px; height:5px; border-radius:50%; background:var(--accent);
-}
-.month-overview-day-num-filled.month-overview-day-num-hasfood::after{ background:#fff; }
+/* Der frühere kleine Punkt unter der Tageszahl (Markierung für Essenstracker-Einträge)
+   wurde entfernt — das Monatsraster zeigt jetzt nur noch Trainingstage. */
 button.month-overview-day-num{ cursor:pointer; -webkit-tap-highlight-color:transparent; }
 .month-overview-day-num-filled{ font-weight:700; }
 .month-overview-report-btn{
