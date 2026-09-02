@@ -74,7 +74,8 @@ function renderFtAddFood(meal){
     <div class="brand" style="margin-bottom:14px;"><h1 style="font-size:22px;">${building ? `Auto-Mahlzeit · ${FT_MEAL_LABELS[meal]}` : FT_MEAL_LABELS[meal]}</h1></div>
     ${building ? `<div id="ftAmbWrap">${ftAutoMealBuilderBarHTML()}</div>` : ''}
     <div class="search-wrap">
-      <input class="search-input" id="ftFoodSearchInput" placeholder="Lebensmittel suchen …" autocomplete="off">
+      <input class="search-input" id="ftFoodSearchInput" placeholder="Lebensmittel suchen …" autocomplete="off" enterkeyhint="search" inputmode="search">
+      <button class="icon-btn" id="ftOffSearchBtn" title="Online suchen" aria-label="Online suchen">${ftIconSearch()}</button>
       <button class="icon-btn" id="ftScanBtn" title="Barcode scannen">${ftIconBarcode()}</button>
     </div>
     <div id="ftSearchResults"></div>
@@ -86,18 +87,28 @@ function renderFtAddFood(meal){
   document.getElementById('ftScanBtn').onclick = ftOpenScanner;
   if (building) ftWireAutoMealBuilderBar();
   const input = document.getElementById('ftFoodSearchInput');
-  let searchDebounceTimer = null;
+  // Die Online-Suche wird NICHT mehr automatisch beim Tippen ausgelöst (kein Debounce-Timer
+  // mehr). Open Food Facts erlaubt nur 10 Suchanfragen pro Minute pro IP und rät in der Doku
+  // ausdrücklich von "Suche während des Tippens" ab — genau daher kamen die ständigen
+  // "gerade nicht verfügbar"-Meldungen: ein einziges getipptes Wort konnte je nach Tipptempo
+  // mehrere Anfragen kosten, das Budget war nach ein, zwei Suchen aufgebraucht.
+  // Jetzt: lokale Treffer (Basisliste/Eigene) erscheinen weiterhin sofort beim Tippen, die
+  // Online-Abfrage startet erst auf Bestätigung — Enter/Suchtaste der Tastatur oder Lupe.
   input.addEventListener('input', ()=>{
-    clearTimeout(searchDebounceTimer);
     const value = input.value;
     if(!value.trim()){ ftHandleSearchInput(value); return; } // sofort zurück zur Startansicht
-    ftShowLocalResultsOnly(value); // Basisliste/Eigene sofort, kein Warten
-    // 600ms statt 350ms: Open Food Facts erlaubt nur 10 Suchanfragen pro Minute und warnt
-    // ausdrücklich vor Suche-während-des-Tippens (siehe Kommentar in 15a-food-core.js). Eine
-    // längere Pause bündelt Tippen zu deutlich weniger Anfragen — lokale Treffer erscheinen ja
-    // ohnehin sofort ohne Wartezeit, spürbar langsamer fühlt es sich dadurch nicht an.
-    searchDebounceTimer = setTimeout(()=>ftHandleSearchInput(value), 600);
+    ftShowLocalResultsOnly(value);
   });
+  const runOnlineSearch = () => {
+    const value = input.value;
+    if(!value.trim()){ ftHandleSearchInput(value); return; }
+    input.blur(); // Tastatur schließen, damit die Trefferliste sichtbar wird
+    ftHandleSearchInput(value);
+  };
+  input.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); runOnlineSearch(); }
+  });
+  document.getElementById('ftOffSearchBtn').onclick = runOnlineSearch;
   ftRenderDefaultResults();
 }
 
@@ -353,31 +364,52 @@ function ftToggleFavorite(id){
   ftSave('favorites', ftFavorites);
 }
 let ftLastQuery = '';
+// Wird nach Aktionen aufgerufen, die die Listen verändern (Favorit gesetzt, eigenes
+// Lebensmittel/gespeicherte Mahlzeit gelöscht …). Wichtig: hier darf KEINE neue Online-Anfrage
+// rausgehen — sonst hätte jeder Stern-Klick wieder Budget gekostet, obwohl der Nutzer gar nicht
+// neu gesucht hat. Liegt das Ergebnis noch im Abfrage-Cache, wird es unverändert wieder
+// angezeigt; sonst nur die lokalen Treffer plus der "Online suchen"-Button.
 function ftRenderCurrentResults(){
   const input = document.getElementById('ftFoodSearchInput');
-  if(input && input.value.trim()) ftHandleSearchInput(input.value);
+  if(input && input.value.trim()) ftHandleSearchInput(input.value, {cachedOnly: true});
   else ftRenderDefaultResults();
 }
 
 function ftLocalResultsHTML(q){
-  const {custom, base} = ftSearchLocal(q);
+  const {custom, saved, base} = ftSearchLocal(q);
   let html = '';
   if(custom.length) html += ftSection('Eigene Lebensmittel', custom);
+  // Bereits online gefundene/gescannte Produkte liegen dauerhaft auf dem Gerät und werden
+  // hier ganz normal mitangezeigt — kein erneuter Online-Abruf nötig (siehe ftSearchLocal()).
+  if(saved.length) html += ftSection('Bereits genutzt (offline)', saved);
   if(base.length) html += ftSection('Basisliste', base);
-  if(!custom.length && !base.length) html += `<div class="no-results">Keine Treffer in deiner Liste.</div>`;
+  if(!custom.length && !saved.length && !base.length) html += `<div class="no-results">Keine Treffer in deiner Liste.</div>`;
   return html;
 }
 function ftShowLocalResultsOnly(q){
   const box = document.getElementById('ftSearchResults');
   if(!box) return;
-  box.innerHTML = ftLocalResultsHTML(q) + `<div class="ft-section-label">Online-Datenbank</div><div class="loading-row">Tippe weiter oder warte kurz …</div>`;
+  // Kein automatischer Online-Abruf mehr (siehe renderFtAddFood()) — stattdessen ein
+  // antippbarer Hinweis, der dieselbe Suche auslöst wie Enter/Lupe.
+  box.innerHTML = ftLocalResultsHTML(q)
+    + `<div class="ft-section-label">Online-Datenbank</div>`
+    + `<button class="ft-btn-ghost" id="ftOffSearchTriggerBtn">Online nach „${ftEscapeHTML(q.trim())}“ suchen</button>`;
   ftWireResultRows(box);
+  const trigger = document.getElementById('ftOffSearchTriggerBtn');
+  if(trigger) trigger.onclick = () => {
+    const input = document.getElementById('ftFoodSearchInput');
+    if(input) input.blur();
+    ftHandleSearchInput(q);
+  };
 }
 
-async function ftHandleSearchInput(q){
+async function ftHandleSearchInput(q, opts){
   ftLastQuery = q;
   const box = document.getElementById('ftSearchResults');
   if(!q.trim()){ ftRenderDefaultResults(); return; }
+  // Nur-Cache-Modus (siehe ftRenderCurrentResults()): ohne bereits vorliegendes Ergebnis
+  // nicht online gehen, sondern die lokale Ansicht mit Such-Button zeigen.
+  if(opts && opts.cachedOnly && !ftOffQueryCacheGet(q.trim())){ ftShowLocalResultsOnly(q); return; }
   box.innerHTML = ftLocalResultsHTML(q) + `<div class="ft-section-label">Online-Datenbank</div><div class="loading-row" id="ftOffLoadingRow">Suche läuft …</div>`;
   ftWireResultRows(box);
 
@@ -387,9 +419,18 @@ async function ftHandleSearchInput(q){
   const loadingRow = document.getElementById('ftOffLoadingRow');
   if(!loadingRow) return;
   if(offResults.length){
+    // Treffer, die bereits im Offline-Abschnitt "Bereits genutzt" stehen (ftOffCache, siehe
+    // ftSearchLocal()), hier auslassen — sonst stünde dasselbe Produkt zweimal in der Liste.
+    const shownIds = new Set(ftSearchLocal(q).saved.map(f => f.id));
+    const fresh = offResults.filter(f => !shownIds.has(f.id));
+    if(!fresh.length){
+      loadingRow.outerHTML = `<div class="no-results">Keine weiteren Online-Treffer.</div>`;
+      ftWireResultRows(box);
+      return;
+    }
     // Gleiches Prinzip wie ftRankFoods() für die lokalen Treffer: schon getrackte Online-
     // Ergebnisse zuerst, nach Häufigkeit sortiert.
-    const sorted = offResults.slice().sort((a,b) => (ftFoodUsageCount[b.id]||0) - (ftFoodUsageCount[a.id]||0));
+    const sorted = fresh.slice().sort((a,b) => (ftFoodUsageCount[b.id]||0) - (ftFoodUsageCount[a.id]||0));
     loadingRow.outerHTML = sorted.map(ftResultRowHTML).join('');
   } else if(reason === 'offline'){
     // Echtes "kein Internet" (navigator.onLine meldet false, siehe ftOffSearch()).
@@ -398,7 +439,11 @@ async function ftHandleSearchInput(q){
     // Open Food Facts erlaubt nur 10 Suchanfragen pro Minute (siehe Kommentar in
     // 15a-food-core.js) — ehrlicher Hinweis samt Wartezeit statt "nicht erreichbar", das den
     // Nutzer sonst fälschlich einen Verbindungsfehler suchen lässt.
-    loadingRow.outerHTML = `<div class="no-results">Zu viele Suchanfragen — kurz warten (ca. 1 Min.), dann geht's wieder.</div>`;
+    // Konkrete Restzeit statt pauschalem "ca. 1 Minute" — die App weiß dank des eigenen
+    // Budget-Zählers bzw. des Retry-After-Headers, wann wieder gesucht werden darf.
+    const wait = (typeof ftOffSearchWaitSeconds === 'function') ? ftOffSearchWaitSeconds() : 0;
+    const waitTxt = wait > 0 ? ` Noch ca. ${wait} Sekunde${wait === 1 ? '' : 'n'}.` : '';
+    loadingRow.outerHTML = `<div class="no-results">Zu viele Suchanfragen an die Online-Datenbank.${waitTxt}</div>`;
   } else if(reason === 'unreachable'){
     // Anfrage kam nicht durch, OBWOHL der Browser eine Verbindung meldet (z. B. CORS-Hänger,
     // kurzzeitiger API-Ausfall, DNS-Filterung einzelner Subdomains) — das fälschlich als

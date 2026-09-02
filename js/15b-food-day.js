@@ -1468,9 +1468,10 @@ function ftOpenAddIngredientToSavedMeal(mealId){
     clearTimeout(debounceTimer);
     const q = input.value;
     if(!q.trim()){ resultsBox.innerHTML = ''; return; }
-    const { custom, base } = ftSearchLocal(q);
+    const { custom, saved, base } = ftSearchLocal(q);
     let html = '';
     if(custom.length) html += `<div class="ft-section-label">Eigene Lebensmittel</div>` + custom.map(ftEsmPickerRowHTML).join('');
+    if(saved.length) html += `<div class="ft-section-label">Bereits genutzt (offline)</div>` + saved.map(ftEsmPickerRowHTML).join('');
     if(base.length) html += `<div class="ft-section-label">Basisliste</div>` + base.map(ftEsmPickerRowHTML).join('');
     resultsBox.innerHTML = html + `<div class="ft-section-label">Online-Datenbank</div><div class="loading-row">Tippe weiter oder warte kurz …</div>`;
     wirePicker();

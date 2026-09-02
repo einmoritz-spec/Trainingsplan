@@ -248,6 +248,10 @@ function ftFoodMatchScore(food, q){
         if(ftNormalizeSearchText(s).includes(token)){ best = 1; break; } // Synonymtreffer
       }
     }
+    // Marke als letzte Chance — relevant für die jetzt mitdurchsuchten, bereits benutzten
+    // Online-/Scan-Produkte (siehe ftSearchLocal()): "ESN" steht dort im Markenfeld und nicht
+    // zwingend im Produktnamen, ohne diese Prüfung fände man sie beim Eintippen der Marke nicht.
+    if(!best && food.brand && ftNormalizeSearchText(food.brand).includes(token)) best = 1;
     if(!best) return 0; // ein nicht gefundenes Wort verwirft den ganzen Treffer
     total += best;
   }
@@ -268,11 +272,19 @@ function ftRankFoods(list, q){
     .map(x=>x.f);
 }
 
+// Lokale Suche über ALLE offline verfügbaren Quellen. Dritte Gruppe `saved`: Produkte, die
+// schon einmal online gefunden oder per Barcode gescannt UND benutzt wurden — sie liegen
+// dauerhaft in ftOffCache (siehe ftPersistOffFoodIfNeeded()), tauchten bisher aber NUR über
+// Favoriten/"Zuletzt genutzt" auf und waren beim Eintippen nicht auffindbar. Man musste sie
+// also jedes Mal erneut online suchen, obwohl alle Nährwerte längst auf dem Gerät lagen.
+// Jetzt werden sie ganz normal mitdurchsucht und funktionieren damit auch offline und ohne
+// Verbrauch des Open-Food-Facts-Minutenbudgets.
 function ftSearchLocal(query){
   const q = query.trim().toLowerCase();
-  if(!q) return {custom:[], base:[]};
+  if(!q) return {custom:[], base:[], saved:[]};
   return {
     custom: ftRankFoods(ftCustomFoods, q),
+    saved: ftRankFoods(Object.values(ftOffCache), q).slice(0, 40),
     base: ftRankFoods(BASE_FOODS, q).slice(0, 40),
   };
 }
@@ -305,13 +317,65 @@ const FT_OFF_HEADERS = {};
 --------------------------------------------------- */
 const FT_OFF_SEARCH_LIMIT = 8;          // Sicherheitsabstand zum offiziellen Limit von 10/min
 const FT_OFF_SEARCH_WINDOW_MS = 60000;
-let ftOffSearchTimestamps = [];
+const FT_OFF_SEARCH_TS_KEY = 'ftOffSearchTs';
+const FT_OFF_SEARCH_COOLDOWN_KEY = 'ftOffSearchCooldownUntil';
+// Zeitüberschreitung für JEDE Anfrage an Open Food Facts. Ohne das konnte eine hängende
+// Verbindung (Server nimmt an, antwortet aber nie — bei OFF unter Last leider nicht selten)
+// beliebig lange offen bleiben: die Suche stand ewig auf "Suche läuft …" und der Nutzer tippte
+// derweil weiter, was NOCH mehr Anfragen erzeugte und das Minutenlimit endgültig sprengte.
+const FT_OFF_TIMEOUT_MS = 8000;
+// WICHTIG: Das Limit gilt serverseitig pro IP, NICHT pro Seitenaufruf. Der Zähler lag bisher nur
+// im Arbeitsspeicher und war nach jedem Reload/App-Neustart wieder bei 0 — die App dachte, sie
+// habe volles Budget, während die IP bei OFF weiterhin gesperrt war. Deshalb wird das Budget
+// jetzt in der sessionStorage mitgeführt und übersteht einen Reload.
+function ftOffStoreRead(key, fallback){
+  try{ const raw = sessionStorage.getItem(key); return raw == null ? fallback : JSON.parse(raw); }
+  catch(e){ return fallback; }
+}
+function ftOffStoreWrite(key, value){
+  try{ sessionStorage.setItem(key, JSON.stringify(value)); }catch(e){ /* privater Modus o.ä. */ }
+}
+let ftOffSearchTimestamps = ftOffStoreRead(FT_OFF_SEARCH_TS_KEY, []) || [];
+let ftOffSearchCooldownUntil = ftOffStoreRead(FT_OFF_SEARCH_COOLDOWN_KEY, 0) || 0;
 function ftOffSearchBudgetLeft(){
   const now = Date.now();
+  const before = ftOffSearchTimestamps.length;
   ftOffSearchTimestamps = ftOffSearchTimestamps.filter(t => now - t < FT_OFF_SEARCH_WINDOW_MS);
+  if (ftOffSearchTimestamps.length !== before) ftOffStoreWrite(FT_OFF_SEARCH_TS_KEY, ftOffSearchTimestamps);
   return FT_OFF_SEARCH_LIMIT - ftOffSearchTimestamps.length;
 }
-function ftOffNoteSearchRequest(){ ftOffSearchTimestamps.push(Date.now()); }
+function ftOffNoteSearchRequest(){
+  ftOffSearchTimestamps.push(Date.now());
+  ftOffStoreWrite(FT_OFF_SEARCH_TS_KEY, ftOffSearchTimestamps);
+}
+// Hat OFF selbst mit 429/503 geantwortet, ist die IP bereits gesperrt — dann darf für eine
+// Weile GAR NICHTS mehr rausgehen (jede weitere Anfrage verlängert die Sperre nur). Retry-After
+// aus dem Antwort-Header wird respektiert, sonst 60 Sekunden.
+function ftOffSearchCooldownLeftMs(){ return Math.max(0, ftOffSearchCooldownUntil - Date.now()); }
+function ftOffSearchStartCooldown(retryAfterHeader){
+  const secs = Number(retryAfterHeader);
+  const ms = Number.isFinite(secs) && secs > 0 ? Math.min(secs, 300) * 1000 : FT_OFF_SEARCH_WINDOW_MS;
+  ftOffSearchCooldownUntil = Date.now() + ms;
+  ftOffStoreWrite(FT_OFF_SEARCH_COOLDOWN_KEY, ftOffSearchCooldownUntil);
+}
+// Sekunden, bis wieder gesucht werden darf — für einen ehrlichen Hinweis in der Oberfläche
+// ("noch ca. X Sekunden") statt des pauschalen "versuch es in 1 Minute nochmal".
+function ftOffSearchWaitSeconds(){
+  const cooldown = ftOffSearchCooldownLeftMs();
+  if (cooldown > 0) return Math.ceil(cooldown / 1000);
+  if (ftOffSearchBudgetLeft() > 0) return 0;
+  const oldest = Math.min(...ftOffSearchTimestamps);
+  return Math.max(1, Math.ceil((oldest + FT_OFF_SEARCH_WINDOW_MS - Date.now()) / 1000));
+}
+async function ftOffFetch(url, timeoutMs){
+  const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const timer = setTimeout(() => { try{ ctrl && ctrl.abort(); }catch(e){} }, timeoutMs || FT_OFF_TIMEOUT_MS);
+  try{
+    return await fetch(url, ctrl ? {headers:FT_OFF_HEADERS, signal:ctrl.signal} : {headers:FT_OFF_HEADERS});
+  } finally {
+    clearTimeout(timer);
+  }
+}
 // Zwischenspeicher für bereits gesuchte Begriffe (nur für die Laufzeit der Seite, absichtlich
 // NICHT persistiert — Suchtreffer sollen bei einem späteren Besuch wieder aktuell geholt werden).
 const ftOffQueryCache = new Map();
@@ -332,7 +396,12 @@ function ftOffQueryCacheSet(key, results){
 // nicht mehr verfügbar" zeigen. Kein echtes LRU (keine Zugriffszeitstempel vorhanden); da neue
 // Cache-Einträge stets ans Ende von Object.keys() angehängt werden, kommt eine simple
 // "älteste ungeschützte zuerst"-Räumung in der Praxis nah genug an eine LRU heran.
-const FT_OFF_CACHE_LIMIT = 300;
+// Von 300 auf 800 angehoben: Der Cache ist seit ftSearchLocal() nicht mehr nur ein
+// Beschleuniger, sondern die eigentliche persönliche Offline-Datenbank — je mehr davon
+// erhalten bleibt, desto seltener muss überhaupt online gesucht werden. Referenzierte
+// Einträge sind ohnehin geschützt (siehe unten), es fliegen also nur nie wieder benutzte
+// Produkte raus.
+const FT_OFF_CACHE_LIMIT = 800;
 function ftPruneOffCache(){
   const ids = Object.keys(ftOffCache);
   if(ids.length <= FT_OFF_CACHE_LIMIT) return;
@@ -387,7 +456,7 @@ function ftPersistOffFoodIfNeeded(food){
 function ftDelay(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
 async function ftOffByBarcodeAttempt(code){
   const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,brands,nutriments`;
-  const res = await fetch(url, {headers:FT_OFF_HEADERS});
+  const res = await ftOffFetch(url);
   if(!res.ok) return {ok:false, reason: navigator.onLine ? 'unreachable' : 'offline'};
   const data = await res.json();
   if(data.status !== 1) return {ok:false, reason:'notFound'};
@@ -453,6 +522,7 @@ async function ftOffSearchAttempt(query, pageSize){
   // Budget vorher prüfen — ohne freies Budget lieber gar nicht feuern (siehe Kommentar zum
   // OFF-Suchlimit oben), sonst verlängert man die Sperre nur und wartet dabei auf einen
   // Fehlschlag, der ohnehin absehbar ist.
+  if (ftOffSearchCooldownLeftMs() > 0) return {results: [], reason: 'ratelimited'};
   if (ftOffSearchBudgetLeft() <= 0) return {results: [], reason: 'ratelimited'};
   // Primär: Search-a-licious. Fallback: legacy search.pl.
   let requestFailed = true;
@@ -460,10 +530,13 @@ async function ftOffSearchAttempt(query, pageSize){
   try{
     const url = `https://search.openfoodfacts.org/search?q=${encodeURIComponent(query)}&langs=de&page_size=${size}&fields=code,product_name,brands,nutriments`;
     ftOffNoteSearchRequest();
-    const res = await fetch(url, {headers:FT_OFF_HEADERS});
+    const res = await ftOffFetch(url);
     // 429 = zu viele Anfragen, 503 = globales Limit/Überlast (siehe OFF-Doku) — das ist etwas
     // anderes als "nicht erreichbar" und darf NICHT sofort erneut versucht werden.
-    if(res.status === 429 || res.status === 503) rateLimited = true;
+    if(res.status === 429 || res.status === 503){
+      rateLimited = true;
+      ftOffSearchStartCooldown(res.headers && res.headers.get('Retry-After'));
+    }
     if(res.ok){
       requestFailed = false;
       const data = await res.json();
@@ -484,10 +557,18 @@ async function ftOffSearchAttempt(query, pageSize){
   if (rateLimited) return {results: [], reason: 'ratelimited'};
   if (ftOffSearchBudgetLeft() <= 0) return {results: [], reason: 'ratelimited'};
   try{
-    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=${size}&fields=code,product_name,brands,nutriments`;
+    // BUGFIX: Der Legacy-Endpunkt braucht laut OFF-Doku zwingend `search_simple=1` UND
+    // `action=process` — ohne die beiden Parameter liefert search.pl je nach Serverzustand eine
+    // HTML-Seite statt JSON zurück. Genau das landete hier dann in res.json(), warf, und die
+    // Suche meldete "nicht erreichbar", obwohl der Server einwandfrei geantwortet hatte. Das
+    // war einer der Hauptgründe für die scheinbar zufälligen Fehlermeldungen.
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=${size}&fields=code,product_name,brands,nutriments`;
     ftOffNoteSearchRequest();
-    const res = await fetch(url, {headers:FT_OFF_HEADERS});
-    if(res.status === 429 || res.status === 503) return {results: [], reason: 'ratelimited'};
+    const res = await ftOffFetch(url);
+    if(res.status === 429 || res.status === 503){
+      ftOffSearchStartCooldown(res.headers && res.headers.get('Retry-After'));
+      return {results: [], reason: 'ratelimited'};
+    }
     // BUGFIX: requestFailed wurde hier früher schon VOR der res.ok-Prüfung auf false gesetzt.
     // Bei einer Fehlerantwort (z.B. 500 oder eine HTML-Fehlerseite statt JSON) warf danach
     // res.json() — und weil requestFailed dann fälschlich false war, meldete die Funktion
@@ -530,7 +611,11 @@ async function ftOffSearchAttempt(query, pageSize){
 // müssen ALLE eingegebenen Wörter enthalten) und nach Relevanz sortiert (ftOffMatchScore) statt
 // einfach in OFF-Reihenfolge zu bleiben — auf maximal 4 Wortabfragen gedeckelt, damit auch bei
 // langen Eingaben nicht unbegrenzt viele parallele Anfragen losgeschickt werden.
-const FT_OFF_TOKEN_QUERY_CAP = 4;
+// Von 4 auf 2 gesenkt: eine einzige Mehrwort-Eingabe konnte vorher bis zu 5 Anfragen kosten
+// (Phrase + 4 Wörter) und mit dem Wiederholungsversuch bis zu 10 — also das komplette
+// Minutenbudget für EINE Suche. Zwei zusätzliche Wortabfragen reichen in der Praxis, um
+// Marke + Produktwort abzudecken, kosten aber höchstens 3 Anfragen pro Suche.
+const FT_OFF_TOKEN_QUERY_CAP = 2;
 const FT_OFF_TOKEN_PAGE_SIZE = 40;
 // Analog zu ftFoodMatchScore() für lokale Treffer, aber gegen Name+Marke eines Online-Treffers
 // statt gegen einen einzelnen Namensstring — bestimmt die Sortierung der Online-Ergebnisliste,
@@ -566,8 +651,11 @@ async function ftOffSearch(query){
     return first;
   }
   // Bei einem Limit-Treffer NICHT erneut versuchen — das würde die Sperre nur verlängern.
+  // Ebenso wenig, wenn das Minutenbudget bereits aufgebraucht ist: der zweite Versuch würde
+  // ohnehin sofort als 'ratelimited' zurückkommen und nur zusätzlich Zeit kosten.
   if(first.reason === 'ratelimited') return first;
-  await ftDelay(700);
+  if(ftOffSearchBudgetLeft() <= 0 || ftOffSearchCooldownLeftMs() > 0) return {results: [], reason: 'ratelimited'};
+  await ftDelay(1200);
   const second = await run();
   if(!second.reason) ftOffQueryCacheSet(query.trim(), second.results);
   return second;
@@ -805,6 +893,11 @@ function ftIconStar(filled){
 }
 function ftIconBarcode(){
   return `<svg viewBox="0 0 24 24" fill="none"><path d="M4 5v14M8 5v14M11 5v14M15 5v14M18 5v14M21 5v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+}
+// Lupe für den expliziten "Online suchen"-Button neben dem Suchfeld (siehe renderFtAddFood(),
+// 15c-food-add.js) — die Online-Suche läuft bewusst NICHT mehr automatisch beim Tippen.
+function ftIconSearch(){
+  return `<svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 }
 function ftIconTrash(){
   return `<svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V4.5a1 1 0 011-1h4a1 1 0 011 1V7m-9 0l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
