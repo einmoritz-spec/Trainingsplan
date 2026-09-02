@@ -647,6 +647,16 @@ function renderMonthOverview(){
   for (let offset = -monthOverviewBase.month; offset <= 0; offset++){
     appendMonthOverviewMonth(offset);
   }
+  // Zusätzlich drei Folgemonate direkt mitrendern. Ohne sie wäre der aktuelle Monat der
+  // allerletzte Block der Seite: man würde nach dem Sprung auf einem Bildschirm landen, unter
+  // dem nichts mehr kommt — genau der Eindruck "ich starte ganz unten". Der Infinite-Scroll
+  // lädt sonst erst NACH einer Scroll-Bewegung nach, was den leeren Eindruck nicht rechtzeitig
+  // behebt. Drei Monate sind billig zu rendern (reine Rastertabellen) und geben verlässlich
+  // genug Scrollweg unterhalb des aktuellen Monats.
+  for (let offset = 1; offset <= 3; offset++){
+    appendMonthOverviewMonth(offset);
+  }
+  monthOverviewNextOffset = 4;
 
   const sentinel = document.getElementById('monthOverviewSentinel');
   monthOverviewObserver = new IntersectionObserver((entries) => {
@@ -664,28 +674,49 @@ function renderMonthOverview(){
 // sticky Zurück-Zeile beginnt. Die Vormonate darüber bleiben erhalten und sind durch
 // Hochscrollen erreichbar.
 //
-// BUGFIX "landet ganz unten": Der aktuelle Monat ist beim Öffnen der LETZTE Block der Seite.
-// Unter ihm steht nur der winzige Sentinel — die Seite ist also gar nicht weit genug scrollbar,
-// um seinen Titel an den oberen Rand zu bringen. window.scrollTo() klemmt die Zielposition dann
-// stillschweigend auf das Seitenende ab, und man landete mitten/unten im Monat statt an dessen
-// Anfang. Deshalb wird vorher ein Platzhalter (#monthOverviewSpacer) genau so hoch gemacht, wie
-// noch Scrollweg fehlt. Er schrumpft wieder, sobald echte Folgemonate nachgeladen werden
-// (siehe appendMonthOverviewMonth()).
+// Warum das mehr ist als ein einzelnes window.scrollTo():
+// 1. Der aktuelle Monat ist beim Öffnen der LETZTE Block der Seite. Unter ihm steht nur der
+//    winzige Sentinel — die Seite ist also gar nicht weit genug scrollbar, um seinen Titel an
+//    den oberen Rand zu bringen. Der Browser klemmt die Zielposition dann stillschweigend aufs
+//    Seitenende ab, und man landet unten im Monat statt an dessen Anfang. Dagegen hilft zweierlei:
+//    drei vorab gerenderte Folgemonate (siehe renderMonthOverview()) und, falls das immer noch
+//    nicht reicht, der Platzhalter #monthOverviewSpacer, der den fehlenden Scrollweg auffüllt.
+// 2. Höhen können sich direkt nach dem Rendern noch ändern (Icon-Bild der Zurück-Zeile, Schrift
+//    wird nachgeladen, Akkordeons oben). Verschiebt sich dadurch etwas ÜBER dem Zielmonat,
+//    stimmt die vorher berechnete Position nicht mehr. Deshalb wird die Position in den ersten
+//    Millisekunden mehrfach nachgemessen und korrigiert — aber nur, solange der Nutzer nicht
+//    selbst gescrollt hat (dann hat seine Eingabe Vorrang).
 function scrollToCurrentMonth(){
-  const jump = () => {
+  let cancelled = false;
+  const cancel = () => { cancelled = true; };
+  ['wheel', 'touchstart', 'keydown'].forEach(ev =>
+    window.addEventListener(ev, cancel, { once: true, passive: true })
+  );
+
+  const align = () => {
+    if (cancelled) return;
     const target = document.querySelector('#monthOverviewList [data-month-offset="0"]');
-    if (!target){ window.scrollTo(0, 0); return; }
+    if (!target) return;
     const stickyH = document.querySelector('.month-overview-back-sticky')?.offsetHeight || 0;
-    const top = Math.max(0, target.getBoundingClientRect().top + window.scrollY - stickyH);
+    // Fehlenden Scrollweg auffüllen — aber nur so viel wie wirklich nötig, damit am Seitenende
+    // keine unnötige Leerfläche entsteht. Dank der drei vorab gerenderten Folgemonate ist das
+    // im Normalfall 0.
     const spacer = document.getElementById('monthOverviewSpacer');
     if (spacer){
-      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-      const missing = top - maxScroll;
-      if (missing > 0) spacer.style.height = `${Math.ceil(missing)}px`;
+      const top = Math.max(0, target.getBoundingClientRect().top + window.scrollY - stickyH);
+      const contentHeight = document.documentElement.scrollHeight - spacer.offsetHeight;
+      const missing = top + window.innerHeight - contentHeight;
+      spacer.style.height = missing > 0 ? `${Math.ceil(missing)}px` : '0px';
     }
-    window.scrollTo(0, top);
+    const delta = target.getBoundingClientRect().top - stickyH;
+    if (Math.abs(delta) < 1) return;
+    window.scrollTo(0, Math.max(0, window.scrollY + delta));
   };
-  requestAnimationFrame(() => requestAnimationFrame(jump));
+
+  requestAnimationFrame(() => { align(); requestAnimationFrame(align); });
+  setTimeout(align, 120);
+  setTimeout(align, 400);
+  setTimeout(() => { align(); ['wheel','touchstart','keydown'].forEach(ev => window.removeEventListener(ev, cancel)); }, 900);
 }
 
 /* ---------------------------------------------------
