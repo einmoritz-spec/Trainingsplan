@@ -345,8 +345,15 @@ html[data-theme="light"] #btnSummaryShare{ color:#000; border-color:#000; }
 }
 .week-strip-arrow-inline img{ width:14px; height:14px; display:block; opacity:0.32; filter:invert(1); }
 html[data-theme="light"] .week-strip-arrow-inline img{ filter:none; }
+/* Deckende Fläche statt transparent: Beim Öffnen steht der aktuelle Monat direkt unter dieser
+   Zeile, DARÜBER liegen aber bereits die Vormonate (siehe prependPastMonthsOfYear(),
+   05-calendar.js). Bei transparentem Hintergrund schimmerte deren unteres Ende (z.B. der
+   "August Bericht"-Button) durch die Leiste hindurch. padding-bottom übernimmt hier den
+   früheren margin-bottom der .back-row, damit auch der Abstand darunter mit abgedeckt wird —
+   ein reiner Margin wäre durchsichtig geblieben. */
 .month-overview-back-sticky{
-  position:sticky; top:0; z-index:20; background:none; border:none; box-shadow:none;
+  position:sticky; top:0; z-index:20; background:var(--bg); border:none; box-shadow:none;
+  margin-bottom:0; padding-bottom:18px;
 }
 .month-overview-block{ padding:22px 20px 6px; }
 .month-overview-title{ font-size:26px; font-weight:800; margin:0 0 4px; }
