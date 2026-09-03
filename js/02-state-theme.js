@@ -401,6 +401,7 @@ function applyTheme(){
   }
   applyFontFamily();
   syncStatusBarColor(bgColor);
+  syncFullscreenForTheme();
 }
 
 // Android/Chrome färben die Status- und Navigationsleiste (die "Balken oben und unten", siehe
@@ -430,31 +431,89 @@ function applyTheme(){
 // ~3px-Trennstrich zwischen System-Statusleiste und App-Inhalt verursacht — dieser Strich wird
 // bewusst in Kauf genommen, damit die untere Leiste mitfärbt. Bitte nicht erneut entfernen,
 // ohne beide Effekte gegeneinander zu prüfen.
+// ---------------------------------------------------------------------------------------
+// STATUSLEISTE / VOLLBILD
+//
+// Hintergrund: Die App wird auf Android als WebAPK installiert. Die Farbe hinter der System-
+// Statusleiste stammt dort aus der manifest.json und wird BEIM INSTALLIEREN fest eingebacken —
+// das <meta name="theme-color"> zur Laufzeit erreicht sie nicht. Ein farblich passender Balken
+// ist deshalb nur bei genau einer Farbe möglich (dem Standard-Dunkel #121316 aus dem Manifest).
+//
+// Lösung: Sobald das Erscheinungsbild vom Standard-Dunkel abweicht — also im Hellmodus oder mit
+// eigener Hintergrundfarbe — wird die Statusleiste per Fullscreen-API komplett ausgeblendet,
+// dann gibt es keinen unpassenden Balken mehr. Beim Standard-Dunkel bleibt sie sichtbar, weil
+// die eingebackene Manifest-Farbe dort ohnehin passt.
+//
+// Zwei Einschränkungen, die technisch nicht zu umgehen sind:
+// - Vollbild darf der Browser nur nach einer Nutzeraktion starten. Direkt beim App-Start (ohne
+//   Berührung) wird die Anfrage abgelehnt; deshalb wird sie bei der ersten Berührung nachgeholt
+//   (siehe installFullscreenGestureFallback()).
+// - Android blendet im Vollbild auch die Navigationsleiste unten aus; beide lassen sich per
+//   Wischen vom Rand kurzzeitig wieder einblenden.
+function themeWantsFullscreen(){
+  return currentThemeMode() === 'light' || !!currentBgColor();
+}
+// wantOverride: Der Essenstracker hat ein eigenes Farbschema (ftSyncStatusBarColor(),
+// 15a-food-core.js) und reicht seinen eigenen Wunsch durch, damit dort dieselbe Regel gilt.
+function syncFullscreenForTheme(wantOverride){
+  try{
+    const want = (wantOverride === undefined) ? themeWantsFullscreen() : !!wantOverride;
+    const isFs = !!document.fullscreenElement;
+    // Beenden geht immer, Starten nur mit frischer Nutzeraktion — schlägt es fehl, wird es
+    // still verworfen und beim nächsten Antippen erneut versucht.
+    if (want && !isFs) { const p = document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(() => {}); }
+    else if (!want && isFs) { const p = document.exitFullscreen(); if (p && p.catch) p.catch(() => {}); }
+  }catch(e){ /* Browser ohne Fullscreen-API */ }
+}
+// Holt das Vollbild bei der ersten Berührung nach dem App-Start nach. Bewusst KEIN {once:true}:
+// Schlägt der erste Versuch fehl (z.B. weil die Berührung ein Scrollen war), soll es beim
+// nächsten Antippen wieder versucht werden. Der Aufwand pro Tap ist ein Boolean-Vergleich.
+function installFullscreenGestureFallback(){
+  document.addEventListener('pointerdown', () => {
+    if (themeWantsFullscreen() && !document.fullscreenElement) syncFullscreenForTheme();
+  }, { passive: true });
+}
+
 function syncStatusBarColor(resolvedBgColor){
   const hex = (resolvedBgColor && resolvedBgColor.hex) || (currentThemeMode() === 'light' ? '#f5f4f1' : '#121316');
-  const old = document.getElementById('metaThemeColor');
-  // Nur neu aufbauen, wenn sich die Farbe wirklich geändert hat — sonst würde jeder
-  // applyTheme()-Aufruf (läuft auch bei unveränderten Themes) unnötig im <head> herumräumen.
-  if (!old || old.getAttribute('content') !== hex){
-    if (old) old.remove();
-    const meta = document.createElement('meta');
+  let meta = document.getElementById('metaThemeColor');
+  if (!meta){
+    meta = document.createElement('meta');
     meta.setAttribute('name', 'theme-color');
     meta.setAttribute('id', 'metaThemeColor');
-    meta.setAttribute('content', hex);
     document.head.appendChild(meta);
   }
+  // Nur noch das content-Attribut ändern statt den Knoten zu entfernen und neu einzufügen.
+  // Das Entfernen war der Versuch, Chrome zu einer Neuauswertung zu zwingen — es bewirkt aber
+  // das Gegenteil: Chrome beobachtet das ERSTE theme-color-Meta im Dokument. Wird genau dieser
+  // Knoten entfernt, gilt die Seite kurzzeitig als "ohne theme-color", und der danach frisch
+  // angehängte Knoten wird in der installierten PWA nicht mehr zuverlässig übernommen — der
+  // Balken blieb auf dem Wert vom Start stehen. Eine reine Attributänderung ist der von Chrome
+  // dokumentierte und tatsächlich beobachtete Weg.
+  if (meta.getAttribute('content') !== hex) meta.setAttribute('content', hex);
+
   const scheme = currentThemeMode() === 'light' ? 'light' : 'dark';
   document.documentElement.style.colorScheme = scheme;
   // Für den nächsten App-Start merken: Der Inline-Schnipsel im <head> von index.html setzt
-  // theme-color damit schon vor dem ersten Paint richtig. Nötig, weil Chrome die Fläche hinter
-  // der Android-Statusleiste beim Start EINMAL aus theme-color übernimmt und spätere Änderungen
-  // in der installierten PWA nicht zuverlässig nachzieht — der Balken oben behielt sonst den
-  // statischen Standardwert, obwohl in der App längst eine eigene Hintergrundfarbe aktiv war.
+  // theme-color damit schon vor dem ersten Paint richtig — wichtig, weil Chrome die Fläche
+  // hinter der Android-Statusleiste beim Seitenstart übernimmt.
   // localStorage statt IndexedDB, weil der Wert dort synchron und ohne await lesbar sein muss.
   try{
     localStorage.setItem('themeColorHex', hex);
     localStorage.setItem('themeColorScheme', scheme);
   }catch(e){ /* z.B. privater Modus — dann bleibt es beim statischen Startwert */ }
+}
+
+// Chrome wertet theme-color in der installierten PWA vor allem beim Start und beim
+// Zurückkehren in die App neu aus. Deshalb hier zusätzlich beim Wiedereinblenden (App aus dem
+// Hintergrund geholt) und beim Wiederherstellen aus dem Back-Forward-Cache erneut setzen —
+// ohne das blieb eine zwischenzeitlich geänderte Hintergrundfarbe oben ungenutzt.
+// installStatusBarColorWatchers() wird einmalig in init() aufgerufen.
+function installStatusBarColorWatchers(){
+  const resync = () => { if (typeof applyTheme === 'function') syncStatusBarColor(currentBgColor()); };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) resync(); });
+  window.addEventListener('pageshow', resync);
+  window.addEventListener('focus', resync);
 }
 
 async function init(){
@@ -466,6 +525,8 @@ async function init(){
   customFonts = await loadJSON('customFonts', []);
   registerCustomFontFaces();
   applyTheme();
+  installStatusBarColorWatchers();
+  installFullscreenGestureFallback();
 
   let planChanged = false;
   // Übungen, die bewusst über hideExerciseFromPlan() ausgeblendet wurden, sollen beim nächsten

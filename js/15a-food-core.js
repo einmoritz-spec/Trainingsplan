@@ -804,6 +804,14 @@ function ftSyncStatusBarColor(resolvedBgColor){
     localStorage.setItem('themeColorHex', hex);
     localStorage.setItem('themeColorScheme', scheme);
   }catch(e){}
+  // Gleiche Regel wie im übrigen Trainingsplan: Weicht das Erscheinungsbild vom Standard-Dunkel
+  // ab, wird die Statusleiste ausgeblendet, weil ihre Farbe im installierten WebAPK fest ist
+  // und dann nicht mehr passt (ausführliche Begründung bei syncFullscreenForTheme(),
+  // 02-state-theme.js). Der Essenstracker kann ein eigenes Schema haben, deshalb reicht er
+  // seinen eigenen Wunsch durch.
+  if (typeof syncFullscreenForTheme === 'function'){
+    syncFullscreenForTheme(scheme === 'light' || !!resolvedBgColor);
+  }
 }
 // Essenstracker-Pendant zu applyTheme() (02-state-theme.js) — wird von JEDEM Essenstracker-
 // Bildschirm-Renderer als allererstes aufgerufen (renderFoodTracker()/renderFoodStats()/
