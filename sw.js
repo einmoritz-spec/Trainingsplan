@@ -124,7 +124,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v74';
+const CACHE_NAME = 'trainingsplan-cache-v75';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
