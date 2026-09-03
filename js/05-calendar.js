@@ -270,24 +270,18 @@ function monthOverviewBlockHTML(year, month){
   `;
 }
 
-function appendMonthOverviewMonth(offset){
+// prepend=true fügt den Monat ganz OBEN in die Liste ein (für die Vormonate, siehe
+// prependPastMonthsOfYear()), sonst wird unten angehängt (Infinite-Scroll nach unten).
+function appendMonthOverviewMonth(offset, prepend){
   const list = document.getElementById('monthOverviewList');
   if (!list) return;
   const { year, month } = goMonthOverviewMonthOffset(offset);
-  list.insertAdjacentHTML('beforeend', monthOverviewBlockHTML(year, month));
-  const block = list.lastElementChild;
+  list.insertAdjacentHTML(prepend ? 'afterbegin' : 'beforeend', monthOverviewBlockHTML(year, month));
+  const block = prepend ? list.firstElementChild : list.lastElementChild;
   if (block){
-    // Offset-Markierung, damit renderMonthOverview() nach dem Rendern gezielt zum
-    // aktuellen Monat (offset 0) scrollen kann — die davor liegenden Monate bleiben
-    // darüber stehen und sind durch Hochscrollen erreichbar.
+    // Offset-Markierung: dient als Anker, an dem prependPastMonthsOfYear() die Scrollposition
+    // ausrichtet (der aktuelle Monat hat Offset 0).
     block.dataset.monthOffset = String(offset);
-    // Der Platzhalter unter dem Sentinel (siehe scrollToCurrentMonth()) wird um die Höhe des
-    // neu geladenen Monats kleiner — sobald echte Folgemonate da sind, braucht es keinen
-    // künstlichen Scrollweg mehr und am Seitenende bleibt keine leere Fläche zurück.
-    const spacer = document.getElementById('monthOverviewSpacer');
-    if (spacer && spacer.offsetHeight){
-      spacer.style.height = `${Math.max(0, spacer.offsetHeight - block.offsetHeight)}px`;
-    }
     block.querySelectorAll('[data-day-popup]').forEach(btn => {
       btn.onclick = () => {
         const [y, m, d] = btn.dataset.dayPopup.split('-').map(Number);
@@ -611,7 +605,6 @@ function renderMonthOverview(){
     ${yearAccordionsHTML}
     <div id="monthOverviewList"></div>
     <div class="month-overview-sentinel" id="monthOverviewSentinel"></div>
-    <div id="monthOverviewSpacer"></div>
   `;
   document.getElementById('btnBack').onclick = () => history.back();
 
@@ -638,25 +631,14 @@ function renderMonthOverview(){
     };
   });
 
-  // Start: alle bereits vergangenen Monate des laufenden Jahres (Januar bis Vormonat)
-  // werden mitgerendert und stehen ÜBER dem aktuellen Monat — man kann also nach oben
-  // scrollen, um sie zu sehen. Direkt nach dem Rendern wird trotzdem automatisch zum
-  // aktuellen Monat gesprungen (siehe scrollToCurrentMonth() unten), sodass man beim
-  // Öffnen wie gewohnt sofort beim laufenden Monat landet. Künftige Monate kommen
-  // weiterhin per Infinite-Scroll nach unten hinzu.
-  for (let offset = -monthOverviewBase.month; offset <= 0; offset++){
-    appendMonthOverviewMonth(offset);
-  }
-  // Zusätzlich drei Folgemonate direkt mitrendern. Ohne sie wäre der aktuelle Monat der
-  // allerletzte Block der Seite: man würde nach dem Sprung auf einem Bildschirm landen, unter
-  // dem nichts mehr kommt — genau der Eindruck "ich starte ganz unten". Der Infinite-Scroll
-  // lädt sonst erst NACH einer Scroll-Bewegung nach, was den leeren Eindruck nicht rechtzeitig
-  // behebt. Drei Monate sind billig zu rendern (reine Rastertabellen) und geben verlässlich
-  // genug Scrollweg unterhalb des aktuellen Monats.
-  for (let offset = 1; offset <= 3; offset++){
+  // WICHTIG (Bugfix "startet ganz unten"): Zuerst wird NUR der aktuelle Monat plus drei
+  // Folgemonate gerendert, und die Seite auf 0 gescrollt. Der aktuelle Monat steht damit
+  // garantiert oben — ohne jede Positionsberechnung, die danebengehen kann.
+  for (let offset = 0; offset <= 3; offset++){
     appendMonthOverviewMonth(offset);
   }
   monthOverviewNextOffset = 4;
+  window.scrollTo(0, 0);
 
   const sentinel = document.getElementById('monthOverviewSentinel');
   monthOverviewObserver = new IntersectionObserver((entries) => {
@@ -667,56 +649,33 @@ function renderMonthOverview(){
   }, { rootMargin: '600px 0px' });
   monthOverviewObserver.observe(sentinel);
 
-  scrollToCurrentMonth();
+  prependPastMonthsOfYear();
 }
 
-// Springt (ohne Animation) so weit nach unten, dass der aktuelle Monat direkt unter der
-// sticky Zurück-Zeile beginnt. Die Vormonate darüber bleiben erhalten und sind durch
-// Hochscrollen erreichbar.
+// Schiebt die bereits vergangenen Monate des laufenden Jahres (Vormonat bis Januar) NACH dem
+// ersten Rendern oben in die Liste — man kann sie also durch Hochscrollen erreichen, landet
+// beim Öffnen aber weiterhin beim aktuellen Monat.
 //
-// Warum das mehr ist als ein einzelnes window.scrollTo():
-// 1. Der aktuelle Monat ist beim Öffnen der LETZTE Block der Seite. Unter ihm steht nur der
-//    winzige Sentinel — die Seite ist also gar nicht weit genug scrollbar, um seinen Titel an
-//    den oberen Rand zu bringen. Der Browser klemmt die Zielposition dann stillschweigend aufs
-//    Seitenende ab, und man landet unten im Monat statt an dessen Anfang. Dagegen hilft zweierlei:
-//    drei vorab gerenderte Folgemonate (siehe renderMonthOverview()) und, falls das immer noch
-//    nicht reicht, der Platzhalter #monthOverviewSpacer, der den fehlenden Scrollweg auffüllt.
-// 2. Höhen können sich direkt nach dem Rendern noch ändern (Icon-Bild der Zurück-Zeile, Schrift
-//    wird nachgeladen, Akkordeons oben). Verschiebt sich dadurch etwas ÜBER dem Zielmonat,
-//    stimmt die vorher berechnete Position nicht mehr. Deshalb wird die Position in den ersten
-//    Millisekunden mehrfach nachgemessen und korrigiert — aber nur, solange der Nutzer nicht
-//    selbst gescrollt hat (dann hat seine Eingabe Vorrang).
-function scrollToCurrentMonth(){
-  let cancelled = false;
-  const cancel = () => { cancelled = true; };
-  ['wheel', 'touchstart', 'keydown'].forEach(ev =>
-    window.addEventListener(ev, cancel, { once: true, passive: true })
-  );
-
-  const align = () => {
-    if (cancelled) return;
-    const target = document.querySelector('#monthOverviewList [data-month-offset="0"]');
-    if (!target) return;
-    const stickyH = document.querySelector('.month-overview-back-sticky')?.offsetHeight || 0;
-    // Fehlenden Scrollweg auffüllen — aber nur so viel wie wirklich nötig, damit am Seitenende
-    // keine unnötige Leerfläche entsteht. Dank der drei vorab gerenderten Folgemonate ist das
-    // im Normalfall 0.
-    const spacer = document.getElementById('monthOverviewSpacer');
-    if (spacer){
-      const top = Math.max(0, target.getBoundingClientRect().top + window.scrollY - stickyH);
-      const contentHeight = document.documentElement.scrollHeight - spacer.offsetHeight;
-      const missing = top + window.innerHeight - contentHeight;
-      spacer.style.height = missing > 0 ? `${Math.ceil(missing)}px` : '0px';
-    }
-    const delta = target.getBoundingClientRect().top - stickyH;
-    if (Math.abs(delta) < 1) return;
-    window.scrollTo(0, Math.max(0, window.scrollY + delta));
-  };
-
-  requestAnimationFrame(() => { align(); requestAnimationFrame(align); });
-  setTimeout(align, 120);
-  setTimeout(align, 400);
-  setTimeout(() => { align(); ['wheel','touchstart','keydown'].forEach(ev => window.removeEventListener(ev, cancel)); }, 900);
+// Warum nicht mehr "alles rendern und dann zum aktuellen Monat scrollen": Genau daran sind die
+// beiden vorherigen Versuche gescheitert. Eine berechnete Zielposition kann der Browser still
+// abklemmen (wenn die Seite nach unten nicht weit genug scrollbar ist), und sie stimmt nicht
+// mehr, sobald sich oberhalb des Ziels nachträglich irgendeine Höhe ändert — dann landet man
+// irgendwo weit unten. Hier wird stattdessen gar nichts berechnet: Die Seite steht bereits
+// korrekt auf 0 (aktueller Monat ganz oben), es wird nur Inhalt OBERHALB eingefügt und die
+// Scrollposition exakt um die Verschiebung des Ankers korrigiert. Die Messung vorher/nachher
+// ist dabei selbstkorrigierend — verschiebt der Browser durch eigenes Scroll-Anchoring bereits
+// selbst, ist die Differenz einfach 0 und es passiert nichts Doppeltes.
+function prependPastMonthsOfYear(){
+  if (!monthOverviewBase.month) return; // Januar: es gibt keine Vormonate im laufenden Jahr
+  const list = document.getElementById('monthOverviewList');
+  const anchor = list && list.querySelector('[data-month-offset="0"]');
+  if (!anchor) return;
+  const before = anchor.getBoundingClientRect().top;
+  for (let offset = -1; offset >= -monthOverviewBase.month; offset--){
+    appendMonthOverviewMonth(offset, true);
+  }
+  const after = anchor.getBoundingClientRect().top;
+  window.scrollBy(0, after - before);
 }
 
 /* ---------------------------------------------------
