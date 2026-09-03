@@ -3,6 +3,13 @@
 --------------------------------------------------- */
 function pushView(view, params){
   resetAllAccordions();
+  // Jede Vorwärtsnavigation startet oben. Ohne das behält der Browser die Scrollposition der
+  // vorherigen Seite bei: Wer z.B. in der Monatsübersicht weit unten war und dort auf
+  // "{Monat} Bericht" tippte, landete im Bericht sofort ganz unten bei "Größte Steigerungen".
+  // Zentral hier statt in jeder einzelnen render*()-Funktion, damit es für alle Seiten gilt.
+  // Zurück-Navigationen laufen über popstate und nicht durch diese Funktion — dort bleibt die
+  // vorherige Position also erhalten.
+  window.scrollTo(0, 0);
   history.pushState({ view, params: params || {} }, '', '');
   updateMiniPlayer();
 }

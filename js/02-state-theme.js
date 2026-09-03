@@ -157,6 +157,15 @@ function currentBgColor(){
   }
   return null;
 }
+// Passt eine Hintergrundfarbe überhaupt zum gewählten Hell-/Dunkelmodus? Gemessen an der
+// Helligkeit (HSV-V): Ein dunkler Ton im Hellmodus (oder umgekehrt) macht die App unlesbar,
+// weil Text-/Rahmenfarben aus dem Modus kommen, der Hintergrund aber übersteuert ist. Wird
+// beim Umschalten von Hell/Dunkel geprüft (siehe Handler in 10-plan-settings.js).
+function bgFitsThemeMode(hex, mode){
+  if (!hex) return true;
+  const { v } = hexToHsv(hex);
+  return mode === 'light' ? v >= 70 : v <= 45;
+}
 function currentThemeMode(){
   return (plan && plan.themeMode === 'light') ? 'light' : 'dark';
 }
@@ -434,7 +443,18 @@ function syncStatusBarColor(resolvedBgColor){
     meta.setAttribute('content', hex);
     document.head.appendChild(meta);
   }
-  document.documentElement.style.colorScheme = currentThemeMode() === 'light' ? 'light' : 'dark';
+  const scheme = currentThemeMode() === 'light' ? 'light' : 'dark';
+  document.documentElement.style.colorScheme = scheme;
+  // Für den nächsten App-Start merken: Der Inline-Schnipsel im <head> von index.html setzt
+  // theme-color damit schon vor dem ersten Paint richtig. Nötig, weil Chrome die Fläche hinter
+  // der Android-Statusleiste beim Start EINMAL aus theme-color übernimmt und spätere Änderungen
+  // in der installierten PWA nicht zuverlässig nachzieht — der Balken oben behielt sonst den
+  // statischen Standardwert, obwohl in der App längst eine eigene Hintergrundfarbe aktiv war.
+  // localStorage statt IndexedDB, weil der Wert dort synchron und ohne await lesbar sein muss.
+  try{
+    localStorage.setItem('themeColorHex', hex);
+    localStorage.setItem('themeColorScheme', scheme);
+  }catch(e){ /* z.B. privater Modus — dann bleibt es beim statischen Startwert */ }
 }
 
 async function init(){

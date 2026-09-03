@@ -1088,7 +1088,18 @@ function renderSettings(){
   });
   app.querySelectorAll('[data-theme-mode]').forEach(btn => {
     btn.onclick = async () => {
-      plan.themeMode = btn.dataset.themeMode;
+      const mode = btn.dataset.themeMode;
+      plan.themeMode = mode;
+      // Eine eigene Hintergrundfarbe, die zum neuen Modus nicht passt, wird verworfen: Sonst
+      // blieb die App nach dem Wechsel auf "Hell" faktisch dunkel, weil die übersteuerte
+      // Hintergrundfarbe den Modus-Standard weiterhin überschrieb — Text und Rahmen kamen aber
+      // aus dem Hellmodus. Der Modus gewinnt also gegen eine unpassende Farbwahl; eine bereits
+      // passende eigene Farbe (z.B. Warmweiß beim Wechsel Hell→Hell-Variante) bleibt erhalten.
+      const bg = currentBgColor();
+      if (bg && !bgFitsThemeMode(bg.hex, mode)){
+        plan.bgColorId = 'default';
+        delete plan.bgCustomHex;
+      }
       await saveJSON('plan', plan);
       applyTheme();
       renderSettings();
