@@ -676,6 +676,15 @@ function prependPastMonthsOfYear(){
   }
   const after = anchor.getBoundingClientRect().top;
   window.scrollBy(0, after - before);
+  // Feinjustierung: Der aktuelle Monat soll BÜNDIG unter der Zurück-Leiste beginnen. Ohne das
+  // blieb oben ein schmaler Streifen des Vormonats sichtbar (der Abstand, den die Seite ganz
+  // oben als Innenabstand hat und der nach dem Voranstellen jetzt Inhalt enthält). Nach unten
+  // scrollen ist hier gefahrlos: unter dem aktuellen Monat stehen drei fertige Folgemonate,
+  // die Position kann also nicht am Seitenende abgeklemmt werden.
+  const bar = document.querySelector('.month-overview-back-sticky');
+  const barH = bar ? bar.getBoundingClientRect().height : 0;
+  const gap = anchor.getBoundingClientRect().top - barH;
+  if (gap > 0.5) window.scrollBy(0, gap);
 }
 
 /* ---------------------------------------------------
