@@ -788,16 +788,22 @@ function ftContrastTextColor(hex){
 // Hintergrund.
 function ftSyncStatusBarColor(resolvedBgColor){
   const hex = (resolvedBgColor && resolvedBgColor.hex) || (ftCurrentThemeMode() === 'light' ? '#f5f4f1' : '#121316');
-  const old = document.getElementById('metaThemeColor');
-  if (!old || old.getAttribute('content') !== hex){
-    if (old) old.remove();
-    const meta = document.createElement('meta');
+  let meta = document.getElementById('metaThemeColor');
+  if (!meta){
+    meta = document.createElement('meta');
     meta.setAttribute('name', 'theme-color');
     meta.setAttribute('id', 'metaThemeColor');
-    meta.setAttribute('content', hex);
     document.head.appendChild(meta);
   }
-  document.documentElement.style.colorScheme = ftCurrentThemeMode() === 'light' ? 'light' : 'dark';
+  // Nur das Attribut ändern, den Knoten NICHT austauschen — Begründung siehe
+  // syncStatusBarColor() in 02-state-theme.js.
+  if (meta.getAttribute('content') !== hex) meta.setAttribute('content', hex);
+  const scheme = ftCurrentThemeMode() === 'light' ? 'light' : 'dark';
+  document.documentElement.style.colorScheme = scheme;
+  try{
+    localStorage.setItem('themeColorHex', hex);
+    localStorage.setItem('themeColorScheme', scheme);
+  }catch(e){}
 }
 // Essenstracker-Pendant zu applyTheme() (02-state-theme.js) — wird von JEDEM Essenstracker-
 // Bildschirm-Renderer als allererstes aufgerufen (renderFoodTracker()/renderFoodStats()/
