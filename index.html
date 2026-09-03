@@ -23,6 +23,28 @@
      der von Chrome gut unterstützte Fall für dynamische Änderungen; da wir den Wert ohnehin
      immer selbst aus dem aktiven Theme setzen, brauchen wir die media-Unterscheidung nicht. -->
 <meta name="theme-color" id="metaThemeColor" content="#121316">
+<script>
+/* Setzt den theme-color-Wert SOFORT — vor dem ersten Paint und lange bevor der eigentliche
+   App-Code (IndexedDB, asynchron) das Theme laden kann. Grund: Die farbige Fläche hinter der
+   Android-Statusleiste wird von Chrome beim Seitenstart einmal aus theme-color übernommen;
+   spätere Änderungen greifen dort (in der installierten PWA) nicht zuverlässig nach. Deshalb
+   blieb der Balken oben auf dem statischen #121316 stehen, während die App selbst längst eine
+   eigene Hintergrundfarbe hatte — genau die im Fehlerbericht sichtbare Abweichung.
+   syncStatusBarColor() (02-state-theme.js) legt den jeweils aktiven Wert zusätzlich in der
+   localStorage ab (synchron lesbar), sodass er hier beim nächsten Start direkt zur Verfügung
+   steht. Bewusst extrem defensiv: schlägt irgendetwas fehl, bleibt einfach der statische
+   Standardwert stehen. */
+(function(){
+  try{
+    var hex = localStorage.getItem('themeColorHex');
+    if (hex && /^#[0-9a-fA-F]{6}$/.test(hex)){
+      document.getElementById('metaThemeColor').setAttribute('content', hex);
+      var scheme = localStorage.getItem('themeColorScheme');
+      if (scheme === 'light' || scheme === 'dark') document.documentElement.style.colorScheme = scheme;
+    }
+  }catch(e){}
+})();
+</script>
 <!-- color-scheme teilt dem Browser mit, ob die Seite hell oder dunkel ist (es setzt KEINE
      konkrete Farbe — das macht allein theme-color oben). Wichtig für die untere Android-Geste-
      Navigationsleiste in der INSTALLIERTEN PWA: ohne dieses Signal färbt sie sich nicht mit den
