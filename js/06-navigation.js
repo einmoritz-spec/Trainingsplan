@@ -3,12 +3,15 @@
 --------------------------------------------------- */
 function pushView(view, params){
   resetAllAccordions();
+  // Scrollposition der Seite, die wir gerade verlassen, im AKTUELLEN Verlaufseintrag ablegen.
+  // Beim Zurückgehen (popstate) wird sie daraus wiederhergestellt — sonst landete man z.B. nach
+  // "August Bericht" → Zurück wieder am Anfang der Monatsübersicht statt beim August.
+  const cur = history.state || { view: 'home', params: {} };
+  history.replaceState({ ...cur, scrollY: window.scrollY }, '', '');
   // Jede Vorwärtsnavigation startet oben. Ohne das behält der Browser die Scrollposition der
   // vorherigen Seite bei: Wer z.B. in der Monatsübersicht weit unten war und dort auf
   // "{Monat} Bericht" tippte, landete im Bericht sofort ganz unten bei "Größte Steigerungen".
   // Zentral hier statt in jeder einzelnen render*()-Funktion, damit es für alle Seiten gilt.
-  // Zurück-Navigationen laufen über popstate und nicht durch diese Funktion — dort bleibt die
-  // vorherige Position also erhalten.
   window.scrollTo(0, 0);
   history.pushState({ view, params: params || {} }, '', '');
   updateMiniPlayer();
@@ -330,5 +333,27 @@ window.addEventListener('popstate', (event) => {
   const state = event.state || { view: 'home', params: {} };
   renderViewByState(state);
   updateMiniPlayer();
+  restoreScrollPosition(state.scrollY || 0);
 });
+
+// Stellt nach dem Zurückgehen die in pushView() gemerkte Scrollposition wieder her.
+// Zwei Anläufe, weil einige Seiten ihren Inhalt erst nach einem await aufbauen (die
+// initFoodTracker()-Zweige in renderViewByState()) und die Seite im ersten Frame noch zu kurz
+// sein kann — der Browser würde die Position dann abklemmen. Die Monatsübersicht scrollt beim
+// Rendern zusätzlich selbst zum aktuellen Monat; der Aufruf hier läuft danach und gewinnt
+// deshalb, was genau richtig ist: Beim Zurückkommen zählt die gemerkte Position, beim frischen
+// Öffnen der aktuelle Monat. Scrollt der Nutzer zwischendurch selbst, wird abgebrochen.
+function restoreScrollPosition(y){
+  if (!y) return;
+  let cancelled = false;
+  const cancel = () => { cancelled = true; };
+  ['wheel', 'touchstart', 'keydown'].forEach(ev => window.addEventListener(ev, cancel, { passive: true }));
+  const apply = () => { if (!cancelled) window.scrollTo(0, y); };
+  requestAnimationFrame(apply);
+  setTimeout(apply, 150);
+  setTimeout(() => {
+    apply();
+    ['wheel', 'touchstart', 'keydown'].forEach(ev => window.removeEventListener(ev, cancel));
+  }, 400);
+}
 
