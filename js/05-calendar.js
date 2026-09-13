@@ -265,7 +265,10 @@ function monthOverviewBlockHTML(year, month){
       <div class="month-overview-grid">
         ${gridInner}
       </div>
-      <button class="month-overview-report-btn" type="button" data-report-month="${year}-${month}">${reportIcon}${MONTH_NAMES_DE[month]} Bericht</button>
+      <div class="month-overview-btn-row">
+        <button class="month-overview-report-btn" type="button" data-report-month="${year}-${month}">${reportIcon}${MONTH_NAMES_DE[month]} Bericht</button>
+        <button class="month-overview-report-btn month-overview-pdf-btn" type="button" data-pdf-month="${year}-${month}" aria-label="${MONTH_NAMES_DE[month]} als PDF exportieren">PDF</button>
+      </div>
     </div>
   `;
 }
@@ -295,9 +298,15 @@ function appendMonthOverviewMonth(offset, prepend){
         goMonthReport(y, m);
       };
     }
+    const pdfBtn = block.querySelector('[data-pdf-month]');
+    if (pdfBtn){
+      pdfBtn.onclick = () => {
+        const [y, m] = pdfBtn.dataset.pdfMonth.split('-').map(Number);
+        openPeriodExportPopup('training', y, m);
+      };
+    }
   }
 }
-
 // Kompakte Zusammenfassung eines Trainingstags (Kachelname, Anzahl Übungen/Sätze/Wdh,
 // Sätze- und Wdh-Zahl farblich hervorgehoben) — geöffnet per Klick auf einen markierten
 // Tag in der Monatsübersicht. Bei mehreren Einheiten am selben Tag wird pro Einheit ein
@@ -628,6 +637,14 @@ function renderMonthOverview(){
     btn.onclick = () => {
       const [y, m] = btn.dataset.reportMonth.split('-').map(Number);
       goMonthReport(y, m);
+    };
+  });
+  // Die Monate abgeschlossener Jahre stecken in den Akkordeons und laufen NICHT durch
+  // appendMonthOverviewMonth() — ihr PDF-Button muss deshalb hier separat verdrahtet werden.
+  app.querySelectorAll('.month-overview-year-accordion [data-pdf-month]').forEach(btn => {
+    btn.onclick = () => {
+      const [y, m] = btn.dataset.pdfMonth.split('-').map(Number);
+      openPeriodExportPopup('training', y, m);
     };
   });
 

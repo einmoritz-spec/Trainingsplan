@@ -830,6 +830,9 @@ function ftMonthBlockHTML(year, month){
       <div class="month-overview-grid">
         ${gridInner}
       </div>
+      <div class="month-overview-btn-row">
+        <button class="month-overview-report-btn" type="button" data-ft-pdf-month="${year}-${month}">${MONTH_NAMES_DE[month]} als PDF</button>
+      </div>
     </div>
   `;
 }
@@ -857,6 +860,15 @@ function appendFtMonthOverviewMonth(offset){
         history.back();
       };
     });
+    // Wochen-/Monats-Export als PDF (siehe openPeriodExportPopup(), 16-period-pdf.js) — zum
+    // Weitergeben an eine Health-App bzw. deren Assistenten.
+    const pdfBtn = block.querySelector('[data-ft-pdf-month]');
+    if (pdfBtn){
+      pdfBtn.onclick = () => {
+        const [y, m] = pdfBtn.dataset.ftPdfMonth.split('-').map(Number);
+        openPeriodExportPopup('food', y, m);
+      };
+    }
   }
 }
 function renderFtMonthOverview(){

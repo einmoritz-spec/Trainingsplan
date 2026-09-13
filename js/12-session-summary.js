@@ -225,6 +225,9 @@ function pdfSafeText(str){
     .replace(/▲/g, '(verbessert)')
     .replace(/✨/g, '(Neu)')
     .replace(/→/g, '->')
+    // ≈ (U+2248) liegt außerhalb von WinAnsi und wurde als Zeichensalat ausgegeben ("H" plus
+    // Steuerzeichen) — betraf auch schon den Tages-Snapshot mit "≈ X kcal".
+    .replace(/≈/g, 'ca.')
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
