@@ -124,7 +124,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v76';
+const CACHE_NAME = 'trainingsplan-cache-v77';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
@@ -157,6 +157,7 @@ const APP_SHELL = [
   './js/15b-food-day.js',
   './js/15c-food-add.js',
   './js/15d-food-stats.js',
+  './js/16-period-pdf.js',
   './js/14-app-init.js',
   './js/vendor/jspdf.umd.min.js',
   './assets/icons/favicon.png',
