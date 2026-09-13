@@ -382,6 +382,11 @@ button.month-overview-day-num{ cursor:pointer; -webkit-tap-highlight-color:trans
   cursor:pointer; -webkit-tap-highlight-color:transparent;
 }
 .month-overview-report-btn svg{ width:18px; height:18px; flex:none; }
+/* Bericht- und PDF-Button nebeneinander unter jedem Monat. Der margin-top sitzt jetzt an der
+   Reihe statt am Button, damit beide auf derselben Höhe beginnen. */
+.month-overview-btn-row{ display:flex; gap:8px; margin-top:20px; }
+.month-overview-btn-row .month-overview-report-btn{ margin-top:0; }
+.month-overview-pdf-btn{ flex:none; width:auto; padding-left:22px; padding-right:22px; }
 .month-overview-sentinel{ height:1px; }
 .month-report-title{ font-size:24px; font-weight:800; margin:8px 0 18px; }
 /* ---------- Monatsbericht: einheitliches Card-Layout für alle Abschnitte ---------- */
