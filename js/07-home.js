@@ -519,6 +519,19 @@ function isWeekStripEnabled(){
 function isFoodTrackerEnabled(){
   return !!(plan && plan.foodTrackerEnabled);
 }
+// Ob das Essenstracker-MODUL (js/15a-food-core.js etc.) aktuell geladen UND mit Daten
+// initialisiert ist. Seit dem Lazy-Loading (siehe ensureFoodTrackerScriptsLoaded(),
+// 04-utils.js) ist das NICHT mehr automatisch der Fall — foodTrackerLoaded ist eine Variable
+// AUS diesem Modul und existiert im globalen Scope schlicht noch nicht, solange es nicht
+// geladen wurde. Ein direkter Zugriff (`foodTrackerLoaded` ohne typeof) wirft dann
+// "ReferenceError: foodTrackerLoaded is not defined" — genau der Absturz aus dem Bug-Report,
+// der bei JEDEM Start auftrat, sobald foodOn true war (also sobald das Feature aktiviert war),
+// weil renderHome() diesen Wert unabhängig davon braucht, ob das Akkordeon je geöffnet wurde.
+// typeof ist der einzige sichere Weg, eine möglicherweise nicht deklarierte Variable zu prüfen,
+// ohne selbst einen ReferenceError auszulösen.
+function isFoodTrackerDataLoaded(){
+  return typeof foodTrackerLoaded !== 'undefined' && foodTrackerLoaded;
+}
 
 // Vom Nutzer bereitgestelltes Gabel/Messer-Piktogramm (siehe messer-und-gabel.png, ersetzt die
 // vorherige, per Stroke nachgezeichnete Version), als flächig gefülltes Inline-SVG nachgebaut
@@ -544,7 +557,7 @@ function isBackupReminderDue(){
 // Essenstracker angezeigten ftCurrentDate — ein schneller Überblick auf der Startseite soll
 // sich nicht danach richten, welcher Tag dort zuletzt zufällig offen war.
 function homeMealsAccordionBodyHTML(){
-  if (!foodTrackerLoaded){
+  if (!isFoodTrackerDataLoaded()){
     return `<div class="loading-row">Lädt …</div>`;
   }
   const iso = ftTodayISO();
@@ -625,7 +638,7 @@ function renderHome(){
   // geladen (initFoodTracker(), asynchron), nicht schon beim bloßen Anzeigen der Startseite —
   // vermeidet unnötige IndexedDB-Reads, wenn der Bereich ohnehin eingeklappt bleibt.
   const mealsHTML = foodOn ? (() => {
-    const todayKcal = foodTrackerLoaded ? ftComputeTotals(ftTodayISO()).kcal : 0;
+    const todayKcal = isFoodTrackerDataLoaded() ? ftComputeTotals(ftTodayISO()).kcal : 0;
     return `
     <div class="muscle-group" style="margin-top:16px;">
       <button class="muscle-group-header" id="btnHomeMealsToggle" type="button">
@@ -682,7 +695,7 @@ function renderHome(){
   if (document.getElementById('btnHomeMealsToggle')){
     document.getElementById('btnHomeMealsToggle').onclick = () => {
       homeMealsOpen = !homeMealsOpen;
-      if (homeMealsOpen && !foodTrackerLoaded){
+      if (homeMealsOpen && !isFoodTrackerDataLoaded()){
         ftEnsureLoaded().then(() => { if (document.getElementById('btnHomeMealsToggle')) renderHome(); });
       }
       renderHome();

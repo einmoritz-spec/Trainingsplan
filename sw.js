@@ -30,6 +30,22 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v84: BUGFIX — regelrechter Absturz beim Start (renderHome() warf "ReferenceError:
+ * foodTrackerLoaded is not defined", weißer Fehlerbildschirm "Etwas ist schiefgelaufen"),
+ * eingeschleppt durch das Essenstracker-Lazy-Loading in v81: foodTrackerLoaded ist eine
+ * Variable AUS dem Essenstracker-Modul (15a-food-core.js) und existiert im globalen Scope erst,
+ * sobald dieses geladen wurde — seit v81 ist das aber nicht mehr automatisch der Fall
+ * (ensureFoodTrackerScriptsLoaded(), 04-utils.js). renderHome() griff an drei Stellen
+ * (homeMealsAccordionBodyHTML(), die "Mahlzeiten"-Kopfzeile, der Akkordeon-Öffnen-Handler)
+ * direkt (ohne typeof) auf foodTrackerLoaded zu — traf JEDEN Start, bei dem der Essenstracker
+ * aktiviert war (isFoodTrackerEnabled()), unabhängig davon, ob das Akkordeon je geöffnet wurde.
+ * Neue Funktion isFoodTrackerDataLoaded() (07-home.js, direkt neben isFoodTrackerEnabled())
+ * prüft das jetzt sicher per typeof; alle drei Stellen nutzen sie statt der rohen Variable.
+ * Beim Lazy-Loading-Umbau selbst (v81) wurden Funktions-AUFRUFE aus dem Essenstracker-Modul
+ * heraus systematisch abgesichert (ftEnsureLoaded()/typeof-Guards) — diese drei rohen
+ * Variablen-LESEZUGRIFFE (kein Funktionsaufruf, daher beim damaligen Audit übersehen) waren die
+ * einzige verbliebene Lücke; eine erneute Suche nach allen anderen Modul-Variablen
+ * (ftDays/ftCurrentDate/ftAutoMealBuilder/...) ergab keine weiteren.
  * v83: Einseitige/wechselseitige Übungen (Ausfallschritte, einarmiges Rudern/Curls) zählten im
  * Trainingsvolumen bisher nur die halbe tatsächlich geleistete Arbeit — die eingetragene
  * Wiederholungszahl steht bei diesen Übungen für EINE Seite, im selben Satz wird aber mit
@@ -228,7 +244,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v83';
+const CACHE_NAME = 'trainingsplan-cache-v84';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
