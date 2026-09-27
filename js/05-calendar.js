@@ -302,7 +302,7 @@ function appendMonthOverviewMonth(offset, prepend){
     if (pdfBtn){
       pdfBtn.onclick = () => {
         const [y, m] = pdfBtn.dataset.pdfMonth.split('-').map(Number);
-        openPeriodExportPopup('training', y, m);
+        ensurePeriodPdfLoaded().then(() => openPeriodExportPopup('training', y, m));
       };
     }
   }
@@ -393,7 +393,7 @@ function openDayTrainingPopup(year, month, day, skipPush){
       : '';
     return `
       <div class="day-popup-block day-popup-session-block" data-session-id="${session.id}">
-        <div class="day-popup-tile-name">${modeDisplayLabel(session.mode)}${exclusionBadgeHTML}</div>
+        <div class="day-popup-tile-name">${modeDisplayLabelHTML(session.mode)}${exclusionBadgeHTML}</div>
         <div class="day-popup-stats">
           ${statsHTML}
         </div>
@@ -644,7 +644,7 @@ function renderMonthOverview(){
   app.querySelectorAll('.month-overview-year-accordion [data-pdf-month]').forEach(btn => {
     btn.onclick = () => {
       const [y, m] = btn.dataset.pdfMonth.split('-').map(Number);
-      openPeriodExportPopup('training', y, m);
+      ensurePeriodPdfLoaded().then(() => openPeriodExportPopup('training', y, m));
     };
   });
 
@@ -1017,7 +1017,7 @@ function renderMonthReport(year, month){
           <div class="month-report-stat-label">Ø Dauer</div>
         </div>
         <div class="month-report-stat-cell">
-          <div class="month-report-stat-value">${totalVolume ? totalVolume.toLocaleString('de-DE') + ' kg' : '—'}${deltaHTML(volumeDelta, ' kg')}</div>
+          <div class="month-report-stat-value">${totalVolume ? Math.round(totalVolume).toLocaleString('de-DE') + ' kg' : '—'}${deltaHTML(volumeDelta, ' kg')}</div>
           <div class="month-report-stat-label">Gesamtvolumen</div>
         </div>
         <div class="month-report-stat-cell">

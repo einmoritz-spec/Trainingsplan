@@ -120,7 +120,7 @@ function renderExerciseEditFieldsHTML(ex, i){
       </label>
       ${ex.imageData ? `<button type="button" class="btn btn-ghost btn-small" data-imageremove="${i}">Bild entfernen</button>` : ''}
     </div>
-    <input type="text" value="${ex.name}" data-field="name" aria-label="Übungsname">
+    <input type="text" value="${esc(ex.name)}" data-field="name" aria-label="Übungsname">
     ${gridHTML}
     <div class="plan-row2">
       <div>
@@ -146,6 +146,8 @@ function renderExerciseEditFieldsHTML(ex, i){
         <select data-field="cardioMachine">
           <option value="" ${!ex.cardioMachine ? 'selected' : ''}>— Kein Kardiogerät —</option>
           ${Object.keys(CARDIO_MACHINES).map(key => `<option value="${key}" ${ex.cardioMachine === key ? 'selected' : ''}>${CARDIO_MACHINES[key].label}</option>`).join('')}
+          ${customCardioMachines().map(m => `<option value="${m.id}" ${ex.cardioMachine === m.id ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}
+          <option value="__add_custom_cardio__">+ Eigenes Gerät hinzufügen…</option>
         </select>
       </div>
     </div>` : ''}
@@ -187,11 +189,23 @@ function renderExerciseEditFieldsHTML(ex, i){
         </label>
       </div>
     </div>
+    <div class="plan-row2">
+      <div>
+        <label style="display:flex; align-items:center; gap:6px; text-transform:none; font-size:12px; letter-spacing:normal;">
+          <input type="checkbox" data-checkfield="unilateral" ${ex.unilateral ? 'checked' : ''} style="width:auto;">
+          Einseitig/wechselseitig (z. B. Ausfallschritte)
+        </label>
+      </div>
+    </div>
     ${ex.bodyweightExercise ? `
     <div class="plan-row2">
       <div>
         <label>Anteil Körpergewicht (%)</label>
         <input type="number" min="1" max="100" step="5" value="${Math.round((ex.bodyWeightFactor != null ? ex.bodyWeightFactor : 1) * 100)}" data-field="bodyWeightFactorPercent">
+      </div>
+      <div>
+        <label>Ungefähres Gerätegewicht (kg)</label>
+        <input type="number" min="0" step="0.5" value="${ex.machineWeightKg || 0}" data-field="machineWeightKg">
       </div>
     </div>
     ` : ''}` : ''}
@@ -328,6 +342,24 @@ function openPlanRowEditPopup(i, onSaved){
     if (bodyweightCheckbox) bodyweightCheckbox.onchange = () => {
       collectInto();
       rerenderFields();
+    };
+    // "+ Eigenes Gerät hinzufügen…" ist als letzte <option> ins Kardiogerät-Auswahlfeld
+    // eingehängt (siehe renderExerciseEditFieldsHTML() oben) statt als eigener Button, damit
+    // die Auswahl bei einer einzelnen bereits bestehenden Übung ein einziges kompaktes
+    // Dropdown bleibt. Der Sentinel-Wert __add_custom_cardio__ darf NIE in plan.exercises
+    // landen (auch nicht kurzzeitig) — das Auswahlfeld wird deshalb VOR collectInto() sofort
+    // auf seinen vorherigen Wert zurückgesetzt; bricht der Nutzer den Prompt ab, bleibt es
+    // genau dort stehen, ohne dass irgendwas Ungültiges gespeichert wurde.
+    const cardioMachineSelect = body.querySelector('[data-field="cardioMachine"]');
+    if (cardioMachineSelect) cardioMachineSelect.onchange = () => {
+      if (cardioMachineSelect.value === '__add_custom_cardio__'){
+        cardioMachineSelect.value = plan.exercises[i].cardioMachine || '';
+        collectInto();
+        openAddCustomCardioMachinePrompt((newMachine) => {
+          plan.exercises[i].cardioMachine = newMachine.id;
+          rerenderFields();
+        });
+      }
     };
     const imageInput = body.querySelector('[data-imageupload]');
     if (imageInput) imageInput.onchange = async () => {
@@ -890,8 +922,8 @@ function renderSettings(){
         <div style="display:${customFontsListOpen ? 'block' : 'none'};">
           ${customFonts.map(f => `
             <div class="muscle-group-header settings-static-row" style="margin-top:8px;">
-              <span class="mg-name font-preview-item" style="font-family:'${f.cssName}', sans-serif; font-size:15px; letter-spacing:normal; text-transform:none;">${f.name}</span>
-              <button class="icon-x" data-remove-custom-font="${f.id}" aria-label="${f.name} löschen">✕</button>
+              <span class="mg-name font-preview-item" style="font-family:'${esc(f.cssName)}', sans-serif; font-size:15px; letter-spacing:normal; text-transform:none;">${esc(f.name)}</span>
+              <button class="icon-x" data-remove-custom-font="${f.id}" aria-label="${esc(f.name)} löschen">✕</button>
             </div>
           `).join('')}
           <button class="accent-custom-btn" id="fontUploadBtn" type="button" style="margin-top:10px; justify-content:center;">
@@ -1403,7 +1435,7 @@ function renderSettings(){
     // Training und Essenstracker separat sichern muss. Der eigenständige Essenstracker-Export
     // in dessen eigenen Einstellungen bleibt zusätzlich bestehen, falls nur die Ernährungsdaten
     // gebraucht werden.
-    await initFoodTracker();
+    await ftEnsureLoaded();
     const nowISO = new Date().toISOString();
     const payload = { version: 1, exportedAt: nowISO, plan, sessions, lastPerformance, food: ftBuildExportPayload() };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -1458,7 +1490,7 @@ function renderSettings(){
         // ein reiner Trainings-Export (oder ein Export von vor der Zusammenlegung) hat kein
         // "food"-Feld, dann bleiben die vorhandenen Essenstracker-Daten auf diesem Gerät
         // unangetastet.
-        if (check.cleaned.food) await ftApplyImportedData(check.cleaned.food);
+        if (check.cleaned.food){ await ftEnsureLoaded(); await ftApplyImportedData(check.cleaned.food); }
         planSearchQuery = '';
         planGroupOpen = new Set();
         alert('Import erfolgreich.');
@@ -1687,7 +1719,7 @@ function openNewExerciseModal(){
       title: 'Wie heißt die Übung?',
       render: (body, next) => {
         body.innerHTML = `
-          <input type="text" id="wizName" value="${(draft.name || '').replace(/"/g,'&quot;')}" placeholder="z. B. Kreuzheben" style="width:100%; padding:14px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:16px;">
+          <input type="text" id="wizName" value="${esc(draft.name || '')}" placeholder="z. B. Kreuzheben" style="width:100%; padding:14px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:16px;">
           <button class="btn btn-primary" id="wizNameNext" style="width:100%; margin-top:16px;">Weiter</button>
           <button class="btn btn-ghost" id="wizFromLibrary" style="width:100%; margin-top:10px;">Aus Vorlagen wählen ›</button>
         `;
@@ -1741,14 +1773,25 @@ function openNewExerciseModal(){
       steps.push({
         title: 'Welches Gerät?',
         render: (body, next) => {
-          body.innerHTML = `
-            <div class="wizard-choice-list">
-              ${Object.keys(CARDIO_MACHINES).map(key => `<button class="wizard-choice ${draft.cardioMachine === key ? 'selected' : ''}" data-val="${key}">${CARDIO_MACHINES[key].label}</button>`).join('')}
-            </div>
-          `;
-          body.querySelectorAll('.wizard-choice').forEach(btn => {
-            btn.onclick = () => { draft.cardioMachine = btn.dataset.val; next(); };
-          });
+          const renderChoices = () => {
+            body.innerHTML = `
+              <div class="wizard-choice-list">
+                ${Object.keys(CARDIO_MACHINES).map(key => `<button class="wizard-choice ${draft.cardioMachine === key ? 'selected' : ''}" data-val="${key}">${CARDIO_MACHINES[key].label}</button>`).join('')}
+                ${customCardioMachines().map(m => `<button class="wizard-choice ${draft.cardioMachine === m.id ? 'selected' : ''}" data-val="${m.id}">${esc(m.label)}</button>`).join('')}
+                <button class="wizard-choice" id="wizAddCustomCardioMachine">+ Eigenes Gerät hinzufügen</button>
+              </div>
+            `;
+            body.querySelectorAll('.wizard-choice[data-val]').forEach(btn => {
+              btn.onclick = () => { draft.cardioMachine = btn.dataset.val; next(); };
+            });
+            document.getElementById('wizAddCustomCardioMachine').onclick = () => {
+              openAddCustomCardioMachinePrompt((newMachine) => {
+                draft.cardioMachine = newMachine.id;
+                next();
+              });
+            };
+          };
+          renderChoices();
         }
       });
     }

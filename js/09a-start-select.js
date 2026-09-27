@@ -77,6 +77,15 @@ function modeDisplayLabel(mode){
   if (customCat) return customCat.label;
   return MODE_LABELS[mode] || mode;
 }
+// HTML-sichere Variante für innerHTML-Templates: ein umbenannter/eigener Kategorie-Name (siehe
+// modeDisplayLabel() oben) ist frei eingebbarer Nutzertext (renderStepCustomName(),
+// 09c-start-select-tiles.js / openModeSettingsPrompt(), 09b-start-select-mode-settings.js).
+// Bewusst NICHT direkt in modeDisplayLabel() escaped: der wird auch für Suche (Klein/Großschreib-
+// Vergleich), alert()-Text und PDF-Export (pdfSafeText()) genutzt, wo HTML-Escaping falsch wäre
+// (PDF/alert würden sonst buchstäblich "&amp;" statt "&" zeigen).
+function modeDisplayLabelHTML(mode){
+  return esc(modeDisplayLabel(mode));
+}
 
 // Liefert den Übungspool-Filter für einen Modus: 'oberkoerper', 'unterkoerper', 'push',
 // 'pull', 'legs' oder 'all'. Standardmäßig (kein modeSettings-Eintrag) entspricht das dem

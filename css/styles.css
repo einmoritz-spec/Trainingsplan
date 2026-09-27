@@ -401,13 +401,31 @@ button.month-overview-day-num{ cursor:pointer; -webkit-tap-highlight-color:trans
 /* 2×2-Kennzahlenraster (Workouts/Ø Dauer/Volumen/Rekorde) — kompakt statt vier einzelner
    Karten, mit optionalem kleinem Vormonats-Delta direkt neben dem Wert (gleiches Farbschema
    grün/rot wie das Trend-Delta in den Verlaufsdiagrammen). */
-.month-report-stat-grid{ display:grid; grid-template-columns:1fr 1fr; row-gap:20px; }
-.month-report-stat-cell{ display:flex; flex-direction:column; }
+/* min-width:0 ist hier entscheidend, nicht kosmetisch: Grid-Items haben per Default
+   min-width:auto, d. h. sie dürfen nie schmaler werden als ihr Inhalt. Da
+   .month-report-stat-value white-space:nowrap trägt, erzwang ein langer Wert (z. B.
+   "141.754,25 kg" beim Gesamtvolumen) eine Mindestbreite deutlich über 1fr — Spalte 1 wuchs
+   dadurch über die Karte hinaus und schob Spalte 2 (Ø Dauer / Neue Rekorde) rechts aus dem
+   sichtbaren Bereich. Mit min-width:0 greift die 1fr-Aufteilung wieder wie beabsichtigt. */
+.month-report-stat-grid{ display:grid; grid-template-columns:1fr 1fr; row-gap:20px; column-gap:14px; }
+.month-report-stat-cell{ display:flex; flex-direction:column; min-width:0; }
 .month-report-stat-value{
-  font-family:'JetBrains Mono', monospace; font-size:23px; font-weight:700; color:var(--text);
+  font-family:'JetBrains Mono', monospace;
+  /* Schrumpft auf schmalen Geräten mit, statt bei fester Größe aus der Zelle zu laufen —
+     23px bleibt das Maximum (unverändertes Aussehen auf breiteren Displays). */
+  font-size:clamp(17px, 5.4vw, 23px);
+  font-weight:700; color:var(--text);
   display:flex; align-items:baseline; gap:6px; white-space:nowrap;
+  /* Erlaubt der Delta-Angabe ("+1.508 kg"), bei Platzmangel in die nächste Zeile zu rutschen,
+     statt neben dem Wert aus der Zelle zu laufen bzw. den Nachbarwert zu überlagern. Der Wert
+     selbst bleibt durch white-space:nowrap oben unzerbrochen. */
+  flex-wrap:wrap;
+  min-width:0;
 }
-.month-report-stat-label{ font-size:11.5px; color:var(--muted); margin-top:3px; }
+/* margin-top:auto hält die Beschriftungen beider Zellen einer Zeile auf gleicher Höhe, auch
+   wenn in einer davon die Delta-Angabe auf eine zweite Zeile umbrochen ist (siehe flex-wrap
+   oben) — ohne das würden "Gesamtvolumen" und "Neue Rekorde" unterschiedlich hoch sitzen. */
+.month-report-stat-label{ font-size:11.5px; color:var(--muted); margin-top:auto; padding-top:3px; }
 .month-report-stat-delta{ font-family:'JetBrains Mono', monospace; font-size:11px; font-weight:700; }
 .month-report-stat-delta.up{ color:#7cc576; }
 .month-report-stat-delta.down{ color:var(--accent-2); }
@@ -2507,12 +2525,20 @@ html[data-theme="dark"] .active-back-btn img{ filter:invert(1); }
 
 .ft-section-label{font-size:0.74rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin:16px 0 8px; padding:0 2px;}
 .ft-section-label:first-child{margin-top:0;}
+/* gap statt justify-content:space-between: mit space-between wurde der freie Platz GLEICHMÄSSIG
+   zwischen allen Kindern verteilt, weil .result-main (siehe unten) nicht wuchs — der
+   Löschen-Button rutschte dadurch je nach Länge des Lebensmittelnamens horizontal hin und her,
+   statt mit den Sternen eine saubere rechte Spalte zu bilden. Jetzt schiebt .result-main alle
+   Buttons nach rechts, und der gap sorgt für den Abstand zwischen Text, Löschen-Button und
+   Stern. */
 .result-row{
-  display:flex; align-items:center; justify-content:space-between; padding:11px 4px;
+  display:flex; align-items:center; gap:6px; padding:11px 4px;
   border-bottom:1px solid var(--border); cursor:pointer;
 }
 .result-row:last-child{border-bottom:none;}
-.result-main{min-width:0;}
+/* flex:1 — ohne das schrumpfte der Textblock auf seine Inhaltsbreite und die Buttons folgten
+   direkt dahinter, statt am rechten Rand zu stehen (siehe Kommentar bei .result-row oben). */
+.result-main{flex:1 1 auto; min-width:0;}
 .result-name{font-weight:600; font-size:0.92rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .result-sub{font-size:0.76rem; color:var(--muted); margin-top:1px;}
 .result-star{

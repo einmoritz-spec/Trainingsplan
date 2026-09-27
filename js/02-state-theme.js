@@ -3,6 +3,19 @@ let freeSelected = new Set();
 
 let plan = null;
 let sessions = [];
+// Löst auf, sobald WIRKLICH die komplette Trainingshistorie im sessions-Array steht (siehe
+// loadRecentSessions(), 01-storage.js, und der Hintergrund-Ladeblock in init() unten). Bildschirme,
+// die mit der VOLLSTÄNDIGEN Historie rechnen (Statistiken, Rekorde, Muskelbalance, Monatsberichte,
+// ...) awaiten das über ensureSessionsFullyLoaded() (06-navigation.js) zuerst, bevor sie rendern —
+// so sind nie unvollständige Zahlen zu sehen. Direkt nach dem Start (bevor init() läuft) noch
+// null; init() ersetzt es synchron durch das echte Promise, bevor irgendetwas rendern kann.
+let sessionsFullyLoadedPromise = null;
+// Kleiner Helfer für Bildschirme, die mit der VOLLSTÄNDIGEN Historie rechnen (siehe Kommentar bei
+// sessionsFullyLoadedPromise oben) — vor init() (theoretisch nicht erreichbar, da erst danach
+// navigiert werden kann) fällt er defensiv auf das bereits vorhandene sessions-Array zurück.
+function ensureSessionsFullyLoaded(){
+  return sessionsFullyLoadedPromise || Promise.resolve(sessions);
+}
 let lastPerformance = {}; // { [exerciseId]: [{reps, weight}, ...] } — letzter geloggter Stand je Übung
 let lastExportAt = null; // ISO-Datum des letzten Backup-Exports (Einstellungen → Daten → Exportieren), siehe renderHome()/BACKUP_REMINDER_DAYS
 
@@ -285,21 +298,21 @@ function deriveSurfaceColors(bgHex){
 const BUILTIN_FONTS = [
   { id: 'default', name: 'Standard (App)', family: `'Inter', system-ui, sans-serif` },
   { id: 'system', name: 'Systemschrift', family: `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif` },
-  { id: 'poppins', name: 'Poppins', family: `'Poppins', sans-serif` },
-  { id: 'montserrat', name: 'Montserrat', family: `'Montserrat', sans-serif` },
-  { id: 'roboto', name: 'Roboto', family: `'Roboto', sans-serif` },
-  { id: 'lato', name: 'Lato', family: `'Lato', sans-serif` },
-  { id: 'opensans', name: 'Open Sans', family: `'Open Sans', sans-serif` },
-  { id: 'nunito', name: 'Nunito', family: `'Nunito', sans-serif` },
-  { id: 'raleway', name: 'Raleway', family: `'Raleway', sans-serif` },
-  { id: 'worksans', name: 'Work Sans', family: `'Work Sans', sans-serif` },
-  { id: 'dmsans', name: 'DM Sans', family: `'DM Sans', sans-serif` },
-  { id: 'spacegrotesk', name: 'Space Grotesk', family: `'Space Grotesk', sans-serif` },
-  { id: 'manrope', name: 'Manrope', family: `'Manrope', sans-serif` },
-  { id: 'rubik', name: 'Rubik', family: `'Rubik', sans-serif` },
-  { id: 'karla', name: 'Karla', family: `'Karla', sans-serif` },
-  { id: 'sourcesans', name: 'Source Sans 3', family: `'Source Sans 3', sans-serif` },
-  { id: 'ibmplexsans', name: 'IBM Plex Sans', family: `'IBM Plex Sans', sans-serif` },
+  { id: 'poppins', name: 'Poppins', family: `'Poppins', sans-serif`, googleFont: 'Poppins:wght@400;600;700' },
+  { id: 'montserrat', name: 'Montserrat', family: `'Montserrat', sans-serif`, googleFont: 'Montserrat:wght@400;600;700' },
+  { id: 'roboto', name: 'Roboto', family: `'Roboto', sans-serif`, googleFont: 'Roboto:wght@400;500;700' },
+  { id: 'lato', name: 'Lato', family: `'Lato', sans-serif`, googleFont: 'Lato:wght@400;700' },
+  { id: 'opensans', name: 'Open Sans', family: `'Open Sans', sans-serif`, googleFont: 'Open+Sans:wght@400;600;700' },
+  { id: 'nunito', name: 'Nunito', family: `'Nunito', sans-serif`, googleFont: 'Nunito:wght@400;600;700' },
+  { id: 'raleway', name: 'Raleway', family: `'Raleway', sans-serif`, googleFont: 'Raleway:wght@400;600;700' },
+  { id: 'worksans', name: 'Work Sans', family: `'Work Sans', sans-serif`, googleFont: 'Work+Sans:wght@400;600;700' },
+  { id: 'dmsans', name: 'DM Sans', family: `'DM Sans', sans-serif`, googleFont: 'DM+Sans:wght@400;600;700' },
+  { id: 'spacegrotesk', name: 'Space Grotesk', family: `'Space Grotesk', sans-serif`, googleFont: 'Space+Grotesk:wght@400;600;700' },
+  { id: 'manrope', name: 'Manrope', family: `'Manrope', sans-serif`, googleFont: 'Manrope:wght@400;600;700' },
+  { id: 'rubik', name: 'Rubik', family: `'Rubik', sans-serif`, googleFont: 'Rubik:wght@400;600;700' },
+  { id: 'karla', name: 'Karla', family: `'Karla', sans-serif`, googleFont: 'Karla:wght@400;600;700' },
+  { id: 'sourcesans', name: 'Source Sans 3', family: `'Source Sans 3', sans-serif`, googleFont: 'Source+Sans+3:wght@400;600;700' },
+  { id: 'ibmplexsans', name: 'IBM Plex Sans', family: `'IBM Plex Sans', sans-serif`, googleFont: 'IBM+Plex+Sans:wght@400;600;700' },
   { id: 'arial', name: 'Arial', family: `Arial, Helvetica, sans-serif` },
   { id: 'helvetica', name: 'Helvetica', family: `'Helvetica Neue', Helvetica, Arial, sans-serif` },
   { id: 'verdana', name: 'Verdana', family: `Verdana, Geneva, sans-serif` },
@@ -311,25 +324,25 @@ const BUILTIN_FONTS = [
   { id: 'timesnewroman', name: 'Times New Roman', family: `'Times New Roman', Times, serif` },
   { id: 'palatino', name: 'Palatino', family: `'Palatino Linotype', Palatino, serif` },
   { id: 'garamond', name: 'Garamond', family: `Garamond, serif` },
-  { id: 'playfair', name: 'Playfair Display', family: `'Playfair Display', serif` },
-  { id: 'merriweather', name: 'Merriweather', family: `'Merriweather', serif` },
-  { id: 'lora', name: 'Lora', family: `'Lora', serif` },
-  { id: 'oswald', name: 'Oswald', family: `'Oswald', sans-serif` },
-  { id: 'anton', name: 'Anton', family: `'Anton', sans-serif` },
-  { id: 'archivoblack', name: 'Archivo Black', family: `'Archivo Black', sans-serif` },
-  { id: 'comfortaa', name: 'Comfortaa', family: `'Comfortaa', sans-serif` },
-  { id: 'quicksand', name: 'Quicksand', family: `'Quicksand', sans-serif` },
-  { id: 'caveat', name: 'Caveat', family: `'Caveat', cursive` },
-  { id: 'dancingscript', name: 'Dancing Script', family: `'Dancing Script', cursive` },
-  { id: 'pacifico', name: 'Pacifico', family: `'Pacifico', cursive` },
+  { id: 'playfair', name: 'Playfair Display', family: `'Playfair Display', serif`, googleFont: 'Playfair+Display:wght@400;600;700' },
+  { id: 'merriweather', name: 'Merriweather', family: `'Merriweather', serif`, googleFont: 'Merriweather:wght@400;700' },
+  { id: 'lora', name: 'Lora', family: `'Lora', serif`, googleFont: 'Lora:wght@400;600;700' },
+  { id: 'oswald', name: 'Oswald', family: `'Oswald', sans-serif`, googleFont: 'Oswald:wght@400;600;700' },
+  { id: 'anton', name: 'Anton', family: `'Anton', sans-serif`, googleFont: 'Anton' },
+  { id: 'archivoblack', name: 'Archivo Black', family: `'Archivo Black', sans-serif`, googleFont: 'Archivo+Black' },
+  { id: 'comfortaa', name: 'Comfortaa', family: `'Comfortaa', sans-serif`, googleFont: 'Comfortaa:wght@400;600;700' },
+  { id: 'quicksand', name: 'Quicksand', family: `'Quicksand', sans-serif`, googleFont: 'Quicksand:wght@400;600;700' },
+  { id: 'caveat', name: 'Caveat', family: `'Caveat', cursive`, googleFont: 'Caveat:wght@400;600;700' },
+  { id: 'dancingscript', name: 'Dancing Script', family: `'Dancing Script', cursive`, googleFont: 'Dancing+Script:wght@400;600;700' },
+  { id: 'pacifico', name: 'Pacifico', family: `'Pacifico', cursive`, googleFont: 'Pacifico' },
   { id: 'courier', name: 'Courier New', family: `'Courier New', Courier, monospace` },
   { id: 'consolas', name: 'Consolas', family: `Consolas, Menlo, monospace` },
   { id: 'menlo', name: 'Menlo', family: `Menlo, Consolas, monospace` },
-  { id: 'firacode', name: 'Fira Code', family: `'Fira Code', monospace` },
-  { id: 'robotomono', name: 'Roboto Mono', family: `'Roboto Mono', monospace` },
-  { id: 'ibmplexmono', name: 'IBM Plex Mono', family: `'IBM Plex Mono', monospace` },
+  { id: 'firacode', name: 'Fira Code', family: `'Fira Code', monospace`, googleFont: 'Fira+Code:wght@400;500;600' },
+  { id: 'robotomono', name: 'Roboto Mono', family: `'Roboto Mono', monospace`, googleFont: 'Roboto+Mono:wght@400;500;600' },
+  { id: 'ibmplexmono', name: 'IBM Plex Mono', family: `'IBM Plex Mono', monospace`, googleFont: 'IBM+Plex+Mono:wght@400;500;600' },
   { id: 'jetbrainsmono', name: 'JetBrains Mono', family: `'JetBrains Mono', monospace` },
-  { id: 'specialelite', name: 'Special Elite', family: `'Special Elite', monospace` },
+  { id: 'specialelite', name: 'Special Elite', family: `'Special Elite', monospace`, googleFont: 'Special+Elite' },
   { id: 'comicsans', name: 'Comic Sans MS', family: `'Comic Sans MS', 'Comic Sans', cursive` },
 ];
 
@@ -361,7 +374,7 @@ function registerCustomFontFaces(){
     if (document.getElementById(styleId)) return; // schon registriert
     const style = document.createElement('style');
     style.id = styleId;
-    style.textContent = `@font-face{ font-family:'${f.cssName}'; src:url(${f.dataUrl}) format('${f.formatHint}'); font-display:swap; }`;
+    style.textContent = `@font-face{ font-family:'${esc(f.cssName)}'; src:url(${f.dataUrl}) format('${f.formatHint}'); font-display:swap; }`;
     document.head.appendChild(style);
   });
 }
@@ -374,8 +387,28 @@ function registerCustomFontFaces(){
 // unangetastet bleibt. Die Ausnahmen (.scroll-wheel-item-text/.font-preview-item) sorgen dafür,
 // dass die Schriftart-Vorschauen im Auswahl-Rad bzw. in der Liste eigener Schriften weiterhin
 // jeweils in IHRER EIGENEN Schrift angezeigt werden, statt selbst überschrieben zu werden.
+// Google Fonts: siehe Kommentar bei <link> in index.html — nur Bebas Neue/Inter/JetBrains Mono
+// laufen dort noch statisch, alle anderen (per googleFont-Feld oben markierten) Familien werden
+// erst hier bei tatsächlichem Bedarf nachgeladen. loadedGoogleFontFamilies verhindert doppelte
+// Requests bei wiederholten Aufrufen (z. B. jedes Mal, wenn applyFontFamily() erneut mit
+// derselben Schrift läuft). Mehrere gleichzeitig angeforderte Familien werden zu EINEM Request
+// gebündelt (siehe openFontPickerSheet()), damit das Öffnen des Schriftart-Menüs nicht 30
+// Einzel-Requests auslöst.
+const loadedGoogleFontFamilies = new Set();
+function ensureGoogleFontsLoaded(familyParams){
+  const toLoad = familyParams.filter(fp => fp && !loadedGoogleFontFamilies.has(fp));
+  if (!toLoad.length) return;
+  toLoad.forEach(fp => loadedGoogleFontFamilies.add(fp));
+  const query = toLoad.map(fp => `family=${fp}`).join('&');
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?${query}&display=swap`;
+  document.head.appendChild(link);
+}
+
 function applyFontFamily(){
   const font = currentFontOption();
+  if (font.googleFont) ensureGoogleFontsLoaded([font.googleFont]);
   document.documentElement.style.setProperty('--font-app', font.family);
   document.documentElement.classList.toggle('font-override', font.id !== 'default');
 }
@@ -518,11 +551,33 @@ function installStatusBarColorWatchers(){
 
 async function init(){
 
-  plan = await loadJSON('plan', DEFAULT_PLAN);
-  sessions = await loadAllSessions();
-  lastPerformance = await loadJSON('lastPerformance', {});
-  lastExportAt = await loadJSON('lastExportAt', null);
-  customFonts = await loadJSON('customFonts', []);
+  // Die fünf unabhängigen Lade-Aufrufe liefen vorher sequenziell (jeder einzelne await blockiert
+  // den nächsten), obwohl keiner vom Ergebnis eines anderen abhängt — Promise.all lässt sie
+  // parallel über IndexedDB laufen und verkürzt damit die Zeit bis zum ersten Paint um die Summe
+  // der Einzel-Latenzen minus der längsten. loadRecentSessions() lädt dabei bewusst nur ein
+  // paar Monate synchron mit (RECENT_SESSION_MONTHS unten) — der Rest folgt im Hintergrund.
+  const RECENT_SESSION_MONTHS = 3;
+  let sessionsResult;
+  [plan, sessionsResult, lastPerformance, lastExportAt, customFonts] = await Promise.all([
+    loadJSON('plan', DEFAULT_PLAN),
+    loadRecentSessions(RECENT_SESSION_MONTHS),
+    loadJSON('lastPerformance', {}),
+    loadJSON('lastExportAt', null),
+    loadJSON('customFonts', []),
+  ]);
+  sessions = sessionsResult.recent;
+  // Hintergrund-Nachladen der älteren Monate: hängt die fehlenden Sessions VORNE an (chunkIndex
+  // und jeder einzelne Chunk sind bereits chronologisch sortiert — siehe writeSessionChunks(),
+  // 01-storage.js — daher ergibt "ältere Monate voranstellen" ohne erneutes Sortieren wieder die
+  // korrekte Gesamt-Reihenfolge). Rendert die Startseite neu, falls sie in der Zwischenzeit noch
+  // offen ist (gleiches Muster wie beim Essenstracker-Akkordeon, siehe 07-home.js) — ein bereits
+  // gezeigter Verlauf/Streak muss sich sonst nicht mehr von selbst korrigieren, falls er zufällig
+  // nur aus den anfangs geladenen Monaten berechnet wurde.
+  sessionsFullyLoadedPromise = sessionsResult.olderPromise.then((older) => {
+    if (older.length) sessions.unshift(...older);
+    if ((history.state && history.state.view || 'home') === 'home') renderHome();
+    return sessions;
+  });
   registerCustomFontFaces();
   applyTheme();
   installStatusBarColorWatchers();
@@ -553,21 +608,58 @@ async function init(){
     }
   });
   if (plan.bodyWeight === undefined) plan.bodyWeight = null;
-  // Körpergewichts-VERLAUF (Liste aus {date, weight}) zusätzlich zum reinen Einzelwert
-  // plan.bodyWeight (der weiterhin unverändert für effectiveSetWeight()/Steckscheiben-Limit/
-  // etc. als "aktuell bekanntes Gewicht" dient, siehe 04-utils.js). Bestandsnutzer mit bereits
-  // gesetztem bodyWeight, aber noch ohne Log, bekommen hier EINMALIG einen ersten Eintrag mit
-  // dem heutigen Datum, damit der neue Verlaufs-Chart nicht komplett leer startet, obwohl
-  // eigentlich schon ein Wert bekannt ist.
+  // Unconditional (nicht Teil der einmaligen Migration unten): stellt bei JEDEM Start sicher,
+  // dass plan.bodyWeightLog ein Array ist — auch falls ein importiertes Backup das Feld
+  // fehlerhaft/fehlend mitbringt, nicht nur beim allerersten Hochlaufen nach Einführung des Felds.
   if (!Array.isArray(plan.bodyWeightLog)) plan.bodyWeightLog = [];
-  if (!plan._bodyWeightLogMigration){
+
+  /* -------------------------------------------------
+     Migrations-Versionierung (schemaVersion)
+     -------------------------------------------------
+     Ersetzt die vorher hier direkt darunter stehenden 15 einzelnen _xyzMigration-Booleans
+     (einer pro einmaliger Datenkorrektur) durch einen einzigen fortlaufenden Zähler — man sieht
+     auf einen Blick, wie viele Migrationsstufen es gibt und in welcher Reihenfolge sie liefen,
+     statt das aus 15 verstreuten If-Bedingungen zusammenzusuchen. Eine künftige neue Migration
+     ergänzt einfach einen weiteren "if (plan.schemaVersion < N)"-Block am Ende und erhöht
+     PLAN_SCHEMA_VERSION um 1.
+     Bestandsnutzer:innen haben die alten Flags noch im gespeicherten plan-Objekt (werden hier
+     nicht gelöscht, nur nicht mehr gelesen) — schemaVersion wird EINMALIG daraus abgeleitet: alle
+     15 Flags liefen bisher immer gemeinsam in einem einzigen synchronen init()-Durchlauf (keine
+     Bedingung endet vorzeitig), ein Bestandsplan hat also entweder ALLE oder KEIN einziges davon
+     gesetzt. Die Schleife zählt trotzdem defensiv nur zusammenhängend von vorne (bricht beim
+     ersten fehlenden Flag ab), falls das für einen älteren Zwischenstand doch nicht zutreffen
+     sollte — sicherer als pauschal "irgendein Flag gesetzt → alle als erledigt annehmen".
+  --------------------------------------------------- */
+  const PLAN_SCHEMA_VERSION = 17;
+  if (plan.schemaVersion == null){
+    const legacyMigrationFlags = [
+      '_bodyWeightLogMigration', '_assistedFlagMigration', '_weightStepMigration',
+      '_catFixCoreLowerBody', '_renameStepperToCrosstrainer', '_bodyweightExerciseFlagMigration',
+      '_bodyWeightFactorMigration', '_removeDuplicateRudernLanghantel', '_pushupBodyWeightFactorMigration',
+      '_stripCoreFromOberkoerperList', '_defaultModeListsMigration', '_fixUnterkoerperDefaultOrder',
+      '_bodyPartMigration', '_fixAbdAddImages', '_addSeithebenImage',
+    ];
+    let inferred = 0;
+    for (const flag of legacyMigrationFlags){
+      if (plan[flag]) inferred++; else break;
+    }
+    plan.schemaVersion = inferred;
+    planChanged = true;
+  }
+
+  if (plan.schemaVersion < 1){
+    // Körpergewichts-VERLAUF (Liste aus {date, weight}) zusätzlich zum reinen Einzelwert
+    // plan.bodyWeight (der weiterhin unverändert für effectiveSetWeight()/Steckscheiben-Limit/
+    // etc. als "aktuell bekanntes Gewicht" dient, siehe 04-utils.js). Bestandsnutzer mit bereits
+    // gesetztem bodyWeight, aber noch ohne Log, bekommen hier EINMALIG einen ersten Eintrag mit
+    // dem heutigen Datum, damit der neue Verlaufs-Chart nicht komplett leer startet, obwohl
+    // eigentlich schon ein Wert bekannt ist.
     if (plan.bodyWeightLog.length === 0 && plan.bodyWeight != null){
       plan.bodyWeightLog.push({ date: new Date().toISOString(), weight: plan.bodyWeight });
     }
-    plan._bodyWeightLogMigration = true;
     planChanged = true;
   }
-  if (!plan._assistedFlagMigration){
+  if (plan.schemaVersion < 2){
     const assistedIds = new Set(['e1']); // Klimmzugmaschine: unterstützt, Volumen = Körpergewicht - eingestelltes Gewicht
     assistedIds.forEach(id => {
       const ex = plan.exercises.find(e => e.id === id);
@@ -576,7 +668,6 @@ async function init(){
         planChanged = true;
       }
     });
-    plan._assistedFlagMigration = true;
     planChanged = true;
   }
   // Gewichts-Raster (ex.weightStep/ex.weightBase, siehe weightStepFor()/roundToWeightGrid()):
@@ -589,7 +680,7 @@ async function init(){
   // Felder für ALLE Übungen aus DEFAULT_PLAN nach, die sie dort definiert haben — bewusst ohne
   // vorhandene abweichende Werte zu überschreiben (!= null-Prüfung), damit eine vom Nutzer
   // selbst angepasste Übung nicht zurückgesetzt wird.
-  if (!plan._weightStepMigration){
+  if (plan.schemaVersion < 3){
     DEFAULT_PLAN.exercises.forEach(defEx => {
       if (defEx.weightStep == null && defEx.weightBase == null) return;
       const ex = plan.exercises.find(e => e.id === defEx.id);
@@ -603,10 +694,9 @@ async function init(){
         planChanged = true;
       }
     });
-    plan._weightStepMigration = true;
     planChanged = true;
   }
-  if (!plan._catFixCoreLowerBody){
+  if (plan.schemaVersion < 4){
     ['e6', 'e7', 'e8', 'e14', 'e20'].forEach(id => {
       const ex = plan.exercises.find(e => e.id === id);
       if (ex && ex.category !== 'unterkoerper'){
@@ -614,7 +704,6 @@ async function init(){
         planChanged = true;
       }
     });
-    plan._catFixCoreLowerBody = true;
     planChanged = true;
   }
   // Kardio-Übung "Stepper" (e22) wurde in "Crosstrainer" umbenannt. Wer die Übung schon vor
@@ -623,7 +712,7 @@ async function init(){
   // mehr automatisch mit DEFAULT_PLAN/EXERCISE_LIBRARY synchronisiert wird. Einmalige Migration
   // überschreibt daher den alten Namen, lässt einen eventuell selbst vergebenen anderen Namen
   // aber unangetastet.
-  if (!plan._renameStepperToCrosstrainer){
+  if (plan.schemaVersion < 5){
     const ex = plan.exercises.find(e => e.id === 'e22');
     if (ex && ex.name === 'Stepper'){
       ex.name = 'Crosstrainer';
@@ -636,7 +725,6 @@ async function init(){
         planChanged = true;
       }
     }
-    plan._renameStepperToCrosstrainer = true;
     planChanged = true;
   }
   // Situps, Rückenstrecker, Klimmzüge, Enger Klimmzug und Trizeps Dips (Bank) sollen ein
@@ -647,7 +735,7 @@ async function init(){
   // Übungen). Dadurch wirkte das kg-Feld bei diesen Übungen wie deaktiviert/nicht vorgesehen,
   // obwohl ein Bonusgewicht möglich sein soll. Einmalige Migration trägt das Flag nach und
   // entfernt ein eventuell fälschlich gesetztes noWeight, das dasselbe Feld sonst hart sperrt.
-  if (!plan._bodyweightExerciseFlagMigration){
+  if (plan.schemaVersion < 6){
     const bodyweightIds = new Set(['e6', 'e14', 'e35', 'e36', 'e53', 'e44']);
     bodyweightIds.forEach(id => {
       const ex = plan.exercises.find(e => e.id === id);
@@ -657,7 +745,6 @@ async function init(){
         planChanged = true;
       }
     });
-    plan._bodyweightExerciseFlagMigration = true;
     planChanged = true;
   }
   // Situps und Rückenstrecker bewegen nicht annähernd das ganze Körpergewicht (anders als
@@ -666,7 +753,7 @@ async function init(){
   // das VOLLE Körpergewicht in die VOL-Berechnung ein. Migration trägt für schon gespeicherte
   // Pläne den realistischeren Faktor 0,5 nach (siehe effectiveSetWeight()); ein eingetragenes
   // Zusatzgewicht bleibt davon unberührt und zählt weiterhin zu 100 %.
-  if (!plan._bodyWeightFactorMigration){
+  if (plan.schemaVersion < 7){
     const factorIds = { e6: 0.5, e14: 0.5 };
     Object.keys(factorIds).forEach(id => {
       const ex = plan.exercises.find(e => e.id === id);
@@ -675,7 +762,6 @@ async function init(){
         planChanged = true;
       }
     });
-    plan._bodyWeightFactorMigration = true;
     planChanged = true;
   }
   // Liegestütze war bisher komplett ohne Gewichts-/VOL-Tracking (noWeight: true). Biomechanische
@@ -687,16 +773,15 @@ async function init(){
   // "Rudern (Langhantel)" (e75) war inhaltlich ein Duplikat von "Langhantelrudern vorgebeugt"
   // (e37) — dieselbe Bewegung, zwei Vorlagen. e75 wurde wieder entfernt; falls sie bei jemandem
   // schon im aktiven Plan war, wird sie hier einmalig sauber rausgenommen.
-  if (!plan._removeDuplicateRudernLanghantel){
+  if (plan.schemaVersion < 8){
     const idx = plan.exercises.findIndex(e => e.id === 'e75');
     if (idx !== -1){
       plan.exercises.splice(idx, 1);
       planChanged = true;
     }
-    plan._removeDuplicateRudernLanghantel = true;
     planChanged = true;
   }
-  if (!plan._pushupBodyWeightFactorMigration){
+  if (plan.schemaVersion < 9){
     const ex = plan.exercises.find(e => e.id === 'e44');
     if (ex){
       ex.bodyweightExercise = true;
@@ -704,10 +789,9 @@ async function init(){
       if (ex.noWeight) delete ex.noWeight;
       planChanged = true;
     }
-    plan._pushupBodyWeightFactorMigration = true;
     planChanged = true;
   }
-  if (!plan._stripCoreFromOberkoerperList){
+  if (plan.schemaVersion < 10){
     const reclassified = new Set(['e6', 'e7', 'e8', 'e14', 'e20']);
     const stored = plan.modeLists && plan.modeLists.oberkoerper;
     if (stored){
@@ -729,10 +813,9 @@ async function init(){
         });
       }
     }
-    plan._stripCoreFromOberkoerperList = true;
     planChanged = true;
   }
-  if (!plan._defaultModeListsMigration){
+  if (plan.schemaVersion < 11){
     // Setzt die Standard-Übungslisten für Ganzkörper A/B und Oberkörper A/B (siehe
     // DEFAULT_PLAN.modeLists) einmalig auch bei Bestandsnutzer:innen — aber NUR für
     // Modus/Variante-Kombinationen, die noch komplett leer/unbelegt sind. Wurde für einen
@@ -748,10 +831,9 @@ async function init(){
         planChanged = true;
       }
     });
-    plan._defaultModeListsMigration = true;
     planChanged = true;
   }
-  if (!plan._fixUnterkoerperDefaultOrder){
+  if (plan.schemaVersion < 12){
     // Die ursprüngliche Standard-Reihenfolge für Unterkörper A/B begann fälschlich mit den
     // Bauchübungen statt mit den Beinübungen (siehe DEFAULT_PLAN.modeLists.unterkoerper,
     // mittlerweile korrigiert). Bereits gespeicherte Listen, die noch exakt dieser alten
@@ -773,10 +855,9 @@ async function init(){
         }
       });
     }
-    plan._fixUnterkoerperDefaultOrder = true;
     planChanged = true;
   }
-  if (!plan._bodyPartMigration){
+  if (plan.schemaVersion < 13){
     // Trägt bei bereits vorhandenen Standardübungen (Abgleich über id mit
     // DEFAULT_PLAN.exercises) nachträglich die Push/Pull/Legs-Zuordnung (ex.bodyPart) nach,
     // falls sie dort noch fehlt — betrifft alle, die ihren Plan bereits vor Einführung dieses
@@ -790,10 +871,9 @@ async function init(){
         planChanged = true;
       }
     });
-    plan._bodyPartMigration = true;
     planChanged = true;
   }
-  if (!plan._fixAbdAddImages){
+  if (plan.schemaVersion < 14){
     // Die Standardbilder für "Abduktoren" (e12) und "Adduktoren" (e13) waren ursprünglich
     // vertauscht (das bei e12 hinterlegte Foto zeigte tatsächlich die Adduktoren-Übung und
     // umgekehrt) — mittlerweile in DEFAULT_PLAN korrigiert. Bereits gespeicherte Übungen, die
@@ -814,10 +894,9 @@ async function init(){
       exE13.imageData = defE13.imageData;
       planChanged = true;
     }
-    plan._fixAbdAddImages = true;
     planChanged = true;
   }
-  if (!plan._addSeithebenImage){
+  if (plan.schemaVersion < 15){
     // "Seitheben" (e19) hatte ursprünglich noch gar kein Bild hinterlegt — trägt es hier
     // einmalig nach, aber nur, falls bislang wirklich keines gesetzt wurde (ein zwischenzeitlich
     // selbst hochgeladenes Bild bleibt unangetastet).
@@ -827,7 +906,53 @@ async function init(){
       exE19.imageData = defE19.imageData;
       planChanged = true;
     }
-    plan._addSeithebenImage = true;
+    planChanged = true;
+  }
+  if (plan.schemaVersion < 16){
+    // Kniebeugen bewegen (anders als z. B. Bankdrücken) zusätzlich zum aufgelegten Gewicht
+    // immer auch das komplette eigene Körpergewicht mit — bisher fehlte das bei den drei
+    // eingebauten Kniebeugen-Varianten in JEDER darauf aufbauenden Berechnung (Volumen,
+    // 1RM-Schätzung, Rekorde), siehe effectiveSetWeight() (04-utils.js). An der Multipresse
+    // (e61) kommt zusätzlich ein grober, im Übungs-Editor änderbarer Näherungswert für das
+    // Eigengewicht der Geräte-Stange selbst hinzu (siehe machineWeightKg-Kommentar dort) — bei
+    // der freien Langhantel (e26/e30) ist das nicht nötig, weil das dort eingetragene Gewicht
+    // ohnehin schon die komplette Stange einschließt.
+    // Betrifft nur die eingebauten Standard-Übungen (feste IDs) — wurde eine davon vom Nutzer
+    // bereits manuell auf "Eigenkörpergewicht" umgestellt (bodyweightExercise dann schon
+    // gesetzt), bleibt das unangetastet; eine eigene, selbst angelegte Übung mit ähnlichem
+    // Namen ist nicht betroffen (keine stabile ID zum sicheren Zuordnen).
+    const bodyweightSquatDefaults = { e26: {}, e30: {}, e61: { machineWeightKg: 15 } };
+    Object.keys(bodyweightSquatDefaults).forEach(id => {
+      const ex = plan.exercises.find(e => e.id === id);
+      if (ex && ex.bodyweightExercise == null){
+        ex.bodyweightExercise = true;
+        Object.assign(ex, bodyweightSquatDefaults[id]);
+      }
+    });
+    planChanged = true;
+  }
+  if (plan.schemaVersion < 17){
+    // Bei einseitigen/wechselseitigen Übungen (Ausfallschritte, einarmiges Rudern/Curls) steht
+    // die eingetragene Wiederholungszahl für EINE Seite — im selben Satz wird aber mit
+    // derselben Wiederholungs-/Gewichtszahl auch die andere Seite bewegt. Das Trainingsvolumen
+    // (Gesamtlast, nicht 1RM-Schätzung oder Gewichts-Rekorde, siehe setVolumeKg(),
+    // 04-utils.js) zählte dadurch bisher nur die Hälfte der tatsächlich geleisteten Arbeit.
+    // Betrifft nur die eingebauten Standard-Übungen (feste IDs) — wurde eine davon vom Nutzer
+    // bereits manuell umbenannt oder das Feld gibt es dort schon (unwahrscheinlich, aber
+    // sicherheitshalber geprüft), bleibt das unangetastet.
+    const unilateralIds = ['e31', 'e32', 'e38', 'e56', 'e57', 'e62'];
+    unilateralIds.forEach(id => {
+      const ex = plan.exercises.find(e => e.id === id);
+      if (ex && ex.unilateral == null) ex.unilateral = true;
+    });
+    planChanged = true;
+  }
+  // Schließt die Versionierung ab: sobald ALLE Stufen oben durchlaufen sind (jede einzelne prüft
+  // schon selbst "< N" und ist dadurch bereits idempotent), steht schemaVersion final auf dem
+  // aktuellen Stand. Ohne diese Zeile bliebe schemaVersion bei genau dem Wert stehen, den die
+  // letzte tatsächlich AUSGEFÜHRTE Stufe zufällig hinterlassen hat.
+  if (plan.schemaVersion < PLAN_SCHEMA_VERSION){
+    plan.schemaVersion = PLAN_SCHEMA_VERSION;
     planChanged = true;
   }
   if (planChanged) await saveJSON('plan', plan);

@@ -215,7 +215,11 @@ function ftEscapeRegex(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
 // Generischer HTML-Escape-Helfer — hier (statt in 15b) definiert, weil er auch innerhalb
 // dieser Datei gebraucht wird (ftToastWithUndo() unten), zusätzlich zu allen UI-Dateien
 // (15b/15c/15d).
-function ftEscapeHTML(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+// Delegiert an das zentrale esc() (04-utils.js) — die vorherige Implementierung (div.textContent
+// lesen/zurücklesen) escapte kein " oder ', wodurch value="${ftEscapeHTML(...)}" an mehreren
+// Stellen (z. B. Eintragsname im Mengen-Modal) aus dem Attribut ausbrechen ließ, wenn der
+// jeweilige Name ein Anführungszeichen enthielt.
+function ftEscapeHTML(s){ return esc(s); }
 // Score EINES Suchworts gegen einen (bereits normalisierten) Lebensmittelnamen — identische
 // 5/4/3/2/1-Staffel wie zuvor. nameCompact (Name ohne Leerzeichen) zusätzlich geprüft, damit
 // z. B. "hähnchenbrust" auch "Hähnchen, Brust" findet.

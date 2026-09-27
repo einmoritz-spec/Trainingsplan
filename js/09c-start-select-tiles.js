@@ -46,7 +46,7 @@ function openAddTilePrompt(){
         </div>
         <div class="new-exercise-modal-body">
           <div class="wizard-choice-list">
-            ${hidden.map(id => `<button class="wizard-choice" data-add-tile="${id}">${modeDisplayLabel(id)}</button>`).join('')}
+            ${hidden.map(id => `<button class="wizard-choice" data-add-tile="${id}">${modeDisplayLabelHTML(id)}</button>`).join('')}
             ${canCreateCustom ? `<button class="wizard-choice" id="addTileCustomNew">+ Neue Kategorie erstellen</button>` : ''}
           </div>
         </div>
@@ -396,7 +396,7 @@ function renderModeEdit(mode, startTab){
   // einzelnen Splits) und lässt sich per Long-Press-Drag auf den Akkordeon-Kopfzeilen
   // verändern (siehe wireMuscleGroupReorder unten); wird erst mit "Speichern" persistiert.
   let groupOrder = fullGroupOrder(mode);
-  const label = modeDisplayLabel(mode);
+  const label = modeDisplayLabelHTML(mode);
 
   app.innerHTML = `
     <div class="brand">

@@ -58,8 +58,21 @@ const CARDIO_MACHINES = {
     { key: 'steps', label: 'Stufen', shortLabel: 'Stufen', unit: '', step: 1, min: 0 }
   ]}
 };
+function customCardioMachines(){
+  return Array.isArray(plan.customCardioMachines) ? plan.customCardioMachines : [];
+}
+// Liefert die Gerätekonfiguration (label + Felder) für einen cardioMachine-Schlüssel — egal ob
+// eingebaut (CARDIO_MACHINES) oder selbst angelegt (plan.customCardioMachines, siehe
+// openAddCustomCardioMachinePrompt(), 03-input-widgets.js). Zentraler Umweg statt überall
+// CARDIO_MACHINES[key] direkt zu lesen, damit eigene Geräte an JEDER bestehenden Stelle
+// (Auswahl-Wizard, Übungs-Editor, Sätze-Tabelle, kcal-Schätzung, PDF-Export, ...) automatisch
+// genauso funktionieren wie eingebaute, ohne diese Stellen einzeln anfassen zu müssen.
+function cardioMachineConfig(key){
+  if (!key) return null;
+  return CARDIO_MACHINES[key] || customCardioMachines().find(m => m.id === key) || null;
+}
 function cardioFieldsFor(planEx){
-  const cfg = planEx && planEx.cardioMachine && CARDIO_MACHINES[planEx.cardioMachine];
+  const cfg = planEx && planEx.cardioMachine && cardioMachineConfig(planEx.cardioMachine);
   return cfg ? cfg.fields : [];
 }
 // Distanz nur beim Laufband automatisch berechenbar (Tempo × Zeit) — bei Crosstrainer/Fahrrad/
@@ -849,19 +862,19 @@ const DEFAULT_PLAN = {
 // die App zeigt dann den üblichen Initialen-Platzhalter) — passende EXERCISE_INFO-Einträge
 // (Kurzbeschreibung + "Worauf achten") liegen weiter oben unter denselben IDs.
 const EXERCISE_LIBRARY = [
-  { id: 'e26', name: 'Kniebeuge (Langhantel)',        sets: 3, repsMin: 6,  repsMax: 10, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine',    muscles: 'Quadrizeps, Gesäßmuskulatur, unterer Rücken stabilisierend', type: 'reps', weightStep: 1.25, bodyPart: 'legs', mainMuscle: 'Quadrizeps' },
+  { id: 'e26', name: 'Kniebeuge (Langhantel)',        sets: 3, repsMin: 6,  repsMax: 10, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine',    muscles: 'Quadrizeps, Gesäßmuskulatur, unterer Rücken stabilisierend', type: 'reps', weightStep: 1.25, bodyPart: 'legs', mainMuscle: 'Quadrizeps', bodyweightExercise: true },
   { id: 'e27', name: 'Kreuzheben (Langhantel)',       sets: 3, repsMin: 5,  repsMax: 8,  weight: 0, category: 'oberkoerper', muscleGroup: 'Rücken',   muscles: 'Unterer Rücken, Gesäßmuskulatur, ischiocrurale Muskulatur', type: 'reps', weightStep: 1.25, bodyPart: 'pull', mainMuscle: 'Rückenstrecker', imageData: 'assets/exercises/e26.webp' },
   { id: 'e28', name: 'Rumänisches Kreuzheben',        sets: 3, repsMin: 8,  repsMax: 12, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine',    muscles: 'Ischiocrurale Muskulatur (Hamstrings), Gesäßmuskulatur', type: 'reps', weightStep: 1.25, bodyPart: 'legs', mainMuscle: 'Ischiocrurale Muskulatur' },
   { id: 'e29', name: 'Sumo-Kreuzheben',                sets: 3, repsMin: 5,  repsMax: 8,  weight: 0, category: 'oberkoerper', muscleGroup: 'Rücken',   muscles: 'Gesäßmuskulatur, Oberschenkelinnenseite, unterer Rücken', type: 'reps', weightStep: 1.25, bodyPart: 'pull', mainMuscle: 'Gesäßmuskulatur', imageData: 'assets/exercises/e28.webp' },
-  { id: 'e30', name: 'Frontkniebeuge',                 sets: 3, repsMin: 6,  repsMax: 10, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine',    muscles: 'Quadrizeps, Rumpf stabilisierend', type: 'reps', weightStep: 1.25, bodyPart: 'legs', mainMuscle: 'Quadrizeps' },
-  { id: 'e31', name: 'Ausfallschritte (Kurzhanteln)',  sets: 3, repsMin: 10, repsMax: 12, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine',    muscles: 'Quadrizeps, Gesäßmuskulatur', type: 'reps', weightStep: 1, bodyPart: 'legs', mainMuscle: 'Quadrizeps' },
-  { id: 'e32', name: 'Bulgarian Split Squats',         sets: 3, repsMin: 10, repsMax: 12, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine',    muscles: 'Quadrizeps, Gesäßmuskulatur', type: 'reps', weightStep: 1, bodyPart: 'legs', mainMuscle: 'Quadrizeps' },
+  { id: 'e30', name: 'Frontkniebeuge',                 sets: 3, repsMin: 6,  repsMax: 10, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine',    muscles: 'Quadrizeps, Rumpf stabilisierend', type: 'reps', weightStep: 1.25, bodyPart: 'legs', mainMuscle: 'Quadrizeps', bodyweightExercise: true },
+  { id: 'e31', name: 'Ausfallschritte (Kurzhanteln)',  sets: 3, repsMin: 10, repsMax: 12, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine',    muscles: 'Quadrizeps, Gesäßmuskulatur', type: 'reps', weightStep: 1, bodyPart: 'legs', mainMuscle: 'Quadrizeps', unilateral: true },
+  { id: 'e32', name: 'Bulgarian Split Squats',         sets: 3, repsMin: 10, repsMax: 12, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine',    muscles: 'Quadrizeps, Gesäßmuskulatur', type: 'reps', weightStep: 1, bodyPart: 'legs', mainMuscle: 'Quadrizeps', unilateral: true },
   { id: 'e33', name: 'Wadenheben stehend',             sets: 3, repsMin: 12, repsMax: 20, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine',    muscles: 'Wadenmuskulatur (Gastrocnemius, Soleus)', type: 'reps', bodyPart: 'legs', mainMuscle: 'Wadenmuskulatur' },
   { id: 'e34', name: 'Hip Thrust',                     sets: 3, repsMin: 8,  repsMax: 12, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine',    muscles: 'Gesäßmuskulatur, ischiocrurale Muskulatur unterstützend', type: 'reps', bodyPart: 'legs', mainMuscle: 'Gesäßmuskulatur', imageData: 'assets/exercises/e30.webp' },
   { id: 'e35', name: 'Klimmzüge',                      sets: 3, repsMin: 5,  repsMax: 10, weight: 0, category: 'oberkoerper', muscleGroup: 'Rücken',   muscles: 'Latissimus, Bizeps unterstützend', type: 'reps', bodyPart: 'pull', bodyweightExercise: true, mainMuscle: 'Latissimus' },
   { id: 'e36', name: 'Enger Klimmzug (Chin-up)',       sets: 3, repsMin: 5,  repsMax: 10, weight: 0, category: 'oberkoerper', muscleGroup: 'Rücken',   muscles: 'Latissimus, Bizeps', type: 'reps', bodyPart: 'pull', bodyweightExercise: true, mainMuscle: 'Latissimus' },
   { id: 'e37', name: 'Langhantelrudern vorgebeugt',    sets: 3, repsMin: 8,  repsMax: 12, weight: 0, category: 'oberkoerper', muscleGroup: 'Rücken',   muscles: 'Mittlerer und breiter Rückenmuskel, Bizeps unterstützend', type: 'reps', weightStep: 1.25, bodyPart: 'pull', mainMuscle: 'Rückenmuskulatur', imageData: 'assets/exercises/e35.webp' },
-  { id: 'e38', name: 'Kurzhantelrudern einarmig',      sets: 3, repsMin: 8,  repsMax: 12, weight: 0, category: 'oberkoerper', muscleGroup: 'Rücken',   muscles: 'Latissimus, mittlerer Rücken, Bizeps unterstützend', type: 'reps', weightStep: 1, bodyPart: 'pull', mainMuscle: 'Latissimus' },
+  { id: 'e38', name: 'Kurzhantelrudern einarmig',      sets: 3, repsMin: 8,  repsMax: 12, weight: 0, category: 'oberkoerper', muscleGroup: 'Rücken',   muscles: 'Latissimus, mittlerer Rücken, Bizeps unterstützend', type: 'reps', weightStep: 1, bodyPart: 'pull', mainMuscle: 'Latissimus', unilateral: true },
   { id: 'e39', name: 'Shrugs (Langhantel)',            sets: 3, repsMin: 10, repsMax: 15, weight: 0, category: 'oberkoerper', muscleGroup: 'Rücken',   muscles: 'Trapezmuskulatur (oberer Anteil)', type: 'reps', weightStep: 1.25, bodyPart: 'pull', mainMuscle: 'Trapezmuskulatur' },
   { id: 'e40', name: 'Bankdrücken (Langhantel)',       sets: 3, repsMin: 6,  repsMax: 10, weight: 0, category: 'oberkoerper', muscleGroup: 'Brust',    muscles: 'Brustmuskulatur, Trizeps und vordere Schulter unterstützend', type: 'reps', weightStep: 1.25, bodyPart: 'push', mainMuscle: 'Brustmuskulatur', imageData: 'assets/exercises/e38.webp' },
   { id: 'e41', name: 'Kurzhantel-Bankdrücken',         sets: 3, repsMin: 8,  repsMax: 12, weight: 0, category: 'oberkoerper', muscleGroup: 'Brust',    muscles: 'Brustmuskulatur, Trizeps unterstützend', type: 'reps', weightStep: 1, bodyPart: 'push', mainMuscle: 'Brustmuskulatur' },
@@ -879,12 +892,12 @@ const EXERCISE_LIBRARY = [
   { id: 'e53', name: 'Trizeps Dips (Bank)',            sets: 3, repsMin: 8,  repsMax: 15, weight: 0, category: 'oberkoerper', muscleGroup: 'Arme',     muscles: 'Trizeps, vordere Schulter unterstützend', type: 'reps', bodyPart: 'push', bodyweightExercise: true, mainMuscle: 'Trizeps', imageData: 'assets/exercises/e53.webp' },
   { id: 'e54', name: 'Trizeps Kickback',               sets: 3, repsMin: 10, repsMax: 15, weight: 0, category: 'oberkoerper', muscleGroup: 'Arme',     muscles: 'Trizeps (Isolation)', type: 'reps', weightStep: 1, bodyPart: 'push', mainMuscle: 'Trizeps' },
   { id: 'e55', name: 'Crunches',                       sets: 3, repsMin: 15, repsMax: 20, weight: 0, category: 'unterkoerper', muscleGroup: 'Bauch',   muscles: 'Gerade Bauchmuskulatur (Rectus abdominis)', type: 'reps', bodyPart: 'legs', noWeight: true, mainMuscle: 'Bauchmuskulatur' },
-  { id: 'e56', name: 'Bizeps Curls Kabelturm (einarmig)', sets: 3, repsMin: 8,  repsMax: 12, weight: 0, category: 'oberkoerper', muscleGroup: 'Arme', muscles: 'Bizeps', type: 'reps', bodyPart: 'pull', mainMuscle: 'Bizeps' },
-  { id: 'e57', name: 'Trizeps Extension Kabelturm (einarmig)', sets: 3, repsMin: 10, repsMax: 15, weight: 0, category: 'oberkoerper', muscleGroup: 'Arme', muscles: 'Trizeps', type: 'reps', bodyPart: 'push', mainMuscle: 'Trizeps' },
+  { id: 'e56', name: 'Bizeps Curls Kabelturm (einarmig)', sets: 3, repsMin: 8,  repsMax: 12, weight: 0, category: 'oberkoerper', muscleGroup: 'Arme', muscles: 'Bizeps', type: 'reps', bodyPart: 'pull', mainMuscle: 'Bizeps', unilateral: true },
+  { id: 'e57', name: 'Trizeps Extension Kabelturm (einarmig)', sets: 3, repsMin: 10, repsMax: 15, weight: 0, category: 'oberkoerper', muscleGroup: 'Arme', muscles: 'Trizeps', type: 'reps', bodyPart: 'push', mainMuscle: 'Trizeps', unilateral: true },
   { id: 'e58', name: 'Trizeps Extension Kabelturm (zweiarmig)', sets: 3, repsMin: 10, repsMax: 15, weight: 0, category: 'oberkoerper', muscleGroup: 'Arme', muscles: 'Trizeps', type: 'reps', bodyPart: 'push', mainMuscle: 'Trizeps' },
   { id: 'e59', name: 'Brustflys (von oben)', sets: 3, repsMin: 10, repsMax: 15, weight: 0, category: 'oberkoerper', muscleGroup: 'Brust', muscles: 'Brustmuskulatur (Pectoralis major), Kabelzug von oben', type: 'reps', bodyPart: 'push', mainMuscle: 'Brustmuskulatur', imageData: 'assets/exercises/e54.webp' },
-  { id: 'e61', name: 'Kniebeugen (Multipresse)', sets: 3, repsMin: 8, repsMax: 12, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine', muscles: 'Quadrizeps, Gesäßmuskulatur, hintere Oberschenkelmuskulatur (geführte Bewegung an der Multipresse)', type: 'reps', weightStep: 1.25, bodyPart: 'legs', mainMuscle: 'Quadrizeps', imageData: 'assets/exercises/e61.webp' },
-  { id: 'e62', name: 'Ausfallschritte (Multipresse)', sets: 3, repsMin: 10, repsMax: 15, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine', muscles: 'Quadrizeps, Gesäßmuskulatur (geführte Bewegung an der Multipresse)', type: 'reps', weightStep: 1.25, bodyPart: 'legs', mainMuscle: 'Quadrizeps' },
+  { id: 'e61', name: 'Kniebeugen (Multipresse)', sets: 3, repsMin: 8, repsMax: 12, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine', muscles: 'Quadrizeps, Gesäßmuskulatur, hintere Oberschenkelmuskulatur (geführte Bewegung an der Multipresse)', type: 'reps', weightStep: 1.25, bodyPart: 'legs', mainMuscle: 'Quadrizeps', imageData: 'assets/exercises/e61.webp', bodyweightExercise: true, machineWeightKg: 15 },
+  { id: 'e62', name: 'Ausfallschritte (Multipresse)', sets: 3, repsMin: 10, repsMax: 15, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine', muscles: 'Quadrizeps, Gesäßmuskulatur (geführte Bewegung an der Multipresse)', type: 'reps', weightStep: 1.25, bodyPart: 'legs', mainMuscle: 'Quadrizeps', unilateral: true },
   { id: 'e63', name: 'Bankdrücken (Multipresse)', sets: 3, repsMin: 6, repsMax: 10, weight: 0, category: 'oberkoerper', muscleGroup: 'Brust', muscles: 'Brustmuskulatur, Trizeps und vordere Schulter unterstützend (geführte Bewegung an der Multipresse)', type: 'reps', weightStep: 1.25, bodyPart: 'push', mainMuscle: 'Brustmuskulatur' },
   { id: 'e64', name: 'Schrägbankdrücken (Multipresse)', sets: 3, repsMin: 6, repsMax: 10, weight: 0, category: 'oberkoerper', muscleGroup: 'Brust', muscles: 'Obere Brustmuskulatur, vordere Schulter unterstützend (geführte Bewegung an der Multipresse)', type: 'reps', weightStep: 1.25, bodyPart: 'push', mainMuscle: 'Obere Brustmuskulatur' },
   { id: 'e65', name: 'Bizeps Curls Maschine', sets: 3, repsMin: 8, repsMax: 12, weight: 0, category: 'oberkoerper', muscleGroup: 'Arme', muscles: 'Bizeps (geführte Bewegung an der Maschine)', type: 'reps', bodyPart: 'pull', mainMuscle: 'Bizeps', imageData: 'assets/exercises/e62.webp' },

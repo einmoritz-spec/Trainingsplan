@@ -866,7 +866,7 @@ function appendFtMonthOverviewMonth(offset){
     if (pdfBtn){
       pdfBtn.onclick = () => {
         const [y, m] = pdfBtn.dataset.ftPdfMonth.split('-').map(Number);
-        openPeriodExportPopup('food', y, m);
+        ensurePeriodPdfLoaded().then(() => openPeriodExportPopup('food', y, m));
       };
     }
   }

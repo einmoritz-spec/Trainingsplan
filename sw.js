@@ -30,6 +30,110 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v83: Einseitige/wechselseitige Übungen (Ausfallschritte, einarmiges Rudern/Curls) zählten im
+ * Trainingsvolumen bisher nur die halbe tatsächlich geleistete Arbeit — die eingetragene
+ * Wiederholungszahl steht bei diesen Übungen für EINE Seite, im selben Satz wird aber mit
+ * derselben Wiederholungs-/Gewichtszahl auch die andere Seite bewegt. Neues Feld
+ * planEx.unilateral (Checkbox "Einseitig/wechselseitig" im Übungs-Editor, direkt unter
+ * "Eigenkörpergewicht") verdoppelt jetzt gezielt NUR das Volumen (setVolumeKg(), neu in
+ * 04-utils.js) — 1RM/10RM-Schätzung und Gewichts-Rekorde bleiben unverdoppelt, weil die die
+ * Kraftfähigkeit bzw. das tatsächlich gehobene Gewicht auf EINER Seite beschreiben, nicht die
+ * Gesamtarbeit. Alle ~9 Stellen, die bisher einzeln "Wdh × effectiveSetWeight()" gerechnet
+ * hatten (Gesamtvolumen, Monatsbericht, Muskelbalance nach Gewicht, Session-Zusammenfassung,
+ * PDF-Export, Live-Anzeige während des Trainings, ...), laufen jetzt über diese eine Funktion.
+ * Automatisch vorbelegt (unilateral:true) für die sechs eingebauten Übungen, bei denen der Name
+ * es schon sagt oder es aus der Bewegung eindeutig hervorgeht: Ausfallschritte (Kurzhanteln/
+ * Multipresse), Bulgarian Split Squats, Kurzhantelrudern einarmig, Bizeps Curls Kabelturm
+ * (einarmig), Trizeps Extension Kabelturm (einarmig). Bewusst NICHT automatisch gesetzt:
+ * bilaterale Kurzhantel-Übungen (z. B. Bizeps Curls Kurzhantel, Hammer Curls — beide Arme
+ * bewegen sich dort meist gleichzeitig, das ist ein anderer, hier nicht angefasster Fall) und
+ * die Dualbeinpresse (laut Beschreibung nur "unilateral belastbar", nicht zwingend so genutzt)
+ * — dafür lässt sich das neue Kontrollkästchen manuell setzen. Für BESTANDSNUTZER übernimmt das
+ * (wie schon beim Kniebeugen-Fix in v82) eine neue Migrationsstufe (plan.schemaVersion < 17).
+ * v82: Kniebeugen zählten bisher nur das aufgelegte Gewicht, nicht das eigene Körpergewicht,
+ * das bei einer Kniebeuge (anders als z. B. bei Bankdrücken) ja ebenfalls die ganze Bewegung
+ * über mitgetragen wird — Volumen, 1RM-Schätzung und Rekorde waren dadurch bei "Kniebeuge
+ * (Langhantel)", "Frontkniebeuge" und "Kniebeugen (Multipresse)" durchgehend zu niedrig. Alle
+ * drei haben jetzt bodyweightExercise:true (siehe effectiveSetWeight(), 04-utils.js) — das
+ * Gewichtsfeld wird dadurch automatisch optional und dezent ausgegraut angezeigt (exakt
+ * dieselbe .weight-input-optional-Optik wie beim Rückenstrecker), man trägt weiterhin ganz
+ * normal das aufgelegte Gewicht ein, Körpergewicht wird automatisch addiert. Neu:
+ * machineWeightKg (nur bei der Multipresse mit 15kg vorbelegt, als "Ungefähres Gerätegewicht
+ * (kg)" pro Übung im Editor änderbar) addiert zusätzlich einen groben Näherungswert für das
+ * Eigengewicht der Multipresse-Stange selbst — bei der freien Langhantel unnötig, weil das
+ * eingetragene Gewicht dort schon die komplette Stange einschließt. Für BESTANDSNUTZER (bei
+ * denen diese drei Übungen schon in plan.exercises stehen, sodass die reine Datenänderung in
+ * data/app-data.js sie nicht erreicht hätte) übernimmt das eine neue Migrationsstufe
+ * (plan.schemaVersion < 16, 02-state-theme.js) — patcht nur die drei Übungen anhand ihrer
+ * festen IDs (e26/e30/e61) und nur, falls bodyweightExercise dort noch nicht gesetzt war.
+ * v81: Eigene Kardiogeräte. Die Geräteauswahl beim Anlegen einer Kardio-Übung ("Welches
+ * Gerät?") und das Kardiogerät-Feld im Übungs-Editor bestehender Übungen waren auf die fünf
+ * fest einprogrammierten CARDIO_MACHINES (Laufband/Crosstrainer/Fahrrad/Rudern/Stairmaster)
+ * beschränkt — für z. B. ein Assault Bike oder SkiErg gab es keine Möglichkeit, ein passendes
+ * Gerät auszuwählen. Neu: "+ Eigenes Gerät hinzufügen" (Wizard) bzw. "+ Eigenes Gerät
+ * hinzufügen…" (Editor-Dropdown, als letzte <option>) öffnen einen kleinen Namens-Prompt
+ * (openAddCustomCardioMachinePrompt(), 03-input-widgets.js) und legen ein neues Gerät in
+ * plan.customCardioMachines an, mit den zwei generischen Feldern "Widerstand"/"Tempo" (gleiches
+ * Muster wie die eingebaute Stepper-Vorlage — passt nicht zu jedem Gerät exakt, aber ein nicht
+ * benötigtes Feld lässt sich einfach leer lassen). Eigene Geräte werden einmal angelegt und
+ * stehen danach bei JEDER künftigen Kardio-Übung zur Auswahl (wie plan.customCategories/
+ * customFonts). Damit das an allen ~10 bestehenden CARDIO_MACHINES[key]-Zugriffsstellen
+ * (Sätze-Tabelle, kcal-Schätzung, Label-Anzeige, PDF-Export, ...) automatisch mitläuft, gibt es
+ * jetzt einen zentralen Umweg cardioMachineConfig(key) (js/data/app-data.js), der zuerst in
+ * CARDIO_MACHINES und dann in plan.customCardioMachines nachschlägt — nur cardioFieldsFor()
+ * und die Label-Auflösung in kcalCategoryLabel() (04-utils.js) mussten darauf umgestellt
+ * werden, alle anderen Stellen griffen ohnehin schon nur über diese beiden Funktionen zu.
+ * Verwalten/Löschen eigener Geräte ist (noch) nicht möglich — bewusst nicht Teil dieser
+ * Änderung, siehe Kommentar in der Antwort an den Nutzer.
+ * v80: Löschen-Buttons in den Lebensmittel-Listen (Suchergebnisse, "Eigene Lebensmittel",
+ * gespeicherte Mahlzeiten) standen nicht untereinander, sondern wanderten je nach Länge des
+ * Lebensmittelnamens horizontal hin und her — die Sterne rechts daneben bildeten dagegen
+ * korrekt eine Spalte. Ursache: .result-main hatte kein flex-grow und schrumpfte damit auf
+ * seine Inhaltsbreite; das justify-content:space-between auf .result-row verteilte den
+ * verbleibenden freien Platz gleichmäßig ZWISCHEN allen drei Kindern (Text | Löschen | Stern),
+ * statt die Buttons geschlossen nach rechts zu schieben. Der Stern war davon nur deshalb nicht
+ * betroffen, weil er als letztes Kind ohnehin am rechten Rand endete. Behoben durch flex:1 auf
+ * .result-main (schiebt beide Buttons nach rechts) und gap:6px auf .result-row statt
+ * space-between (sorgt für den Abstand zwischen Text, Löschen-Button und Stern). Betrifft alle
+ * vier Stellen mit dieser Zeilenstruktur gemeinsam, da sie sich dieselben CSS-Regeln teilen.
+ * v79: Kennzahlen-Raster im Monatsbericht (2×2-Karte oben: Workouts/Ø Dauer/Gesamtvolumen/
+ * Neue Rekorde) lief rechts aus der Karte heraus — die rechte Spalte war abgeschnitten
+ * ("1:10:1…", "Neue Rekorde") und das Delta "+1.508 kg" überlagerte den Rekord-Wert.
+ * Ursache: .month-report-stat-cell sind Grid-Items und haben damit per Default
+ * min-width:auto, dürfen also nie schmaler werden als ihr Inhalt. Da .month-report-stat-value
+ * white-space:nowrap trägt, erzwang ein langes Volumen ("141.754,25 kg") eine Mindestbreite
+ * über 1fr hinaus, wodurch Spalte 1 wuchs und Spalte 2 aus der Karte schob. Behoben durch
+ * min-width:0 auf den Zellen (1fr greift wieder), flex-wrap auf dem Wert (Delta rutscht bei
+ * Platzmangel in die nächste Zeile statt überzulaufen), margin-top:auto auf der Beschriftung
+ * (hält die Labels beider Zellen einer Zeile trotz umbrochenem Delta auf gleicher Höhe),
+ * column-gap sowie einer mitskalierenden Schriftgröße per clamp(). Zusätzlich wird das
+ * Gesamtvolumen jetzt auf ganze Kilogramm gerundet angezeigt (zwei Nachkommastellen sind bei
+ * sechsstelligen Werten reines Rauschen und kosteten drei Zeichen Breite) — der Delta-Wert
+ * daneben war ohnehin schon gerundet.
+ * v78: Sicherheits-/Performance-Durchgang. (1) Zentrale esc()-Funktion (04-utils.js) für
+ * HTML-Escaping eingeführt und an rund 20 Stellen auf der Trainings-Seite nachgerüstet, die
+ * Nutzertext (Übungsname, Notiz, Kategorie-/Split-Name, eigene Schriftart) bisher ungeschützt in
+ * innerHTML einsetzten — u. a. exerciseNameHTML() (11a-active-session.js) und die neue
+ * modeDisplayLabelHTML() (09a-start-select.js) escapen jetzt zentral, was vorher an jeder
+ * einzelnen Aufrufstelle hätte einzeln passieren müssen. Zwei alte Ad-hoc-Fixes, die nur "
+ * escapten (nicht aber < / >), wurden durch esc() ersetzt. ftEscapeHTML() (Essenstracker)
+ * delegiert jetzt ebenfalls an esc() — die vorherige Implementierung escapte kein "/', wodurch
+ * value="${ftEscapeHTML(...)}" an mehreren Stellen aus dem Attribut ausbrechen ließ.
+ * (2) Google Fonts: nur noch Bebas Neue/Inter/JetBrains Mono (immer benötigt) laufen statisch in
+ * index.html, die übrigen ~30 wählbaren Familien laden jetzt erst bei Bedarf nach
+ * (ensureGoogleFontsLoaded(), 02-state-theme.js) statt bei JEDEM Start als ein einziger,
+ * render-blockierender Request mit allen Gewichtungen.
+ * (3) Essenstracker (js/data/food-data.js + js/15a-d, ~339 KB) und Perioden-PDF-Export
+ * (js/16-period-pdf.js) werden nicht mehr statisch in index.html geladen, sondern erst beim
+ * ersten tatsächlichen Bedarf per Skript-Injection nachgeladen (ensureFoodTrackerScriptsLoaded()/
+ * ensurePeriodPdfLoaded(), 04-utils.js) — analog zum bestehenden Muster für jsPDF selbst. Beide
+ * bleiben Teil des App-Shell-Precache unten (Offline-Nutzung unverändert).
+ * (4) init() (02-state-theme.js): die 5 unabhängigen Storage-Ladeaufrufe laufen jetzt über
+ * Promise.all parallel statt sequenziell. Die bisher 15 einzelnen _xyzMigration-Booleans im
+ * plan-Objekt sind einem einzigen plan.schemaVersion-Zähler gewichen (siehe Kommentar dort).
+ * (5) Trainingshistorie/Essenstracker-Tage laden beim Start jetzt nur noch die letzten 3 Monate
+ * synchron (schnellerer erster Paint), der Rest lädt anschließend im Hintergrund nach (siehe
+ * loadRecentSessions()/loadAllSessions(), 01-storage.js).
  * v31: 15-food-tracker.js (2083 Zeilen, eine einzige Datei für das komplette
  * Essenstracker-Feature) aufgeteilt in 15a-food-core.js/15b-food-day.js/
  * 15c-food-add.js/15d-food-stats.js (siehe Kopfkommentar in 15a-food-core.js) —
@@ -124,7 +228,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v77';
+const CACHE_NAME = 'trainingsplan-cache-v83';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [

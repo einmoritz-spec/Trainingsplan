@@ -39,7 +39,7 @@ function openModeSettingsPrompt(mode, reuseHistoryEntry){
 
     const nameAndPoolHTML = isFrei ? '' : `
       <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:6px;">Name</label>
-      <input type="text" id="modeSettingsNameInput" value="${currentLabel.replace(/"/g,'&quot;')}" placeholder="${MODE_LABELS[mode] || mode}" style="width:100%; padding:12px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:16px; margin-bottom:16px;">
+      <input type="text" id="modeSettingsNameInput" value="${esc(currentLabel)}" placeholder="${esc(MODE_LABELS[mode] || mode)}" style="width:100%; padding:12px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:16px; margin-bottom:16px;">
 
       <label style="display:block; font-size:12px; color:var(--muted); margin-bottom:6px;">Übungen zur Auswahl</label>
       <button class="muscle-group-header" id="modeSettingsFilterToggle" type="button" style="margin-bottom:0;">

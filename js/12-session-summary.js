@@ -42,10 +42,10 @@ function computeSessionTrends(session){
       }
     } else {
       const currValid = e.sets.filter(s => s.reps !== null && s.reps !== undefined && s.weight !== null && s.weight !== undefined);
-      currVol = currValid.length ? currValid.reduce((a,s) => a + s.reps*effectiveSetWeight(planEx, s.weight), 0) : null;
+      currVol = currValid.length ? currValid.reduce((a,s) => a + setVolumeKg(planEx, s.reps, s.weight), 0) : null;
       if (prevEntry){
         const prevValid = prevEntry.sets.filter(s => s.reps !== null && s.reps !== undefined && s.weight !== null && s.weight !== undefined);
-        prevVol = prevValid.length ? prevValid.reduce((a,s) => a + s.reps*effectiveSetWeight(planEx, s.weight), 0) : null;
+        prevVol = prevValid.length ? prevValid.reduce((a,s) => a + setVolumeKg(planEx, s.reps, s.weight), 0) : null;
       }
     }
     let trend = 'new';
@@ -613,7 +613,7 @@ function buildProgressPdfBlob(){
     return s.entries.reduce((a,e) => {
       const planEx = plan.exercises.find(x => x.id === e.exerciseId);
       if (((planEx && planEx.muscleGroup) || 'Sonstige') !== group) return a;
-      return a + e.sets.reduce((a2,st) => a2 + ((st.reps && st.weight) ? st.reps*effectiveSetWeight(planEx, st.weight) : 0), 0);
+      return a + e.sets.reduce((a2,st) => a2 + setVolumeKg(planEx, st.reps, st.weight), 0);
     }, 0);
   }
   const sparkGroups = MUSCLE_GROUP_ORDER.filter(g => g !== 'Kardio').filter(g => {

@@ -21,7 +21,7 @@ function totalVolumeKg(){
   return sessionsForStats().reduce((a,s)=>
     a + s.entries.reduce((a2,e)=>{
       const planEx = plan.exercises.find(x => x.id === e.exerciseId);
-      return a2 + e.sets.reduce((a3,st)=> a3 + ((st.reps && st.weight) ? st.reps*effectiveSetWeight(planEx, st.weight) : 0), 0);
+      return a2 + e.sets.reduce((a3,st)=> a3 + setVolumeKg(planEx, st.reps, st.weight), 0);
     }, 0)
   , 0);
 }
@@ -55,7 +55,7 @@ function fmtSec(sec){
 function sessionVolumeKg(s){
   return s.entries.reduce((a,e) => {
     const planEx = plan.exercises.find(x => x.id === e.exerciseId);
-    return a + e.sets.reduce((a2,st) => a2 + ((st.reps && st.weight) ? st.reps*effectiveSetWeight(planEx, st.weight) : 0), 0);
+    return a + e.sets.reduce((a2,st) => a2 + setVolumeKg(planEx, st.reps, st.weight), 0);
   }, 0);
 }
 function weekBucket(d){
@@ -202,7 +202,7 @@ function renderStatsChart(metric){
     return s.entries.reduce((a,e) => {
       const planEx = plan.exercises.find(x => x.id === e.exerciseId);
       if (((planEx && planEx.muscleGroup) || 'Sonstige') !== group) return a;
-      return a + e.sets.reduce((a2,st) => a2 + ((st.reps && st.weight) ? st.reps*effectiveSetWeight(planEx, st.weight) : 0), 0);
+      return a + e.sets.reduce((a2,st) => a2 + setVolumeKg(planEx, st.reps, st.weight), 0);
     }, 0);
   }
   const groupChartsHTML = isTime ? '' : MUSCLE_GROUP_ORDER.filter(g => g !== 'Kardio').map(g => {
@@ -380,7 +380,7 @@ function setMetricValue(reps, weight, planEx, mode){
   const effWeight = effectiveSetWeight(planEx, weight);
   if (mode === '1rm') return Math.round(estimate1RM(effWeight, reps));
   if (mode === '10rm') return Math.round(estimate10RM(effWeight, reps));
-  return Math.round(reps * effWeight);
+  return Math.round(setVolumeKg(planEx, reps, weight));
 }
 
 // Berechnet alle Kennzahlen für eine Übung innerhalb einer bestimmten Session
@@ -416,7 +416,7 @@ function computeExerciseMetrics(entry, planEx){
   if (!validSets.length){
     return { setsCount: entry.sets ? entry.sets.length : 0, hasData: false };
   }
-  const setVolumes = validSets.map(s => s.reps * effectiveSetWeight(planEx, s.weight));
+  const setVolumes = validSets.map(s => setVolumeKg(planEx, s.reps, s.weight));
   const setWeights = validSets.map(s => effectiveSetWeight(planEx, s.weight));
   // Rohes eingetragenes Zusatzgewicht (NICHT effectiveSetWeight, das bei bodyweightExercise
   // bereits das Körpergewicht mit einrechnet) — dient nur dazu, zu erkennen, ob überhaupt

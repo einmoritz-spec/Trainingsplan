@@ -6,7 +6,28 @@
 // (sw.js, Cache-First) nach einem Update oft noch mehrere Starts lang die ALTE Fassung —
 // ohne diesen Stempel ist "der Fix wirkt nicht" nicht von "der Fix ist nie angekommen" zu
 // unterscheiden. Bei jeder Änderung zusammen mit CACHE_NAME in sw.js erhöhen.
-const BUILD_STAMP = '58';
+const BUILD_STAMP = '59';
+
+/* ---------------------------------------------------
+   HTML-Escaping
+   ---------------------------------------------------
+   Zentrale, korrekte Escape-Funktion für alle Stellen, die Nutzertext (Übungsname, Notiz,
+   Kategorie-/Split-Name, eigene Schriftart, ...) in innerHTML-Templates einsetzen — betrifft
+   NUR Text-/Attribut-Interpolation, nicht Fälle wie PDF-Text (pdfSafeText()) oder alert()/
+   confirm() (die ohnehin nie HTML rendern und daher unverändert bleiben müssen).
+   BEWUSST eine Zeichen-für-Zeichen-Ersetzung statt des früher an einigen Stellen genutzten
+   "div.textContent lesen, dann div.innerHTML zurücklesen"-Tricks (siehe ftEscapeHTML()):
+   dieser Trick escaped zwar &/</>, NICHT aber " oder ' — in einem Attribut-Kontext wie
+   value="${...}" oder aria-label="${...}" ließ sich ein Anführungszeichen im Nutzertext also
+   weiterhin aus dem Attribut ausbrechen (z. B. ein Übungsname wie foo" onmouseover="…). Diese
+   Funktion escaped alle fünf sicherheitsrelevanten Zeichen und ist damit sowohl für Text- als
+   auch für Attribut-Kontexte sicher.
+--------------------------------------------------- */
+const ESC_HTML_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function esc(str){
+  return String(str ?? '').replace(/[&<>"']/g, (c) => ESC_HTML_MAP[c]);
+}
+
 /* ---------------------------------------------------
    Wake Lock (Bildschirm bei laufendem Training nicht abschalten)
    ---------------------------------------------------
@@ -174,7 +195,7 @@ function estimateSessionKcalBreakdown(session){
 // sprechender Text statt als Rechenwert.
 function kcalCategoryLabel(planEx){
   if (planEx && planEx.cardioMachine){
-    return planEx.cardioMachine === 'laufband' ? 'Laufband' : (CARDIO_MACHINES[planEx.cardioMachine]?.label || 'Kardiogerät');
+    return planEx.cardioMachine === 'laufband' ? 'Laufband' : (cardioMachineConfig(planEx.cardioMachine)?.label || 'Kardiogerät');
   }
   if (planEx && (planEx.bodyweightExercise || planEx.noWeight)) return 'Eigengewicht';
   return 'Krafttraining';
@@ -340,6 +361,15 @@ function computeEfficiencyPoints(sessionList){
 // deutlich realistischere Näherung hinterlegt als 100 %. Ein eingetragenes Zusatzgewicht (z. B.
 // eine Hantelscheibe auf der Brust) zählt davon unabhängig immer voll, da es tatsächlich komplett
 // mitbewegt wird.
+// machineWeightKg (optional, Default 0): bei geführten Geräten, die das eigene Körpergewicht
+// bewegen (z. B. Kniebeugen an der Multipresse), trägt zusätzlich zum Körpergewicht auch die
+// Stange/Führung selbst zum bewegten Gewicht bei — bei freien Kniebeugen (Langhantel) ist das
+// bereits im eingetragenen Gewicht enthalten (die Langhantel WIRD ja eingetragen), bei der
+// Multipresse dagegen trägt man i. d. R. nur die aufgelegten Zusatzscheiben ein, nicht das
+// (oft durch ein Gegengewichtssystem geführte, schwer einzuschätzende) Eigengewicht der
+// Multipresse-Stange selbst. Ein fester, aber je Übung im Editor änderbarer Näherungswert
+// (siehe "Ungefähres Gerätegewicht (kg)", 10-plan-settings.js) gleicht das aus — exakt ist das
+// nicht (variiert je nach Gerät/Studio), aber deutlich näher an der Realität als 0.
 function effectiveSetWeight(planEx, setWeight){
   const w = setWeight ?? 0;
   if (!planEx) return w;
@@ -349,9 +379,26 @@ function effectiveSetWeight(planEx, setWeight){
   }
   if (planEx.bodyweightExercise && bw){
     const factor = planEx.bodyWeightFactor != null ? planEx.bodyWeightFactor : 1;
-    return (bw * factor) + w;
+    return (bw * factor) + (planEx.machineWeightKg || 0) + w;
   }
   return w;
+}
+
+// Volumen (Wdh × Gewicht) EINES Satzes — nutzt effectiveSetWeight() für das Gewicht (siehe
+// oben) und verdoppelt zusätzlich bei einseitigen/wechselseitigen Übungen (planEx.unilateral,
+// z. B. Ausfallschritte, einarmiges Rudern/Curls): die eingetragene Wiederholungszahl steht
+// dort für EINE Seite, im selben Satz wird aber mit derselben Wiederholungs-/Gewichtszahl auch
+// die andere Seite bewegt — die reine Wdh×Gewicht-Rechnung würde sonst nur die Hälfte der
+// tatsächlich geleisteten Arbeit zählen. Betrifft bewusst NUR das Trainingsvolumen (Gesamtlast,
+// "wie viel kg wurden insgesamt bewegt") — 1RM/10RM-Schätzung und Gewichts-Rekorde
+// (setMetricValue() im '1rm'/'10rm'-Modus, computeExerciseMetrics().setWeights) rufen weiterhin
+// effectiveSetWeight() direkt auf und bleiben unverdoppelt, weil sie die Kraftfähigkeit bzw.
+// das tatsächlich gehobene Gewicht auf EINER Seite beschreiben, nicht die Gesamtarbeit.
+function setVolumeKg(planEx, reps, weight){
+  const r = reps || 0, w = weight || 0;
+  if (!r || !w) return 0;
+  const vol = r * effectiveSetWeight(planEx, w);
+  return (planEx && planEx.unilateral) ? vol * 2 : vol;
 }
 
 // Zahlen-Eingabefelder, die Kommazahlen im deutschen Format (78,5 statt 78.5) annehmen
@@ -601,6 +648,79 @@ function ensureJsPdfLoaded(){
 }
 
 /* ---------------------------------------------------
+   Lazy-Laden weiterer Skript-Module (Essenstracker, Perioden-PDF-Export)
+   ---------------------------------------------------
+   Gleiches Prinzip wie ensureJsPdfLoaded() oben, aber für mehrere Dateien, die IN FESTER
+   REIHENFOLGE geladen werden müssen (klassische <script>-Tags ohne type="module", die sich
+   einen globalen Scope teilen — spätere Dateien nutzen Funktionen/Konstanten aus früheren ohne
+   eigenen Import, siehe Kommentar über den <script>-Tags in index.html). Ein einzelnes
+   dynamisch eingefügtes <script> lädt asynchron; um die Reihenfolge trotzdem zu garantieren,
+   wird erst das onload des einen abgewartet, bevor das nächste eingefügt wird.
+   Betrifft zwei bisher immer beim Start geparste, aber selten gebrauchte Blöcke:
+   - Essenstracker (js/data/food-data.js + js/15a..d, zusammen ~339 KB): das Feature ist per
+     Standard AUSGESCHALTET (isFoodTrackerEnabled()) und wurde bisher trotzdem bei JEDEM Start
+     geparst, auch wenn es nie geöffnet wird.
+   - Perioden-PDF-Export (js/16-period-pdf.js, ~17 KB): reine Export-Funktion, nur über den
+     "PDF exportieren"-Knopf im Monatsbericht erreichbar (openPeriodExportPopup(),
+     05-calendar.js) — keine andere Stelle im Code ruft in diese Datei hinein.
+   Das Statistik-Modul (08a-c, ~144 KB) wurde bewusst NICHT lazy gemacht: computeExerciseMetrics/
+   aggregateSessions/setMetricValue & Co. werden von renderSessionSummary() gebraucht, die nach
+   JEDER abgeschlossenen Trainingseinheit läuft — Lazy-Loading hätte die Kosten dadurch nur vom
+   Boot auf den häufigsten Moment der App verschoben, nicht eingespart.
+--------------------------------------------------- */
+function loadScriptSequence(urls){
+  return urls.reduce((chain, src) => chain.then(() => new Promise((resolve) => {
+    const existing = document.querySelector(`script[data-lazy="${src}"]`);
+    if (existing){
+      if (existing.dataset.loaded === '1') { resolve(true); return; }
+      existing.addEventListener('load', () => resolve(true));
+      existing.addEventListener('error', () => resolve(false));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.dataset.lazy = src;
+    script.onload = () => { script.dataset.loaded = '1'; resolve(true); };
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  })), Promise.resolve(true));
+}
+
+const FOOD_TRACKER_SCRIPT_URLS = [
+  'js/data/food-data.js', 'js/15a-food-core.js', 'js/15b-food-day.js',
+  'js/15c-food-add.js', 'js/15d-food-stats.js',
+];
+let foodTrackerScriptsLoadPromise = null;
+function ensureFoodTrackerScriptsLoaded(){
+  if (typeof initFoodTracker === 'function') return Promise.resolve(true);
+  if (!foodTrackerScriptsLoadPromise){
+    // "Fraunces" (siehe Kommentar bei <link> in index.html) wird ausschließlich vom
+    // Essenstracker-eigenen Design genutzt — lädt daher zusammen mit dem Modul hier statt über
+    // die allgemeine Schriftart-Auswahl.
+    ensureGoogleFontsLoaded(['Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700']);
+    foodTrackerScriptsLoadPromise = loadScriptSequence(FOOD_TRACKER_SCRIPT_URLS);
+  }
+  return foodTrackerScriptsLoadPromise;
+}
+// Einstiegspunkt für ALLE Aufrufstellen AUSSERHALB des Essenstracker-Moduls selbst (dort, wo
+// bisher direkt initFoodTracker() aufgerufen wurde) — lädt bei Bedarf zuerst die Skripte (sonst
+// existiert initFoodTracker() als Funktion noch gar nicht) und ruft danach das nun garantiert
+// vorhandene, weiterhin idempotente initFoodTracker() auf. Interne Aufrufe INNERHALB des
+// Essenstracker-Moduls (z. B. 15b→15c) bleiben unverändert bei initFoodTracker(), da dort das
+// Modul durch den Aufruf selbst bereits geladen ist.
+async function ftEnsureLoaded(){
+  await ensureFoodTrackerScriptsLoaded();
+  return initFoodTracker();
+}
+
+let periodPdfScriptLoadPromise = null;
+function ensurePeriodPdfLoaded(){
+  if (typeof openPeriodExportPopup === 'function') return Promise.resolve(true);
+  if (!periodPdfScriptLoadPromise) periodPdfScriptLoadPromise = loadScriptSequence(['js/16-period-pdf.js']);
+  return periodPdfScriptLoadPromise;
+}
+
+/* ---------------------------------------------------
    Validierung importierter Backup-Dateien
    ---------------------------------------------------
    Vorher (Bug): der Import in renderSettings() (10-plan-settings.js) prüfte nur, ob
@@ -735,7 +855,7 @@ const HARD_UPDATE_MARKER = 'eisenprotokoll:hardUpdatePending';
 // nicht geöffnet wurde — initFoodTracker() ist idempotent, kostet bei bereits geladenen
 // Daten also nichts.
 async function exportAllDataToFile(filePrefix){
-  await initFoodTracker();
+  await ftEnsureLoaded();
   const nowISO = new Date().toISOString();
   const payload = { version: 1, exportedAt: nowISO, plan, sessions, lastPerformance, food: ftBuildExportPayload() };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });

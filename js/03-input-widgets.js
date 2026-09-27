@@ -782,6 +782,10 @@ function openFontPickerSheet(){
   if (existing) existing.remove();
 
   const allOptions = allFontOptions();
+  // Alle wählbaren Google-Fonts-Familien auf einmal nachladen (siehe ensureGoogleFontsLoaded(),
+  // 02-state-theme.js) — das Menü zeigt jede Option in ihrer eigenen Schrift als Vorschau
+  // (.font-preview-item), dafür müssen alle geladen sein, nicht nur die aktuell aktive.
+  ensureGoogleFontsLoaded(BUILTIN_FONTS.filter(f => f.googleFont).map(f => f.googleFont));
   let query = '';
 
   const overlay = document.createElement('div');
@@ -813,7 +817,7 @@ function openFontPickerSheet(){
     const activeId = currentFontOption().id;
     listEl.innerHTML = filtered.map(f => `
       <button type="button" class="font-picker-item font-preview-item ${f.id === activeId ? 'selected' : ''}" data-font-id="${f.id}" style="font-family:${f.family};">
-        <span>${f.name}</span>
+        <span>${esc(f.name)}</span>
         <span class="font-picker-item-check">✓</span>
       </button>
     `).join('');
@@ -945,6 +949,67 @@ function openPlankTimerOverlay(applySeconds){
   overlay.onclick = () => { popOverlayStateIfOpen(); remove(); };
 }
 
+// Legt ein neues, selbst benanntes Kardiogerät an (plan.customCardioMachines) und ruft
+// onSaved(newMachine) mit dem fertigen Eintrag auf — von ZWEI Stellen genutzt: dem
+// "Welches Gerät?"-Schritt im Übungs-Erstellen-Wizard (10-plan-settings.js) und dem
+// Kardiogerät-Auswahlfeld im Übungs-Editor bestehender Übungen (selbe Datei). Eigene Geräte
+// bekommen bewusst IMMER dieselben zwei generischen Felder wie die eingebauten Stepper/Fahrrad-
+// Vorlagen ("Widerstand"/"Tempo") statt eines eigenen Feld-Editors — die meisten
+// Kardiogeräte-Konsolen zeigen genau sowas an (Level/Widerstand-Rad + Tempo-/Cadence-Anzeige),
+// und ein Feld, das nicht passt, kann einfach leer gelassen werden. cardioMachineConfig()
+// (js/data/app-data.js) macht ein so angelegtes Gerät danach überall (Sätze-Tabelle,
+// kcal-Schätzung, PDF-Export, ...) automatisch nutzbar wie ein eingebautes.
+function openAddCustomCardioMachinePrompt(onSaved){
+  const existing = document.getElementById('addCustomCardioMachineOverlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'add-exercise-overlay centered-overlay';
+  overlay.id = 'addCustomCardioMachineOverlay';
+  overlay.innerHTML = `
+    <div class="add-exercise-modal" style="max-height:none;">
+      <div class="add-exercise-modal-header">
+        <div class="add-exercise-modal-title">Eigenes Gerät</div>
+        <button class="add-exercise-modal-close" id="addCustomCardioMachineClose" aria-label="Abbrechen">✕</button>
+      </div>
+      <div class="new-exercise-modal-body">
+        <input type="text" id="addCustomCardioMachineInput" placeholder="z. B. Assault Bike" style="width:100%; padding:14px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:16px;">
+      </div>
+      <div class="add-exercise-modal-header" style="border-top:1px solid var(--border); border-bottom:none;">
+        <button class="btn btn-primary" id="addCustomCardioMachineSave" style="flex:1;">Speichern</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  pushOverlayState(remove);
+
+  function remove(){ const el = document.getElementById('addCustomCardioMachineOverlay'); if (el) el.remove(); }
+  const close = () => { popOverlayStateIfOpen(); remove(); };
+  const input = document.getElementById('addCustomCardioMachineInput');
+  input.focus();
+
+  const save = async () => {
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    if (!Array.isArray(plan.customCardioMachines)) plan.customCardioMachines = [];
+    const newMachine = {
+      id: 'customcardio_' + uid(),
+      label: name,
+      fields: [
+        { key: 'resistance', label: 'Widerstand', shortLabel: 'Widerstand', unit: '', step: 1, min: 0 },
+        { key: 'speed', label: 'Tempo', shortLabel: 'Tempo', unit: '', step: 0.5, min: 0 },
+      ],
+    };
+    plan.customCardioMachines.push(newMachine);
+    await saveJSON('plan', plan);
+    close();
+    onSaved(newMachine);
+  };
+  document.getElementById('addCustomCardioMachineSave').onclick = save;
+  input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter'){ ev.preventDefault(); save(); } });
+  document.getElementById('addCustomCardioMachineClose').onclick = close;
+  overlay.onclick = (ev) => { if (ev.target === overlay) close(); };
+}
 function openExerciseNotePrompt(planEx, exerciseName){
   const existing = document.getElementById('exerciseNotePromptOverlay');
   if (existing) existing.remove();

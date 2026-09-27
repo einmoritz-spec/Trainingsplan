@@ -97,7 +97,7 @@ function computeExerciseBreakdownForGroup(group, periodDays){
       const validCount = e.type === 'time'
         ? (e.sets || []).filter(st => st.seconds !== null && st.seconds !== undefined).length
         : (e.sets || []).filter(st => st.reps !== null && st.reps !== undefined).length;
-      const vol = (e.sets || []).reduce((a,st) => a + ((st.reps && st.weight) ? st.reps*effectiveSetWeight(planEx, st.weight) : 0), 0);
+      const vol = (e.sets || []).reduce((a,st) => a + setVolumeKg(planEx, st.reps, st.weight), 0);
       if (!map[e.name]) map[e.name] = { name: e.name, sets: 0, volume: 0 };
       map[e.name].sets += validCount;
       map[e.name].volume += vol;
@@ -155,7 +155,7 @@ function workoutsFilterOptions(allSessions){
   const tileOptions = usedModes
     .filter(m => m !== 'frei')
     .sort((a, b) => order.indexOf(a) - order.indexOf(b))
-    .map(mode => ({ id: mode, label: modeDisplayLabel(mode) }));
+    .map(mode => ({ id: mode, label: modeDisplayLabelHTML(mode) }));
   const options = [{ id: 'all', label: 'Alle' }, ...tileOptions];
   if (usedModes.includes('frei')) options.push({ id: 'frei', label: 'Freies Training' });
   return options;
@@ -380,7 +380,7 @@ function computeMuscleGroupVolumeSums(periodDays){
       const planEx = plan.exercises.find(x => x.id === e.exerciseId);
       const g = (planEx && planEx.muscleGroup) || 'Sonstige';
       if (g === 'Kardio') return;
-      const vol = (e.sets || []).reduce((a,st) => a + ((st.reps && st.weight) ? st.reps * effectiveSetWeight(planEx, st.weight) : 0), 0);
+      const vol = (e.sets || []).reduce((a,st) => a + setVolumeKg(planEx, st.reps, st.weight), 0);
       if (vol > 0) sums[g] = (sums[g] || 0) + vol;
     });
   });

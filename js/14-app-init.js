@@ -139,7 +139,7 @@ async function handleShortcutParam(){
     const meal = MEAL_SHORTCUTS[shortcut];
     if (meal){
       if (!isFoodTrackerEnabled()) return; // Feature aus — dann bleibt die Startseite stehen
-      await initFoodTracker();
+      await ftEnsureLoaded();
       ftCurrentDate = ftTodayISO(); // bewusst immer heute, unabhängig vom zuletzt offenen Tag
       goFtAddFood(meal);
     }

@@ -221,7 +221,7 @@ function renderCompareBanner(){
   el.innerHTML = `
     <div class="mini-player-mid">
       <div class="mini-player-time">Vergleichen</div>
-      <div class="mini-player-exercise">${modeDisplayLabel(compareSessionA.mode)} · ${fmtDate(compareSessionA.date)} — zweites Training antippen</div>
+      <div class="mini-player-exercise">${modeDisplayLabelHTML(compareSessionA.mode)} · ${fmtDate(compareSessionA.date)} — zweites Training antippen</div>
     </div>
     <button class="mini-player-cancel" id="compareBannerCancel" aria-label="Abbrechen">✕</button>
   `;
@@ -242,7 +242,7 @@ function compareModePillHTML(){
   if (!compareSessionA) return '';
   return `
     <div class="compare-mode-pill">
-      <span>Vergleichen: ${modeDisplayLabel(compareSessionA.mode)} · ${fmtDate(compareSessionA.date)}</span>
+      <span>Vergleichen: ${modeDisplayLabelHTML(compareSessionA.mode)} · ${fmtDate(compareSessionA.date)}</span>
       <button id="compareModePillCancel" type="button" aria-label="Abbrechen">✕</button>
     </div>
   `;
@@ -363,11 +363,11 @@ function openSessionComparePrompt(a, b){
       <div class="new-exercise-modal-body">
         <div class="compare-header-row">
           <div class="compare-header-col">
-            <div class="compare-header-mode">${modeDisplayLabel(a.mode)}</div>
+            <div class="compare-header-mode">${modeDisplayLabelHTML(a.mode)}</div>
             <div class="compare-header-date">${fmtDate(a.date)}</div>
           </div>
           <div class="compare-header-col">
-            <div class="compare-header-mode">${modeDisplayLabel(b.mode)}</div>
+            <div class="compare-header-mode">${modeDisplayLabelHTML(b.mode)}</div>
             <div class="compare-header-date">${fmtDate(b.date)}</div>
           </div>
         </div>
@@ -430,11 +430,11 @@ function openExerciseCompareDetail(a, b, name){
       <div class="new-exercise-modal-body">
         <div class="compare-header-row">
           <div class="compare-header-col">
-            <div class="compare-header-mode">${modeDisplayLabel(a.mode)}</div>
+            <div class="compare-header-mode">${modeDisplayLabelHTML(a.mode)}</div>
             <div class="compare-header-date">${fmtDate(a.date)}</div>
           </div>
           <div class="compare-header-col">
-            <div class="compare-header-mode">${modeDisplayLabel(b.mode)}</div>
+            <div class="compare-header-mode">${modeDisplayLabelHTML(b.mode)}</div>
             <div class="compare-header-date">${fmtDate(b.date)}</div>
           </div>
         </div>
@@ -683,7 +683,7 @@ function renderHome(){
     document.getElementById('btnHomeMealsToggle').onclick = () => {
       homeMealsOpen = !homeMealsOpen;
       if (homeMealsOpen && !foodTrackerLoaded){
-        initFoodTracker().then(() => { if (document.getElementById('btnHomeMealsToggle')) renderHome(); });
+        ftEnsureLoaded().then(() => { if (document.getElementById('btnHomeMealsToggle')) renderHome(); });
       }
       renderHome();
     };
@@ -698,7 +698,10 @@ function renderHome(){
   app.querySelectorAll('.home-meal-box').forEach(box => {
     box.onclick = () => { ftCurrentDate = ftTodayISO(); goFoodTracker(); };
   });
-  if (document.getElementById('btnFoodTracker')) document.getElementById('btnFoodTracker').onclick = () => goFoodTracker();
+  // Kopf-Icon ist unabhängig vom Mahlzeiten-Akkordeon jederzeit antippbar (auch BEVOR dieses
+  // je aufgeklappt wurde) — anders als die Akkordeon-interaktionen unten kann das Modul hier
+  // also noch ungeladen sein, deshalb über ftEnsureLoaded() statt direkt goFoodTracker().
+  if (document.getElementById('btnFoodTracker')) document.getElementById('btnFoodTracker').onclick = () => ftEnsureLoaded().then(() => goFoodTracker());
   if (document.getElementById('btnBackupReminder')){
     // Führt direkt in die Einstellungen zum Exportieren-Button statt nur die Seite zu öffnen —
     // Backup-Erinnerung soll in einem Tap zur Handlung führen, nicht nur zur Fundstelle.

@@ -283,12 +283,18 @@ const EXERCISE_NAME_HINTS = { 'Adduktoren': '(von außen)', 'Abduktoren': '(von 
 // EXERCISE_NAME_HINTS-Zuordnung (die nur bei identischem Namen für beide Varianten
 // funktionieren würde).
 const NAME_TRAILING_PAREN = /^(.*\S)\s+(\([^)]+\))$/;
+// Escaped den (frei umbenennbaren) Übungsnamen, BEVOR er ins Markup eingesetzt wird — name
+// kommt aus plan.exercises[].name bzw. session.entries[].name und ist über "Übung bearbeiten"/
+// "Eigene Übung erstellen" (10-plan-settings.js) frei eingebbarer Nutzertext, landet über diese
+// eine Funktion aber an rund 20 Stellen quer durchs UI in innerHTML. EXERCISE_NAME_HINTS ist
+// eine feste, eingebaute Zuordnung (keine Nutzereingabe) und muss nicht escaped werden.
 function exerciseNameHTML(name){
+  const safeName = esc(name);
   const hint = EXERCISE_NAME_HINTS[name];
-  if (hint) return `${name} <span class="exercise-name-hint">${hint}</span>`;
+  if (hint) return `${safeName} <span class="exercise-name-hint">${hint}</span>`;
   const m = name.match(NAME_TRAILING_PAREN);
-  if (m) return `${m[1]} <span class="exercise-name-hint">${m[2]}</span>`;
-  return name;
+  if (m) return `${esc(m[1])} <span class="exercise-name-hint">${esc(m[2])}</span>`;
+  return safeName;
 }
 function initials(name){
   const words = name.trim().split(/\s+/);

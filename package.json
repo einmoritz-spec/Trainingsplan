@@ -1,0 +1,8 @@
+{
+  "name": "trainingsplan",
+  "private": true,
+  "description": "Trainings- und Essenstracker-PWA. Kein Build-Schritt nötig (klassische <script>-Tags, siehe js/) — package.json existiert ausschließlich für die Unit-Tests unter tests/.",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

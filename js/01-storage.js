@@ -243,6 +243,31 @@ async function loadAllSessions(){
   await saveJSON('sessionsChunkIndex', []);
   return [];
 }
+// Lädt beim App-Start nur die letzten `monthsBack` Trainingsmonate SYNCHRON (Grundlage für
+// Startseite/Verlauf/Wochenstreifen — für diese Ansichten reicht ein paar Monate zurück völlig
+// aus), den Rest der Historie lädt der zurückgegebene `olderPromise` im Hintergrund weiter, ohne
+// den ersten Bildaufbau zu blockieren. Bei einer über Jahre gewachsenen Historie sind das sonst
+// dutzende parallele IndexedDB-Reads (einer pro Monats-Chunk, siehe loadAllSessions() oben) allein
+// für Daten, die auf der Startseite gar nicht gebraucht werden.
+// Rückwärtskompatibel: reine Datenmechanik hier — WAS mit `recent`/`olderPromise` passiert
+// (sessions-Array befüllen, bei Bedarf neu rendern), entscheidet ausschließlich init() in
+// 02-state-theme.js, das die sessions-Variable besitzt.
+async function loadRecentSessions(monthsBack){
+  const chunkIndex = await loadJSON('sessionsChunkIndex', null);
+  // Kein Chunk-Index (Migrationspfad oder brandneue Installation) oder Historie ohnehin schon
+  // kürzer als das gewünschte Fenster: eine Aufteilung lohnt sich dann nicht — normal laden.
+  if (!chunkIndex || chunkIndex.length <= monthsBack){
+    return { recent: await loadAllSessions(), olderPromise: Promise.resolve([]) };
+  }
+  const recentKeys = chunkIndex.slice(-monthsBack);
+  const olderKeys = chunkIndex.slice(0, -monthsBack);
+  const recentChunks = await Promise.all(recentKeys.map(mk => loadJSON('sessionsChunk:' + mk, [])));
+  const recent = recentChunks.flat().filter(Boolean);
+  // NICHT awaited — läuft im Hintergrund weiter, der Aufrufer bekommt sofort `recent` zurück.
+  const olderPromise = Promise.all(olderKeys.map(mk => loadJSON('sessionsChunk:' + mk, [])))
+    .then(chunks => chunks.flat().filter(Boolean));
+  return { recent, olderPromise };
+}
 async function saveSessionAt(session){
   const monthKey = monthKeyOf(session);
   const chunk = await loadJSON('sessionsChunk:' + monthKey, []);

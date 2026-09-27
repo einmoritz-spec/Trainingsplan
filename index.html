@@ -72,7 +72,20 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Poppins:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Roboto:wght@400;500;700&family=Lato:wght@400;700&family=Open+Sans:wght@400;600;700&family=Nunito:wght@400;600;700&family=Raleway:wght@400;600;700&family=Work+Sans:wght@400;600;700&family=DM+Sans:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&family=Manrope:wght@400;600;700&family=Rubik:wght@400;600;700&family=Karla:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Sans:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Merriweather:wght@400;700&family=Lora:wght@400;600;700&family=Oswald:wght@400;600;700&family=Anton&family=Archivo+Black&family=Comfortaa:wght@400;600;700&family=Quicksand:wght@400;600;700&family=Caveat:wght@400;600;700&family=Dancing+Script:wght@400;600;700&family=Pacifico&family=Fira+Code:wght@400;500;600&family=Roboto+Mono:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Special+Elite&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+<!-- Nur die drei IMMER benötigten Familien werden hier noch statisch geladen: Inter ist die
+     Standardschrift der App (BUILTIN_FONTS[0], "Standard (App)"), Bebas Neue/JetBrains Mono sind
+     fest für große Überschriften bzw. Zahlen verdrahtet (siehe html.font-override-Ausnahmen in
+     css/styles.css) und laufen dadurch IMMER, unabhängig von der gewählten Schriftart. Die
+     übrigen ~30 im Schriftart-Menü wählbaren Google-Fonts-Familien wurden früher alle hier auf
+     einmal geladen (ein einziger, render-blockierender Request mit allen Gewichtungen, obwohl
+     praktisch immer nur eine einzige Familie tatsächlich gebraucht wird) — sie werden jetzt erst
+     bei Bedarf per ensureGoogleFontsLoaded() (02-state-theme.js) nachgeladen: entweder weil sie
+     die aktuell gewählte Schrift sind (applyFontFamily(), einmal beim Start) oder weil das
+     Schriftart-Menü selbst geöffnet wird (dort müssen alle Optionen für die Vorschau geladen
+     sein). "Fraunces" (nur vom Essenstracker-Feature genutzt, siehe .kcal-value/.meal-title/
+     .sheet-title/.modal-title in css/styles.css) lädt zusammen mit dem ebenfalls lazy geladenen
+     Essenstracker-Modul, siehe ensureFoodTrackerScriptsLoaded() (04-utils.js). -->
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- jsPDF wird NICHT mehr hier statisch geladen (Version 2.5.1, lokal unter js/vendor/,
      unverändert) — das kostete Parse-/Boot-Zeit bei JEDEM Start, obwohl PDF-Export ein
      selten genutztes Feature ist. Die Datei bleibt Teil des App-Shell-Precache in sw.js
@@ -154,12 +167,15 @@
 <script src="js/11c-active-session-rest.js"></script>
 <script src="js/12-session-summary.js"></script>
 <script src="js/13-session-detail-pdf.js"></script>
-<script src="js/data/food-data.js"></script>
-<script src="js/15a-food-core.js"></script>
-<script src="js/15b-food-day.js"></script>
-<script src="js/15c-food-add.js"></script>
-<script src="js/15d-food-stats.js"></script>
-<script src="js/16-period-pdf.js"></script>
+<!-- js/data/food-data.js, js/15a-food-core.js bis js/15d-food-stats.js (Essenstracker, ~339 KB)
+     und js/16-period-pdf.js (Perioden-PDF-Export, ~17 KB) werden NICHT mehr hier statisch
+     geladen — beides sind selten gebrauchte Blöcke (Essenstracker ist standardmäßig
+     ausgeschaltet, siehe isFoodTrackerEnabled(); der Perioden-Export läuft nur über einen
+     einzelnen Button im Monatsbericht). Beide bleiben Teil des App-Shell-Precache in sw.js
+     (Offline-Nutzung funktioniert also weiterhin unverändert), werden aber erst beim ersten
+     tatsächlichen Bedarf per ensureFoodTrackerScriptsLoaded()/ensurePeriodPdfLoaded()
+     (04-utils.js) dynamisch nachgeladen — analog zum schon bestehenden Muster für jsPDF
+     selbst (ensureJsPdfLoaded(), siehe Kommentar weiter oben). -->
 <script src="js/14-app-init.js"></script>
 
 <!--

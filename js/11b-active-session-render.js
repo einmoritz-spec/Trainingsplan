@@ -367,7 +367,7 @@ function renderActive(){
     const planEx = plan.exercises.find(x => x.id === e.exerciseId);
     const img = planEx && planEx.imageData;
     return `
-    <button class="thumb ${i === ei ? 'active' : ''} ${isEntryDone(e) ? 'done' : ''}" data-thumb="${i}" aria-label="${e.name}">
+    <button class="thumb ${i === ei ? 'active' : ''} ${isEntryDone(e) ? 'done' : ''}" data-thumb="${i}" aria-label="${esc(e.name)}">
       <span class="thumb-media">
         ${img ? `<img class="thumb-img" src="${img}" alt="">` : `<span class="thumb-initials">${initials(e.name)}</span>`}
       </span>
@@ -480,7 +480,7 @@ function renderActive(){
       ${bodyWeightWarningHTML}
       <div class="exercise-title-row">
         <div class="exercise-title">${exerciseNameHTML(entry.name)}</div>
-        <button class="icon-x" id="btnRemoveExercise" aria-label="${entry.name} aus dieser Einheit entfernen">✕</button>
+        <button class="icon-x" id="btnRemoveExercise" aria-label="${esc(entry.name)} aus dieser Einheit entfernen">✕</button>
       </div>
       <div class="sets" id="currentSets">
         ${currentSetsMarkup}
@@ -488,13 +488,13 @@ function renderActive(){
       <div class="add-set-row ${entry.type === 'time' ? 'set-row-time' : ''}" ${currentPlanEx && currentPlanEx.cardioMachine ? 'style="display:none;"' : ''}>
         <button class="add-set" id="btnAddSet" aria-label="Satz hinzufügen">+</button>
         ${currentPlanEx ? `
-        <button class="note-btn" id="btnExerciseNote" aria-label="Notiz zu ${entry.name}">
+        <button class="note-btn" id="btnExerciseNote" aria-label="Notiz zu ${esc(entry.name)}">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
         </button>
         ` : ''}
         <button class="check-all-btn" id="btnCheckAllExercise" aria-label="Ganze Übung abhaken">✓</button>
       </div>
-      ${currentPlanEx && currentPlanEx.note ? `<div class="exercise-note-display">${currentPlanEx.note}</div>` : ''}
+      ${currentPlanEx && currentPlanEx.note ? `<div class="exercise-note-display">${esc(currentPlanEx.note)}</div>` : ''}
       ${referenceHTML}
     </div>
   `;
@@ -671,7 +671,7 @@ function renderActive(){
       if (active.currentIndex >= active.entries.length) active.currentIndex = Math.max(0, active.entries.length - 1);
       perfSuggestion = null;
       renderActive();
-      showUndoToast(`"${removedEntry.name}" entfernt.`, () => {
+      showUndoToast(`"${esc(removedEntry.name)}" entfernt.`, () => {
         active.entries.splice(removedIndex, 0, removedEntry);
         active.currentIndex = removedIndex;
         renderActive();

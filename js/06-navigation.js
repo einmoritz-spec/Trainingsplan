@@ -107,27 +107,32 @@ function goSettings(push){
 }
 function goProgressList(push){
   if (push !== false) pushView('progressList');
-  renderProgressList();
+  ensureSessionsFullyLoaded().then(renderProgressList);
 }
 function goMuscleBalance(push){
   if (push !== false) pushView('muscleBalance');
-  renderMuscleBalance();
+  ensureSessionsFullyLoaded().then(renderMuscleBalance);
 }
 function goIntensityStats(push){
   if (push !== false) pushView('intensityStats');
-  renderIntensityStats();
+  ensureSessionsFullyLoaded().then(renderIntensityStats);
 }
 function goKcalStats(push){
   if (push !== false) pushView('kcalStats');
-  renderKcalStats();
+  ensureSessionsFullyLoaded().then(renderKcalStats);
 }
 function goProgressDetail(name, push){
   if (push !== false) pushView('progressDetail', { name });
-  renderExerciseProgress(name);
+  ensureSessionsFullyLoaded().then(() => renderExerciseProgress(name));
 }
+// ensureSessionsFullyLoaded() ist hier PFLICHT, nicht nur eine Performance-Feinheit: renderSession-
+// Detail() sucht die Session per sessions.find(id) — liegt sie in einem noch nicht im Hintergrund
+// nachgeladenen älteren Monat (siehe loadRecentSessions(), 01-storage.js), wäre sie im Array
+// schlicht noch nicht vorhanden und die Funktion würde fälschlich sofort zur Startseite
+// zurückspringen (s. dortiges "if (!s) return goHome(false)").
 function goSessionDetail(id, push){
   if (push !== false) pushView('sessionDetail', { id });
-  renderSessionDetail(id);
+  ensureSessionsFullyLoaded().then(() => renderSessionDetail(id));
 }
 function goStartSelect(push){
   if (push !== false) pushView('startSelect');
@@ -143,7 +148,7 @@ function goModeEdit(mode, push, startTab){
 }
 function goStatsChart(metric, push){
   if (push !== false) pushView('statsChart', { metric });
-  renderStatsChart(metric);
+  ensureSessionsFullyLoaded().then(() => renderStatsChart(metric));
 }
 // Fehlte bisher komplett: renderBodyWeightChart() (08a-stats-progress-charts.js) war schon
 // lange fertig implementiert, aber ohne diese Navigations-Wrapper-Funktion nie erreichbar —
@@ -156,11 +161,11 @@ function goStatsChart(metric, push){
 // auf diese Seite nicht funktionieren.
 function goBodyWeightChart(push){
   if (push !== false) pushView('bodyWeightChart');
-  renderBodyWeightChart();
+  ensureSessionsFullyLoaded().then(renderBodyWeightChart);
 }
 function goWorkoutsOverview(push){
   if (push !== false) pushView('workoutsOverview');
-  renderWorkoutsOverview();
+  ensureSessionsFullyLoaded().then(renderWorkoutsOverview);
 }
 function goMonthOverview(push){
   if (push !== false) pushView('monthOverview');
@@ -168,23 +173,30 @@ function goMonthOverview(push){
   // sie zeigt jetzt auch Ernährungs-Infos je Tag/Monat (siehe monthOverviewDayMarker()/
   // monthOverviewBlockHTML(), 05-calendar.js). initFoodTracker() ist idempotent (lädt nur
   // beim allerersten Aufruf wirklich, siehe foodTrackerLoaded-Flag), kostet bei bereits
-  // geladenen Daten also nichts.
-  initFoodTracker().then(renderMonthOverview);
+  // geladenen Daten also nichts. Zusätzlich ensureSessionsFullyLoaded(), da die Übersicht auch
+  // Trainings aus älteren, ggf. noch im Hintergrund nachladenden Monaten markiert.
+  Promise.all([ensureSessionsFullyLoaded(), ftEnsureLoaded()]).then(() => renderMonthOverview());
 }
 function goMonthReport(year, month, push){
   if (push !== false) pushView('monthReport', { year, month });
   // Essenstracker-Daten müssen geladen sein, BEVOR der Monatsbericht rendert — er zeigt jetzt
   // zusätzlich eine Ernährungs-Karte (Ø kcal/Makros) für denselben Monat, siehe
-  // renderMonthReport() (05-calendar.js). initFoodTracker() ist idempotent.
-  initFoodTracker().then(() => renderMonthReport(year, month));
+  // renderMonthReport() (05-calendar.js). initFoodTracker() ist idempotent. Zusätzlich
+  // ensureSessionsFullyLoaded() (siehe goMonthOverview() oben).
+  Promise.all([ensureSessionsFullyLoaded(), ftEnsureLoaded()]).then(() => renderMonthReport(year, month));
 }
+// ensureSessionsFullyLoaded() aus demselben Grund wie bei goSessionDetail() oben: sucht die
+// Session per sessions.find(sessionId).
 function goExerciseSessionDetail(sessionId, exerciseId, push){
   if (push !== false) pushView('exerciseSessionDetail', { sessionId, exerciseId });
-  renderExerciseSessionDetail(sessionId, exerciseId);
+  ensureSessionsFullyLoaded().then(() => renderExerciseSessionDetail(sessionId, exerciseId));
 }
+// Läuft nach JEDER abgeschlossenen Trainingseinheit — computeWeekStreak()/computeSessionTrends()/
+// computeExerciseHighlights() (12-session-summary.js) werten dafür die GESAMTE Historie aus
+// (Streak, Vergleich mit vorherigen Einheiten), nicht nur die zuletzt geladenen Monate.
 function goSessionSummary(session, push){
   if (push !== false) pushView('sessionSummary', { id: session.id });
-  renderSessionSummary(session);
+  ensureSessionsFullyLoaded().then(() => renderSessionSummary(session));
 }
 
 // Generisches System, damit Popups/Overlays (Übung hinzufügen, Kategorie-Einstellungen,
@@ -269,37 +281,36 @@ function renderViewByState(state){
   switch(state.view){
     case 'plan': renderPlanEditor(); break;
     case 'settings': renderSettings(); break;
-    case 'progressList': renderProgressList(); break;
-    case 'muscleBalance': renderMuscleBalance(); break;
-    case 'intensityStats': renderIntensityStats(); break;
-    case 'kcalStats': renderKcalStats(); break;
-    case 'progressDetail': renderExerciseProgress(state.params.name); break;
-    case 'sessionDetail': renderSessionDetail(state.params.id); break;
-    case 'sessionSummary': {
+    case 'progressList': ensureSessionsFullyLoaded().then(renderProgressList); break;
+    case 'muscleBalance': ensureSessionsFullyLoaded().then(renderMuscleBalance); break;
+    case 'intensityStats': ensureSessionsFullyLoaded().then(renderIntensityStats); break;
+    case 'kcalStats': ensureSessionsFullyLoaded().then(renderKcalStats); break;
+    case 'progressDetail': ensureSessionsFullyLoaded().then(() => renderExerciseProgress(state.params.name)); break;
+    case 'sessionDetail': ensureSessionsFullyLoaded().then(() => renderSessionDetail(state.params.id)); break;
+    case 'sessionSummary': ensureSessionsFullyLoaded().then(() => {
       const s = sessions.find(x => x.id === state.params.id);
       if (s) renderSessionSummary(s); else renderHome();
-      break;
-    }
+    }); break;
     case 'startSelect': renderStartSelect(); break;
     case 'freeSelect': renderFreeSelect(); break;
     case 'modeEdit': renderModeEdit(state.params.mode, state.params.startTab); break;
-    case 'statsChart': renderStatsChart(state.params.metric); break;
-    case 'bodyWeightChart': renderBodyWeightChart(); break;
-    case 'workoutsOverview': renderWorkoutsOverview(); break;
-    case 'monthOverview': initFoodTracker().then(renderMonthOverview); break;
-    case 'monthReport': initFoodTracker().then(() => renderMonthReport(state.params.year, state.params.month)); break;
-    case 'exerciseSessionDetail': renderExerciseSessionDetail(state.params.sessionId, state.params.exerciseId); break;
-    case 'foodTracker': initFoodTracker().then(renderFoodTracker); break;
-    case 'foodStats': initFoodTracker().then(renderFoodStats); break;
-    case 'foodAddMeal': initFoodTracker().then(() => renderFtAddFood(state.params.meal)); break;
-    case 'foodAutoMealBuilder': initFoodTracker().then(() => {
+    case 'statsChart': ensureSessionsFullyLoaded().then(() => renderStatsChart(state.params.metric)); break;
+    case 'bodyWeightChart': ensureSessionsFullyLoaded().then(renderBodyWeightChart); break;
+    case 'workoutsOverview': ensureSessionsFullyLoaded().then(renderWorkoutsOverview); break;
+    case 'monthOverview': Promise.all([ensureSessionsFullyLoaded(), ftEnsureLoaded()]).then(() => renderMonthOverview()); break;
+    case 'monthReport': Promise.all([ensureSessionsFullyLoaded(), ftEnsureLoaded()]).then(() => renderMonthReport(state.params.year, state.params.month)); break;
+    case 'exerciseSessionDetail': ensureSessionsFullyLoaded().then(() => renderExerciseSessionDetail(state.params.sessionId, state.params.exerciseId)); break;
+    case 'foodTracker': ftEnsureLoaded().then(renderFoodTracker); break;
+    case 'foodStats': ftEnsureLoaded().then(renderFoodStats); break;
+    case 'foodAddMeal': ftEnsureLoaded().then(() => renderFtAddFood(state.params.meal)); break;
+    case 'foodAutoMealBuilder': ftEnsureLoaded().then(() => {
       // Beim direkten Ansprung dieser Route (Reload/Vorwärts-Navigation) gibt es keine
       // gesammelten Items aus einer laufenden Sitzung mehr — startet daher bewusst mit einer
       // leeren Sammlung statt mit einem Fehler, exakt wie ein neu geöffnetes Formular.
       ftAutoMealBuilder = { meal: state.params.meal, items: [] };
       renderFtAddFood(state.params.meal);
     }); break;
-    case 'foodCalendar': initFoodTracker().then(renderFtMonthOverview); break;
+    case 'foodCalendar': ftEnsureLoaded().then(renderFtMonthOverview); break;
     case 'active': if (active) renderActive(); else renderHome(); break;
     default: renderHome();
   }
