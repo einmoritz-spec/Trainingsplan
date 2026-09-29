@@ -337,15 +337,21 @@ function openSessionComparePrompt(a, b){
     if (m.sec > 0) return fmtDuration(m.sec);
     return '✓';
   };
+  // esc() (04-utils.js), NICHT ftEscapeHTML(): dieses Vergleichs-Feature hat nichts mit dem
+  // Essenstracker zu tun, war hier aber trotzdem dessen (mittlerweile nur noch als dünner
+  // Wrapper um esc() existierende, siehe dort) Escape-Funktion nutzen — seit dem Lazy-Loading
+  // des Essenstracker-Moduls (ftEnsureLoaded(), 04-utils.js) existiert ftEscapeHTML() aber
+  // nicht mehr zuverlässig, solange das Modul in der Sitzung noch nie geladen wurde. esc() ist
+  // die dafür vorgesehene, immer verfügbare zentrale Variante.
   const exerciseRowsHTML = names.map(name => {
     const ma = amtA[name], mb = amtB[name];
     const va = ma ? (ma.volKg || ma.sec || 0) : null;
     const vb = mb ? (mb.volKg || mb.sec || 0) : null;
     const better = (va == null || vb == null || va === vb) ? null : (va > vb ? 'a' : 'b');
     return `
-      <div class="compare-stat-row compare-stat-row-clickable" data-compare-exercise="${ftEscapeHTML(name)}" role="button" tabindex="0">
+      <div class="compare-stat-row compare-stat-row-clickable" data-compare-exercise="${esc(name)}" role="button" tabindex="0">
         <span class="compare-stat-val compare-stat-val-ex ${better === 'a' ? 'compare-stat-better' : ''}">${formatAmount(ma)}</span>
-        <span class="compare-stat-label compare-stat-label-ex">${ftEscapeHTML(name)} ›</span>
+        <span class="compare-stat-label compare-stat-label-ex">${esc(name)} ›</span>
         <span class="compare-stat-val compare-stat-val-ex ${better === 'b' ? 'compare-stat-better' : ''}">${formatAmount(mb)}</span>
       </div>
     `;

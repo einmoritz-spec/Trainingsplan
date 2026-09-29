@@ -119,7 +119,14 @@ function goIntensityStats(push){
 }
 function goKcalStats(push){
   if (push !== false) pushView('kcalStats');
-  ensureSessionsFullyLoaded().then(renderKcalStats);
+  // renderKcalStats() (08c-stats-progress-list.js) zeigt bei aktiviertem Essenstracker
+  // zusätzlich eine "Trainingstage vs. Ruhetage"-Vergleichskarte (computeTrainingVsRestDayIntake(),
+  // im lazy geladenen Essenstracker-Modul) — anders als bei den übrigen Statistik-Seiten reicht
+  // hier ensureSessionsFullyLoaded() allein NICHT: ist das Feature an, aber das Modul in dieser
+  // Sitzung noch nie geladen worden (z. B. direkter Sprung hierher, ohne vorher den
+  // Essenstracker geöffnet zu haben), existiert computeTrainingVsRestDayIntake() schlicht noch
+  // nicht — siehe den ReferenceError-Bug-Report dazu.
+  Promise.all([ensureSessionsFullyLoaded(), isFoodTrackerEnabled() ? ftEnsureLoaded() : null]).then(renderKcalStats);
 }
 function goProgressDetail(name, push){
   if (push !== false) pushView('progressDetail', { name });
@@ -284,7 +291,7 @@ function renderViewByState(state){
     case 'progressList': ensureSessionsFullyLoaded().then(renderProgressList); break;
     case 'muscleBalance': ensureSessionsFullyLoaded().then(renderMuscleBalance); break;
     case 'intensityStats': ensureSessionsFullyLoaded().then(renderIntensityStats); break;
-    case 'kcalStats': ensureSessionsFullyLoaded().then(renderKcalStats); break;
+    case 'kcalStats': Promise.all([ensureSessionsFullyLoaded(), isFoodTrackerEnabled() ? ftEnsureLoaded() : null]).then(renderKcalStats); break;
     case 'progressDetail': ensureSessionsFullyLoaded().then(() => renderExerciseProgress(state.params.name)); break;
     case 'sessionDetail': ensureSessionsFullyLoaded().then(() => renderSessionDetail(state.params.id)); break;
     case 'sessionSummary': ensureSessionsFullyLoaded().then(() => {
@@ -300,8 +307,20 @@ function renderViewByState(state){
     case 'monthOverview': Promise.all([ensureSessionsFullyLoaded(), ftEnsureLoaded()]).then(() => renderMonthOverview()); break;
     case 'monthReport': Promise.all([ensureSessionsFullyLoaded(), ftEnsureLoaded()]).then(() => renderMonthReport(state.params.year, state.params.month)); break;
     case 'exerciseSessionDetail': ensureSessionsFullyLoaded().then(() => renderExerciseSessionDetail(state.params.sessionId, state.params.exerciseId)); break;
-    case 'foodTracker': ftEnsureLoaded().then(renderFoodTracker); break;
-    case 'foodStats': ftEnsureLoaded().then(renderFoodStats); break;
+    // WICHTIG: .then(renderFoodTracker) (bare Referenz statt Arrow-Funktion) wäre hier ein
+    // Bug — der Ausdruck "renderFoodTracker" wird als Argument von .then() SOFORT ausgewertet,
+    // also im selben Moment, in dem ftEnsureLoaded() aufgerufen wird, NICHT erst nachdem das
+    // Promise aufgelöst hat. renderFoodTracker existiert zu diesem frühen Zeitpunkt aber noch
+    // gar nicht (liegt im noch nicht geladenen Essenstracker-Modul, siehe ftEnsureLoaded(),
+    // 04-utils.js) — das wirft sofort "ReferenceError: renderFoodTracker is not defined",
+    // BEVOR ftEnsureLoaded() überhaupt die Chance hatte, das Modul zu laden. Eine Arrow-
+    // Funktion () => renderFoodTracker() verzögert den Namens-Lookup dagegen bis zur
+    // tatsächlichen AUSFÜHRUNG (nach dem Laden) — das ist hier bei allen drei Fällen unten
+    // zwingend nötig, bei den weiter oben stehenden Statistik-Fällen (renderProgressList etc.)
+    // dagegen unkritisch, weil diese Funktionen NICHT lazy geladen werden (siehe Kommentar zu
+    // ensureFoodTrackerScriptsLoaded(), 04-utils.js) und daher schon immer existieren.
+    case 'foodTracker': ftEnsureLoaded().then(() => renderFoodTracker()); break;
+    case 'foodStats': ftEnsureLoaded().then(() => renderFoodStats()); break;
     case 'foodAddMeal': ftEnsureLoaded().then(() => renderFtAddFood(state.params.meal)); break;
     case 'foodAutoMealBuilder': ftEnsureLoaded().then(() => {
       // Beim direkten Ansprung dieser Route (Reload/Vorwärts-Navigation) gibt es keine
@@ -310,7 +329,7 @@ function renderViewByState(state){
       ftAutoMealBuilder = { meal: state.params.meal, items: [] };
       renderFtAddFood(state.params.meal);
     }); break;
-    case 'foodCalendar': ftEnsureLoaded().then(renderFtMonthOverview); break;
+    case 'foodCalendar': ftEnsureLoaded().then(() => renderFtMonthOverview()); break;
     case 'active': if (active) renderActive(); else renderHome(); break;
     default: renderHome();
   }

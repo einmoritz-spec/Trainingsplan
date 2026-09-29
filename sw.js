@@ -30,6 +30,29 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v85: BUGFIX — weiterer Absturz nach dem Essenstracker-Lazy-Loading (v81), diesmal beim
+ * direkten Neuladen der Seite MITTEN im Essenstracker ("ReferenceError: renderFoodTracker is
+ * not defined", 06-navigation.js:303). Subtilere Ursache als der v84-Fix: `.then(renderFood
+ * Tracker)` (bare Funktionsreferenz statt Arrow-Funktion) wertet den Bezeichner
+ * "renderFoodTracker" SOFORT aus — im selben Moment, in dem ftEnsureLoaded() aufgerufen wird,
+ * nicht erst nachdem dessen Promise aufgelöst hat. renderFoodTracker existiert zu diesem frühen
+ * Zeitpunkt aber noch nicht (liegt im noch nicht geladenen Essenstracker-Modul) — das wirft den
+ * Fehler, BEVOR ftEnsureLoaded() überhaupt die Chance hatte, das Modul zu laden. Betraf die drei
+ * bare Referenzen case 'foodTracker'/'foodStats'/'foodCalendar' (renderViewByState(),
+ * 06-navigation.js) — jetzt alle auf () => renderXY() umgestellt (verzögert den Namens-Lookup
+ * bis zur tatsächlichen Ausführung nach dem Laden). Die bare Referenzen bei den (nicht lazy
+ * geladenen) Statistik-Funktionen (renderProgressList etc.) waren davon nicht betroffen und
+ * blieben unverändert.
+ * Beim selben Durchgang zwei weitere, unabhängig davon gefundene Fälle derselben Fehlerklasse
+ * (unbedingter Zugriff auf eine Essenstracker-Funktion von AUSSERHALB des Moduls) behoben:
+ * (1) renderKcalStats() (08c-stats-progress-list.js) rief bei aktiviertem Essenstracker
+ * computeTrainingVsRestDayIntake() unbedingt auf, unabhängig davon, ob das Modul in dieser
+ * Sitzung je geladen wurde — goKcalStats() lädt es jetzt bei Bedarf zuerst nach (nur wenn das
+ * Feature aktiviert ist, sonst wie bisher ohne Essenstracker-Bezug). (2) Der Sessions-
+ * Vergleich auf der Startseite (renderHome(), 07-home.js) nutzte ftEscapeHTML() als
+ * allgemeine Escape-Funktion für Übungsnamen, obwohl das Feature nichts mit dem Essenstracker
+ * zu tun hat — jetzt esc() (04-utils.js, ohnehin die dafür vorgesehene, immer verfügbare
+ * zentrale Variante, siehe v83).
  * v84: BUGFIX — regelrechter Absturz beim Start (renderHome() warf "ReferenceError:
  * foodTrackerLoaded is not defined", weißer Fehlerbildschirm "Etwas ist schiefgelaufen"),
  * eingeschleppt durch das Essenstracker-Lazy-Loading in v81: foodTrackerLoaded ist eine
@@ -244,7 +267,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v84';
+const CACHE_NAME = 'trainingsplan-cache-v85';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
