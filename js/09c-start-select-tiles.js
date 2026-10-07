@@ -394,7 +394,8 @@ function renderModeEdit(mode, startTab){
   // Reihenfolge der Muskelgruppen-Akkordeons — gilt gemeinsam für Split A und B (welche
   // Muskelgruppe zuerst trainiert wird, ist eine Eigenschaft der Kategorie, nicht des
   // einzelnen Splits) und lässt sich per Long-Press-Drag auf den Akkordeon-Kopfzeilen
-  // verändern (siehe wireMuscleGroupReorder unten); wird erst mit "Speichern" persistiert.
+  // verändern (siehe wireMuscleGroupReorder unten); wird bei jeder Änderung sofort gespeichert
+  // (siehe persistModeEdit() unten — es gibt bewusst keinen "Speichern"-Button mehr).
   let groupOrder = fullGroupOrder(mode);
   const label = modeDisplayLabelHTML(mode);
 
@@ -412,8 +413,44 @@ function renderModeEdit(mode, startTab){
     </div>
     `}
     <div id="modeEditRows"></div>
-    <button class="btn btn-primary" id="btnSaveMode" style="margin-top:8px;">Speichern</button>
   `;
+
+  // Speichert den aktuellen Bearbeitungsstand (Auswahl, Reihenfolge je Split, Reihenfolge der
+  // Muskelgruppen) SOFORT in plan — wird nach jeder einzelnen Änderung aufgerufen (Häkchen
+  // setzen/entfernen, Übung per Drag verschieben, Muskelgruppen umsortieren), statt wie früher
+  // gesammelt über einen "Speichern"-Button am Ende.
+  // Reihenfolge = die Anzeige-Reihenfolge in diesem Bearbeiten-Screen (nach der aktuellen
+  // Muskelgruppen-Reihenfolge sortiert, innerhalb einer Gruppe zusätzlich per Drag manuell
+  // anpassbar) — genau diese Reihenfolge soll später auch im Training gelten, nicht die
+  // Reihenfolge, in der die Häkchen gesetzt wurden.
+  // Die Schreibvorgänge laufen bewusst nacheinander (modeEditSaveChain) statt parallel: bei
+  // schnellen Folge-Taps würden sonst mehrere saveJSON('plan', ...)-Aufrufe gleichzeitig laufen,
+  // und ein älterer, langsamerer Schreibvorgang könnte einen neueren überschreiben.
+  let modeEditSaveChain = Promise.resolve();
+  function persistModeEdit(){
+    if (!plan.modeLists) plan.modeLists = {};
+    if (!plan.modeSettings) plan.modeSettings = {};
+    if (!plan.modeSettings[mode]) plan.modeSettings[mode] = {};
+    plan.modeSettings[mode].groupOrder = groupOrder.slice();
+    const flatten = state => {
+      if (state.ungrouped){
+        return (state.groups._all || []).filter(id => state.selected.has(id));
+      }
+      const result = [];
+      orderedGroupNames(state.groups).forEach(g => {
+        (state.groups[g] || []).forEach(id => { if (state.selected.has(id)) result.push(id); });
+      });
+      return result;
+    };
+    plan.modeLists[mode] = {
+      A: flatten(modeEditData.A),
+      B: flatten(modeEditData.B)
+    };
+    modeEditSaveChain = modeEditSaveChain
+      .then(() => saveJSON('plan', plan))
+      .catch(() => { /* ein fehlgeschlagener Schreibvorgang darf die Kette nicht blockieren */ });
+    return modeEditSaveChain;
+  }
 
   function renderTabs(){
     document.querySelectorAll('#modeEditTabs .period-btn').forEach(b => {
@@ -489,6 +526,7 @@ function renderModeEdit(mode, startTab){
       rerender: renderRows,
       commitOrder: (newVisibleOrder) => {
         groupOrder = [...newVisibleOrder, ...groupOrder.filter(g => !newVisibleOrder.includes(g))];
+        persistModeEdit();
         renderRows();
       }
     });
@@ -579,6 +617,7 @@ function renderModeEdit(mode, startTab){
           if (finalMode === 'dragging' && targetIndex !== fromIndex){
             const [moved] = arr.splice(fromIndex, 1);
             arr.splice(targetIndex, 0, moved);
+            persistModeEdit();
             renderRows();
           } else if (finalMode !== 'scrolling'){
             if (state.selected.has(id)){
@@ -586,6 +625,7 @@ function renderModeEdit(mode, startTab){
             } else {
               state.selected.add(id);
             }
+            persistModeEdit();
             renderRows();
           }
         };
@@ -608,32 +648,7 @@ function renderModeEdit(mode, startTab){
   });
 
   document.getElementById('btnBack').onclick = () => history.back();
-  document.getElementById('btnSaveMode').onclick = async () => {
-    if (!plan.modeLists) plan.modeLists = {};
-    if (!plan.modeSettings) plan.modeSettings = {};
-    if (!plan.modeSettings[mode]) plan.modeSettings[mode] = {};
-    plan.modeSettings[mode].groupOrder = groupOrder;
-    // Reihenfolge = die Anzeige-Reihenfolge in diesem Bearbeiten-Screen (nach der aktuellen
-    // Muskelgruppen-Reihenfolge sortiert, innerhalb einer Gruppe zusätzlich per Drag manuell
-    // anpassbar) — genau diese Reihenfolge soll später auch im Training gelten, nicht die
-    // Reihenfolge, in der die Häkchen gesetzt wurden.
-    const flatten = state => {
-      if (state.ungrouped){
-        return (state.groups._all || []).filter(id => state.selected.has(id));
-      }
-      const result = [];
-      orderedGroupNames(state.groups).forEach(g => {
-        (state.groups[g] || []).forEach(id => { if (state.selected.has(id)) result.push(id); });
-      });
-      return result;
-    };
-    plan.modeLists[mode] = {
-      A: flatten(modeEditData.A),
-      B: flatten(modeEditData.B)
-    };
-    await saveJSON('plan', plan);
-    history.back();
-  };
+
 }
 
 let freeGroups = null;

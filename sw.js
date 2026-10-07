@@ -30,6 +30,12 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v86: Split-Bearbeitung (Kategorie → "bearbeiten", Split A/B) speichert jetzt SOFORT bei jeder
+ * Änderung — Übung an-/abwählen, Übung per Drag verschieben, Muskelgruppen umsortieren —
+ * statt erst über den "Speichern"-Button am Ende der Seite (der Button ist entfernt). Die
+ * Speicherlogik steckt in persistModeEdit() (09c-start-select-tiles.js, renderModeEdit()); die
+ * Schreibvorgänge laufen bewusst nacheinander über eine Promise-Kette, damit bei schnellen
+ * Folge-Taps ein älterer, langsamerer saveJSON('plan', ...) keinen neueren überschreibt.
  * v85: BUGFIX — weiterer Absturz nach dem Essenstracker-Lazy-Loading (v81), diesmal beim
  * direkten Neuladen der Seite MITTEN im Essenstracker ("ReferenceError: renderFoodTracker is
  * not defined", 06-navigation.js:303). Subtilere Ursache als der v84-Fix: `.then(renderFood
@@ -267,7 +273,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v85';
+const CACHE_NAME = 'trainingsplan-cache-v86';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
