@@ -339,7 +339,7 @@ function ftMealGroupRowHTML(meal, e){
     <div class="food-row" data-entry-id="${e.id}" data-meal="${meal}" data-group="1">
       <div class="food-row-main">
         <div class="food-row-name">${ftEscapeHTML(e.name)}</div>
-        <div class="food-row-sub">${ftPortionLabel(e.portion)} Portion · ${itemCount} Zutat${itemCount===1?'':'en'}</div>
+        <div class="food-row-sub">${ftPortionLabel(e.portion)} Portion${ftMealItemsTotalG(e.items) > 0 ? ' · ' + Math.round(ftMealItemsTotalG(e.items)*e.portion) + ' g' : ''} · ${itemCount} Zutat${itemCount===1?'':'en'}</div>
       </div>
       <div class="food-row-right">
         <div class="food-row-kcal">${Math.round(e.kcal)}</div>

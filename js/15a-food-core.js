@@ -849,6 +849,13 @@ function ftApplyTheme(){
   ftSyncStatusBarColor(bgColor);
 }
 
+// Gesamtgewicht (g) einer Mahlzeit-Basis (Portion 1×) = Summe der hinterlegten Gramm-Mengen aller
+// Zutaten. Stückangaben tragen ihr Gramm-Äquivalent ohnehin in amountG (siehe
+// ftResolveSavedMealItems(), 15c). Basis für die Gramm-Eingabe im Portions-Dialog
+// (ftOpenPortionModal(), 15c) und die Gramm-Anzeige in der Tagesansicht.
+function ftMealItemsTotalG(items){
+  return (items||[]).reduce((s,i) => s + (parseFloat(i.amountG)||0), 0);
+}
 function ftPortionLabel(p){
   if(Math.abs(p-0.25)<0.001) return '1/4';
   if(Math.abs(p-0.5)<0.001) return '1/2';

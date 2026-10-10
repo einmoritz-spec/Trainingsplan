@@ -30,6 +30,9 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v89: Essenstracker: gespeicherte Mahlzeiten können statt per Portion (1/2, 1×…) auch per Gramm-Menge
+ *       getrackt werden ("300 g" → Portion = 300 / Gesamtgewicht der Mahlzeit); Tagesansicht zeigt
+ *       zusätzlich die Gramm-Menge des Eintrags.
  * v88: Einstellungen zeigen unten "Version vom TT.MM.JJ, HH:MM" (statt "Build 59").
  * v87: Abschluss-Screen: Stat-Leiste (Dauer/Serie/Rekorde/Verbessert/RPE/kcal) bei 5+ Feldern
  *       einzeilig und kompakt — kcal-Einheit steht klein neben der Zahl statt als Label darunter
@@ -278,7 +281,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v88';
+const CACHE_NAME = 'trainingsplan-cache-v89';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [

@@ -993,6 +993,9 @@ const FT_PORTION_PRESETS = [0.25, 0.5, 0.75, 1];
 function ftOpenPortionModal(opts){
   const { title, baseItems, initialPortion, confirmLabel, onConfirm, onDelete } = opts;
   const sums = ftSumItemMacros(baseItems);
+  // Gesamtgewicht der Mahlzeit (Portion 1×) — ermöglicht statt eines Bruchteils eine direkte
+  // Gramm-Angabe ("300 g davon gegessen"), die intern in eine Portion umgerechnet wird.
+  const totalG = ftMealItemsTotalG(baseItems);
   ftOpenOverlay(`
     <div class="modal" id="ftPortionModal">
       <div class="modal-head"><div class="modal-title">${ftEscapeHTML(title)}</div><button class="sheet-close" id="ftPortionClose">${ftIconX()}</button></div>
@@ -1006,6 +1009,12 @@ function ftOpenPortionModal(opts){
           <input class="qty-input" id="ftPortionInput" type="number" inputmode="decimal" step="0.25" value="${initialPortion}">
           <button class="qty-btn" id="ftPortionPlus">+</button>
         </div>
+        ${totalG > 0 ? `
+        <div class="field-label">oder Menge in Gramm <span style="color:var(--muted); font-weight:400; text-transform:none; letter-spacing:0;">(Gesamt ${Math.round(totalG)} g)</span></div>
+        <div class="qty-row">
+          <input class="qty-input" id="ftPortionGrams" type="number" inputmode="decimal" step="10" value="${Math.round(initialPortion*totalG)}">
+          <span class="qty-unit" style="color:var(--muted);">g</span>
+        </div>` : ''}
         <div class="qty-preview" id="ftPortionPreview"></div>
         <div class="field-label">Zutaten</div>
         <div id="ftPortionItemsList"></div>
@@ -1016,13 +1025,25 @@ function ftOpenPortionModal(opts){
   `, {type:'modal'});
   document.getElementById('ftPortionClose').onclick = ftCloseOverlay;
   const input = document.getElementById('ftPortionInput');
+  const gramsInput = document.getElementById('ftPortionGrams'); // nur vorhanden, wenn totalG > 0
+  // Wird nur gesetzt, solange der Wert per Gramm-Feld eingegeben wurde: dann ist die exakte
+  // Portion (g / totalG) maßgeblich, nicht der auf 2 Stellen gerundete Anzeigewert im
+  // Portions-Feld. Jede Eingabe über Portion/Presets/±-Tasten setzt es wieder auf null.
+  let portionFromGrams = null;
+  function currentPortion(){
+    if (portionFromGrams !== null) return portionFromGrams;
+    return Math.max(0.05, parseFloat(input.value)||0);
+  }
+  function syncGramsFromPortion(){
+    if (gramsInput) gramsInput.value = Math.round(currentPortion()*totalG);
+  }
   function highlightPreset(portion){
     document.querySelectorAll('.portion-pill').forEach(btn=>{
       btn.classList.toggle('active', Math.abs(parseFloat(btn.dataset.portion)-portion) < 0.001);
     });
   }
   function update(){
-    const portion = Math.max(0.05, parseFloat(input.value)||0);
+    const portion = currentPortion();
     highlightPreset(portion);
     const kcal = Math.round(sums.kcal*portion);
     const p = Math.round(sums.p*portion*10)/10;
@@ -1037,17 +1058,29 @@ function ftOpenPortionModal(opts){
       return `<div class="food-row-sub" style="padding:5px 2px; border-bottom:1px solid var(--border);">${ftEscapeHTML(i.name)} — ${qty} · ${Math.round(i.kcal*portion)} kcal</div>`;
     }).join('');
   }
-  input.addEventListener('input', update);
-  ftWireClearOnFocus(input, update);
-  document.getElementById('ftPortionMinus').onclick = ()=>{ input.value = Math.max(0.05, Math.round(((parseFloat(input.value)||0)-0.25)*100)/100); update(); };
-  document.getElementById('ftPortionPlus').onclick = ()=>{ input.value = Math.round(((parseFloat(input.value)||0)+0.25)*100)/100; update(); };
+  function onPortionChanged(){ portionFromGrams = null; syncGramsFromPortion(); update(); }
+  input.addEventListener('input', onPortionChanged);
+  ftWireClearOnFocus(input, onPortionChanged);
+  document.getElementById('ftPortionMinus').onclick = ()=>{ portionFromGrams = null; input.value = Math.max(0.05, Math.round(((parseFloat(input.value)||0)-0.25)*100)/100); onPortionChanged(); };
+  document.getElementById('ftPortionPlus').onclick = ()=>{ portionFromGrams = null; input.value = Math.round(((parseFloat(input.value)||0)+0.25)*100)/100; onPortionChanged(); };
   document.querySelectorAll('.portion-pill').forEach(btn=>{
-    btn.onclick = ()=>{ input.value = btn.dataset.portion; update(); };
+    btn.onclick = ()=>{ input.value = btn.dataset.portion; onPortionChanged(); };
   });
+  if (gramsInput){
+    // Gramm eingeben -> Portion = g / Gesamtgewicht (Portions-Feld zeigt gerundet mit);
+    // Gramm-Feld selbst wird dabei NICHT überschrieben, damit das Tippen nicht springt.
+    const onGramsInput = ()=>{
+      const g = parseFloat(String(gramsInput.value).replace(',', '.'));
+      portionFromGrams = (g > 0) ? Math.max(0.05, g/totalG) : null;
+      if (portionFromGrams !== null) input.value = Math.round(portionFromGrams*100)/100;
+      update();
+    };
+    gramsInput.addEventListener('input', onGramsInput);
+    ftWireClearOnFocus(gramsInput, onGramsInput);
+  }
   update();
   document.getElementById('ftPortionConfirmBtn').onclick = ()=>{
-    const portion = Math.max(0.05, parseFloat(input.value)||0);
-    onConfirm(portion);
+    onConfirm(currentPortion());
   };
   if(onDelete){
     document.getElementById('ftPortionDeleteBtn').onclick = ()=>{ ftCloseOverlay(); onDelete(); };
