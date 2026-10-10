@@ -5,8 +5,9 @@
 // sichtbar, welche Code-Version wirklich läuft. Bei einer PWA bedient der Service Worker
 // (sw.js, Cache-First) nach einem Update oft noch mehrere Starts lang die ALTE Fassung —
 // ohne diesen Stempel ist "der Fix wirkt nicht" nicht von "der Fix ist nie angekommen" zu
-// unterscheiden. Bei jeder Änderung zusammen mit CACHE_NAME in sw.js erhöhen.
-const BUILD_STAMP = '59';
+// unterscheiden. Enthält Datum + Uhrzeit (Europe/Berlin) des Builds im Format "TT.MM.JJ, HH:MM"
+// und wird bei jeder Auslieferung zusammen mit CACHE_NAME in sw.js neu gesetzt.
+const BUILD_STAMP = '10.10.26, 12:52';
 
 /* ---------------------------------------------------
    HTML-Escaping

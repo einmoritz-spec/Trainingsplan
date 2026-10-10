@@ -1094,9 +1094,9 @@ function renderSettings(){
          Cache-First-Service-Worker (sw.js) ist sonst nicht erkennbar, ob ein neues Build
          schon aktiv ist oder noch die alte Fassung aus dem Cache bedient wird — genau das
          hat bei der Fehlersuche zur unteren Navigationsleiste Zeit gekostet. BUILD_STAMP
-         wird bei jeder Änderung mit erhöht, zusammen mit CACHE_NAME in sw.js. -->
-    <div style="margin-top:18px; text-align:center; color:var(--muted); font-size:11px;">
-      Build ${BUILD_STAMP}
+         (Datum + Uhrzeit des Builds) wird bei jeder Auslieferung zusammen mit CACHE_NAME in sw.js neu gesetzt. -->
+    <div style="margin-top:18px; text-align:center; color:var(--muted); font-size:13px;">
+      Version vom ${BUILD_STAMP}
     </div>
   `;
 

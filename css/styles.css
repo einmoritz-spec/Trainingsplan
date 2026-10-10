@@ -571,14 +571,19 @@ html[data-theme="light"] .bodyweight-warning-icon{ filter: none; }
    12-session-summary.js) — kommt praktisch nur zustande, wenn sowohl RPE-Erfassung als auch
    geschätzter Kalorienverbrauch aktiviert sind. Kleinere Zahlen/Icons + weniger Innenabstand,
    und alle Labels bis auf "≈ kcal" ausgeblendet, damit nichts mehr über die Trennlinien läuft. */
-.summary-pill-compact{ padding:12px 10px; gap:2px; }
+.summary-pill-compact{ padding:11px 8px; gap:0; align-items:center; }
+/* Felder nehmen ihre Inhaltsbreite + gleichmäßigen Rest -> "1:05:10" bekommt automatisch mehr
+   Platz als "9"; alle Felder einzeilig, vertikal zentriert, keine Leerräume unter den Zahlen. */
+.summary-pill-compact .summary-pill-item{ flex:1 1 auto; padding:0 5px; }
 .summary-pill-compact .summary-pill-value{ font-size:15px; }
-.summary-pill-compact .summary-pill-value-long{ font-size:13px; }
+.summary-pill-compact .summary-pill-value-long{ font-size:15px; letter-spacing:-0.4px; }
 .summary-pill-compact .summary-pill-icon-img{ width:14px; height:14px; }
 .summary-pill-compact .summary-pill-icon{ font-size:14px; }
 .summary-pill-compact .summary-pill-top{ gap:4px; }
 .summary-pill-compact .summary-pill-label{ display:none; }
-.summary-pill-compact .summary-pill-label-keep{ display:block; font-size:10px; margin-top:3px; }
+.summary-pill-compact .summary-pill-divider{ align-self:center; height:22px; }
+.summary-pill-unit{ display:none; font-size:10px; color: var(--muted); font-weight:600; margin-left:-1px; }
+.summary-pill-compact .summary-pill-unit{ display:inline; }
 
 /* ---------- Abschluss-Screen nach Training ---------- */
 .summary-badge{

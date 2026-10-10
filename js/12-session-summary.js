@@ -105,9 +105,11 @@ function renderSessionSummary(session){
   // Rest nur bei vorhandenen Werten bzw. aktivierter Einstellung (RPE/kcal). Ab 5 Feldern wird
   // es auf schmalen Bildschirmen zu gedrängt (Zahlen liefen sichtbar in die Trennlinien und die
   // Labels umbrachen zweizeilig ineinander) — dann greift .summary-pill-compact: kleinere
-  // Zahlen/Icons und alle grauen Labels ausgeblendet AUSSER "≈ kcal" (die einzige Zahl, die
-  // ohne Beschriftung nicht selbsterklärend wäre; Serie/Rekorde/Verbessert haben ihr Icon,
-  // Dauer ihr Doppelpunkt-Format, RPE seine Farbe).
+  // Zahlen/Icons und alle grauen Labels ausgeblendet; die einzige Zahl, die ohne Beschriftung
+  // nicht selbsterklärend wäre (kcal), bekommt stattdessen eine kleine Einheit INLINE neben
+  // dem Wert (.summary-pill-unit) — so bleibt die Leiste einzeilig und alle Felder sitzen auf
+  // gleicher Höhe (Serie/Rekorde/Verbessert haben ihr Icon, Dauer ihr Doppelpunkt-Format,
+  // RPE seine Farbe).
   const pillItemCount = 2 + (starCount > 0 ? 1 : 0) + (improvedCount > 0 ? 1 : 0)
     + (sessionAvgRpe != null ? 1 : 0) + (sessionKcal != null ? 1 : 0);
 
@@ -174,8 +176,8 @@ function renderSessionSummary(session){
       ${sessionKcal != null ? `
       <div class="summary-pill-divider"></div>
       <div class="summary-pill-item">
-        <div class="summary-pill-top"><span class="summary-pill-value">${sessionKcal.toLocaleString('de-DE')}</span></div>
-        <div class="summary-pill-label summary-pill-label-keep">≈ kcal</div>
+        <div class="summary-pill-top"><span class="summary-pill-value">${sessionKcal.toLocaleString('de-DE')}</span><span class="summary-pill-unit">kcal</span></div>
+        <div class="summary-pill-label">≈ kcal</div>
       </div>` : ''}
     </div>
     ${rowsHTML ? `

@@ -30,6 +30,11 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v88: Einstellungen zeigen unten "Version vom TT.MM.JJ, HH:MM" (statt "Build 59").
+ * v87: Abschluss-Screen: Stat-Leiste (Dauer/Serie/Rekorde/Verbessert/RPE/kcal) bei 5+ Feldern
+ *       einzeilig und kompakt — kcal-Einheit steht klein neben der Zahl statt als Label darunter
+ *       (kein Leerraum mehr unter den anderen Feldern), Felder nehmen Inhaltsbreite, sodass
+ *       "1:05:10" genug Platz hat.
  * v86: Split-Bearbeitung (Kategorie → "bearbeiten", Split A/B) speichert jetzt SOFORT bei jeder
  * Änderung — Übung an-/abwählen, Übung per Drag verschieben, Muskelgruppen umsortieren —
  * statt erst über den "Speichern"-Button am Ende der Seite (der Button ist entfernt). Die
@@ -273,7 +278,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v86';
+const CACHE_NAME = 'trainingsplan-cache-v88';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
