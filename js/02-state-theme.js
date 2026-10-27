@@ -606,6 +606,17 @@ async function init(){
       ex.mainMuscle = def ? def.mainMuscle : (ex.muscleGroup || '');
       planChanged = true;
     }
+    // Standardbilder nachliefern: bekommt eine eingebaute Übung in einem App-Update erstmals ein
+    // Bild (DEFAULT_PLAN), übernehmen es bestehende Installationen hier bei jedem Start — aber nur,
+    // wenn in der eigenen Kopie noch gar kein Bild gesetzt ist (ein selbst hochgeladenes Foto
+    // bleibt unangetastet). Neue Bilder brauchen dadurch keine eigene Migrationsstufe mehr.
+    if (!ex.imageData){
+      const def = DEFAULT_PLAN.exercises.find(d => d.id === ex.id);
+      if (def && def.imageData){
+        ex.imageData = def.imageData;
+        planChanged = true;
+      }
+    }
   });
   if (plan.bodyWeight === undefined) plan.bodyWeight = null;
   // Unconditional (nicht Teil der einmaligen Migration unten): stellt bei JEDEM Start sicher,
