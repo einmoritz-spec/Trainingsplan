@@ -30,6 +30,11 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v91: Standard-Übungen an den App-Export angeglichen — alle bisher nur über die Bibliothek
+ *       wählbaren Übungen aus dem Export plus 5 eigene (Nackenheben, Seitheben Maschine, Hammercurls
+ *       Kabelturm, Überzugmaschine, Beinstrecker (Scheiben)) sind jetzt Teil von DEFAULT_PLAN;
+ *       Standard-Split-Listen (modeLists) übernommen; e20 (Rückenstrecker Maschine) wandert in
+ *       die Bibliothek. Schema 19: fehlendes Hip-Thrust-Bild nachtragen.
  * v90: Hip Thrust (e34) hat ein eigenes Bild (e78.webp) statt des Kniebeugen-Bildes (e30).
  * v89: Essenstracker: gespeicherte Mahlzeiten können statt per Portion (1/2, 1×…) auch per Gramm-Menge
  *       getrackt werden ("300 g" → Portion = 300 / Gesamtgewicht der Mahlzeit); Tagesansicht zeigt
@@ -282,7 +287,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v90';
+const CACHE_NAME = 'trainingsplan-cache-v91';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [

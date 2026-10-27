@@ -630,7 +630,7 @@ async function init(){
      ersten fehlenden Flag ab), falls das für einen älteren Zwischenstand doch nicht zutreffen
      sollte — sicherer als pauschal "irgendein Flag gesetzt → alle als erledigt annehmen".
   --------------------------------------------------- */
-  const PLAN_SCHEMA_VERSION = 18;
+  const PLAN_SCHEMA_VERSION = 19;
   if (plan.schemaVersion == null){
     const legacyMigrationFlags = [
       '_bodyWeightLogMigration', '_assistedFlagMigration', '_weightStepMigration',
@@ -954,6 +954,16 @@ async function init(){
     const exE34 = plan.exercises.find(e => e.id === 'e34');
     if (exE34 && exE34.imageData === 'assets/exercises/e30.webp'){
       exE34.imageData = 'assets/exercises/e78.webp';
+    }
+    planChanged = true;
+  }
+  if (plan.schemaVersion < 19){
+    // Nachtrag zu Stufe 18: Hip Thrust (e34) hatte bei manchen Plänen GAR kein Bild gesetzt
+    // (nicht das alte Kniebeugen-Bild) — dort das neue Standardbild nachtragen. Ein selbst
+    // hochgeladenes Foto bleibt unangetastet.
+    const exE34b = plan.exercises.find(e => e.id === 'e34');
+    if (exE34b && !exE34b.imageData){
+      exE34b.imageData = 'assets/exercises/e78.webp';
     }
     planChanged = true;
   }
