@@ -630,7 +630,7 @@ async function init(){
      ersten fehlenden Flag ab), falls das für einen älteren Zwischenstand doch nicht zutreffen
      sollte — sicherer als pauschal "irgendein Flag gesetzt → alle als erledigt annehmen".
   --------------------------------------------------- */
-  const PLAN_SCHEMA_VERSION = 17;
+  const PLAN_SCHEMA_VERSION = 18;
   if (plan.schemaVersion == null){
     const legacyMigrationFlags = [
       '_bodyWeightLogMigration', '_assistedFlagMigration', '_weightStepMigration',
@@ -945,6 +945,16 @@ async function init(){
       const ex = plan.exercises.find(e => e.id === id);
       if (ex && ex.unilateral == null) ex.unilateral = true;
     });
+    planChanged = true;
+  }
+  if (plan.schemaVersion < 18){
+    // Hip Thrust (e34) nutzte bisher das Kniebeugen-Bild (e30) — bekommt jetzt ein eigenes
+    // (e78). Nur umstellen, wenn noch exakt das alte Standardbild gesetzt ist; ein selbst
+    // hochgeladenes Foto bleibt unangetastet.
+    const exE34 = plan.exercises.find(e => e.id === 'e34');
+    if (exE34 && exE34.imageData === 'assets/exercises/e30.webp'){
+      exE34.imageData = 'assets/exercises/e78.webp';
+    }
     planChanged = true;
   }
   // Schließt die Versionierung ab: sobald ALLE Stufen oben durchlaufen sind (jede einzelne prüft
