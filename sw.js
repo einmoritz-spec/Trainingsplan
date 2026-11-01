@@ -30,6 +30,7 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v93: Neue Übungsbilder: Kniebeuge (Langhantel), Ausfallschritte (Multipresse), Dualbeinpresse, Beinstrecker (Scheiben).
  * v92: init() trägt neue Standardbilder (DEFAULT_PLAN) bei bestehenden Übungen ohne Bild automatisch nach.
  * v91: Standard-Übungen an den App-Export angeglichen — alle bisher nur über die Bibliothek
  *       wählbaren Übungen aus dem Export plus 5 eigene (Nackenheben, Seitheben Maschine, Hammercurls
@@ -288,7 +289,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v92';
+const CACHE_NAME = 'trainingsplan-cache-v93';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
@@ -355,6 +356,10 @@ const APP_SHELL = [
   './assets/exercises/e28.webp',
   './assets/exercises/e30.webp',
   './assets/exercises/e78.webp',
+  './assets/exercises/e79.webp',
+  './assets/exercises/e80.webp',
+  './assets/exercises/e81.webp',
+  './assets/exercises/e82.webp',
   './assets/exercises/e35.webp',
   './assets/exercises/e38.webp',
   './assets/exercises/e41.webp',
