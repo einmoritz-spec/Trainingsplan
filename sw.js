@@ -30,6 +30,7 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v98: Neue Übungsbilder: Laufband, Crosstrainer, Fahrrad, Rudern (Kardio).
  * v97: Neues Übungsbild: Hammercurls Kabelturm.
  * v96: Nackenheben (msh8uwv8yqyxq) aus den Standard-Übungen entfernt (identisch mit Shrugs (Kettlebells)).
  * v95: Neue Übungsbilder: Bizeps Curls Kabelturm (einarmig), Bizeps Curls SZ-Hantel, Trizeps Extension Kabelturm (einarmig/zweiarmig).
@@ -293,7 +294,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v97';
+const CACHE_NAME = 'trainingsplan-cache-v98';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
@@ -375,6 +376,10 @@ const APP_SHELL = [
   './assets/exercises/e91.webp',
   './assets/exercises/e92.webp',
   './assets/exercises/e93.webp',
+  './assets/exercises/e94.webp',
+  './assets/exercises/e95.webp',
+  './assets/exercises/e96.webp',
+  './assets/exercises/e97.webp',
   './assets/exercises/e35.webp',
   './assets/exercises/e38.webp',
   './assets/exercises/e41.webp',
