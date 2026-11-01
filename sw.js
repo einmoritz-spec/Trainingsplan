@@ -30,6 +30,7 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v96: Nackenheben (msh8uwv8yqyxq) aus den Standard-Übungen entfernt (identisch mit Shrugs (Kettlebells)).
  * v95: Neue Übungsbilder: Bizeps Curls Kabelturm (einarmig), Bizeps Curls SZ-Hantel, Trizeps Extension Kabelturm (einarmig/zweiarmig).
  * v94: Neue Übungsbilder: Bankdrücken/Schrägbankdrücken (Multipresse), Shrugs, Überzugmaschine, Face Pulls, Seitheben Maschine.
  * v93: Neue Übungsbilder: Kniebeuge (Langhantel), Ausfallschritte (Multipresse), Dualbeinpresse, Beinstrecker (Scheiben).
@@ -291,7 +292,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v95';
+const CACHE_NAME = 'trainingsplan-cache-v96';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
