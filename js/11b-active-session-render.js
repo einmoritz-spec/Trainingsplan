@@ -506,6 +506,12 @@ function renderActive(){
   // exakt an der richtigen Stelle "verankert", auch beim Scrollen, ohne eigene Positionierung.
   const isCardioSuggestion = !!(perfSuggestion && perfSuggestion.seconds !== undefined);
 
+  // "Training beenden" nur zeigen, wenn ALLE Sätze des gesamten Trainings abgehakt sind (dann bei
+  // jeder Übung) oder wenn gerade die letzte Übung ausgewählt ist — sonst ausblenden.
+  const allSetsDone = active.entries.length > 0 && active.entries.every(isEntryDone);
+  const onLastExercise = active.entries.length > 0 && ei === active.entries.length - 1;
+  const showEndButton = allSetsDone || onLastExercise;
+
   app.innerHTML = `
     <div class="active-header-row">
       <button class="active-back-btn" id="btnActiveBack" type="button" aria-label="Zur Startseite (Training läuft weiter)">
@@ -536,12 +542,14 @@ function renderActive(){
     <div class="thumb-strip">${thumbsHTML}</div>
     ${exerciseCardHTML}
     ${addExerciseHTML}
+    ${showEndButton ? `
     <div style="height:70px"></div>
     <div class="bottom-bar">
       <div class="bottom-bar-inner">
         <button class="btn btn-primary" id="btnEnd">Training beenden</button>
       </div>
     </div>
+    ` : ''}
   `;
 
   // Gemerkte Scroll-Position der Bilderleiste wiederherstellen (siehe Kommentar oben in
@@ -730,7 +738,8 @@ function renderActive(){
     };
   });
 
-  document.getElementById('btnEnd').onclick = () => {
+  const btnEndEl = document.getElementById('btnEnd');
+  if (btnEndEl) btnEndEl.onclick = () => {
     openEndSessionConfirmPrompt(() => {
       const problems = findIncompleteDoneSets();
       if (problems.length){
