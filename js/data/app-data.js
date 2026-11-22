@@ -137,6 +137,15 @@ const EXERCISE_INFO = {
       'Geschwindigkeit an das eigene Niveau anpassen, lieber länger und moderat als zu schnell'
     ]
   },
+  e78: { // Gesäßmaschine
+    desc: 'Stehende Gesäßmaschine: Mit dem Polster auf den Schultern wird ein Bein gegen Widerstand nach hinten unten gedrückt (Hüftstreckung) – trainiert gezielt die Gesäßmuskulatur (Glutaeus maximus).',
+    tips: [
+      'Oberkörper aufrecht und fest am Schulterpolster, nicht ins Hohlkreuz fallen',
+      'Bewegung aus dem Gesäß, nicht mit Schwung oder dem unteren Rücken',
+      'Oben kurz die Gesäßmuskulatur anspannen, dann kontrolliert zurückführen',
+      'Standbein leicht gebeugt lassen, Hände fest an den Griffen'
+    ]
+  },
   e70: { // Bauchpresse
     desc: 'Bauchübung an der Maschine: Oben wird ein Griff gehalten, unten liegt ein Polster an den Oberschenkeln an – durch Zusammenziehen von Oberkörper und Beinen wird die gerade Bauchmuskulatur belastet.',
     tips: [
@@ -858,6 +867,7 @@ const DEFAULT_PLAN = {
     { id: 'mspto3c2p89r0', name: 'Seitheben Maschine', sets: 3, repsMin: 8, repsMax: 12, secondsMin: 30, secondsMax: 60, weight: 0, category: 'oberkoerper', muscleGroup: 'Schultern', mainMuscle: 'Schultern', muscles: '', type: 'reps', assisted: false, bodyweightExercise: false, bodyPart: 'push', imageData: 'assets/exercises/e88.webp' },
     { id: 'mt9u87l8a8cyv', name: 'Hammercurls Kabelturm', sets: 3, repsMin: 8, repsMax: 12, secondsMin: 30, secondsMax: 60, weight: 0, category: 'oberkoerper', muscleGroup: 'Arme', mainMuscle: 'Arme', muscles: '', type: 'reps', assisted: false, bodyweightExercise: false, bodyPart: null, imageData: 'assets/exercises/e93.webp' },
     { id: 'mtidl2bm3pq2c', name: 'Überzugmaschine', sets: 3, repsMin: 8, repsMax: 12, secondsMin: 30, secondsMax: 60, weight: 0, category: 'oberkoerper', muscleGroup: 'Rücken', mainMuscle: 'Rücken', muscles: '', type: 'reps', assisted: false, bodyweightExercise: false, bodyPart: 'pull', imageData: 'assets/exercises/e86.webp' },
+    { id: 'e78', name: 'Gesäßmaschine', sets: 3, repsMin: 10, repsMax: 15, weight: 0, category: 'unterkoerper', muscleGroup: 'Beine', muscles: 'Gesäßmuskulatur (Glutaeus maximus), hintere Oberschenkelmuskulatur unterstützend', type: 'reps', bodyPart: 'legs', mainMuscle: 'Gesäßmuskulatur', imageData: 'assets/exercises/e98.webp' },
   ],
   modeLists: {
     // Standard-Zusammenstellungen der Splits (A/B). Können jederzeit über das Stift-Symbol bei

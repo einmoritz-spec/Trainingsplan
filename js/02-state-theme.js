@@ -588,8 +588,19 @@ async function init(){
   // App-Start NICHT automatisch wieder auftauchen — auch wenn sie Teil von
   // DEFAULT_PLAN.exercises sind (sonst würde die Migration unten sie sofort erneut hinzufügen).
   const hiddenIds = new Set((Array.isArray(plan.removedExercises) ? plan.removedExercises : []).map(e => e.id));
+  const normName = (n) => String(n || '').trim().toLowerCase();
+  const hiddenNames = new Set((Array.isArray(plan.removedExercises) ? plan.removedExercises : []).map(e => normName(e.name)));
   DEFAULT_PLAN.exercises.forEach(defEx => {
     if (hiddenIds.has(defEx.id)) return;
+    // Hat jemand eine Standard-Übung schon selbst unter gleichem Namen angelegt (andere ID),
+    // wird sie NICHT doppelt hinzugefügt — stattdessen bekommt die eigene Übung bei Bedarf nur
+    // das Standardbild (ein eigenes Foto bleibt unangetastet).
+    const sameName = plan.exercises.find(e => e.id !== defEx.id && normName(e.name) === normName(defEx.name));
+    if (sameName){
+      if (!sameName.imageData && defEx.imageData){ sameName.imageData = defEx.imageData; planChanged = true; }
+      return;
+    }
+    if (hiddenNames.has(normName(defEx.name))) return;
     if (!plan.exercises.some(e => e.id === defEx.id)){
       plan.exercises.push({ ...defEx });
       planChanged = true;

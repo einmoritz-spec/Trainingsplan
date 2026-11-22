@@ -30,6 +30,7 @@
  * ohne Bump beim nächsten Online-Laden angekommen, ein Versionssprung stellt
  * aber sicher, dass auch rein offline installierte Instanzen beim nächsten
  * Update-Zyklus sauber alles neu holen, sobald wieder Netz da ist.
+ * v99: Neue Standard-Übung „Gesäßmaschine“ mit Bild e98.webp; gleichnamige eigene Übung bekommt nur das Bild (kein Duplikat).
  * v98: Neue Übungsbilder: Laufband, Crosstrainer, Fahrrad, Rudern (Kardio).
  * v97: Neues Übungsbild: Hammercurls Kabelturm.
  * v96: Nackenheben (msh8uwv8yqyxq) aus den Standard-Übungen entfernt (identisch mit Shrugs (Kettlebells)).
@@ -294,7 +295,7 @@
  * unverändert, nur andere Dateinamen/mehr Dateien in der Precache-Liste.
  */
 
-const CACHE_NAME = 'trainingsplan-cache-v98';
+const CACHE_NAME = 'trainingsplan-cache-v99';
 const FONT_CACHE_NAME = 'trainingsplan-fonts-v1';
 
 const APP_SHELL = [
@@ -380,6 +381,7 @@ const APP_SHELL = [
   './assets/exercises/e95.webp',
   './assets/exercises/e96.webp',
   './assets/exercises/e97.webp',
+  './assets/exercises/e98.webp',
   './assets/exercises/e35.webp',
   './assets/exercises/e38.webp',
   './assets/exercises/e41.webp',
