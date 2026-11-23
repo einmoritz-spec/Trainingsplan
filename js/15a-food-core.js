@@ -1068,6 +1068,12 @@ if (window.visualViewport){
    15d-food-stats.js (siehe Erläuterung am Dateikopf) — 05-calendar.js (Tages-Popup und
    Monatsbericht im TRAININGSkalender) ruft beide für die Essenstracker-Werte desselben Tages
    auf, unabhängig davon, ob die Essenstracker-Statistikseite je geöffnet wurde. */
+// Tage mit weniger als dieser Kalorienzahl gelten als "nicht eingetragen" (nicht als 0 kcal):
+// Sie fallen aus ALLEN Statistiken, Durchschnitten, Serien und Monatsübersichten heraus, die
+// über ftDayTotalsForISO()/ftAllDayTotals() laufen. Die Einträge selbst bleiben unangetastet
+// und sind im Tagesbildschirm weiterhin sichtbar/bearbeitbar.
+const FT_MIN_TRACKED_KCAL = 1000;
+function ftIsDayTracked(iso){ return !!ftDayTotalsForISO(iso); }
 function ftDayTotalsForISO(iso){
   const day = ftDays[iso];
   if (!day) return null;
@@ -1076,7 +1082,7 @@ function ftDayTotalsForISO(iso){
     kcal+=e.kcal; p+=e.p; c+=e.c; f+=e.f;
     fiber+=e.fiber||0; sugar+=e.sugar||0; salt+=e.salt||0;
   }));
-  if (!kcal) return null;
+  if (kcal < FT_MIN_TRACKED_KCAL) return null;
   return {
     kcal: Math.round(kcal), p: Math.round(p), c: Math.round(c), f: Math.round(f),
     fiber: Math.round(fiber*10)/10, sugar: Math.round(sugar*10)/10, salt: Math.round(salt*100)/100,

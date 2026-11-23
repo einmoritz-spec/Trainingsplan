@@ -310,6 +310,7 @@ function ftFoodMacroBreakdown(macroKey, periodDays){
     // Zeitraum mit, auch bei "Tag", und tauchen dann fälschlich in der Lebensmittel-
     // Aufschlüsselung eines Makros auf, obwohl sie gar nicht zum gewählten Zeitraum gehören.
     if (iso < cutoffIso || iso > todayIso) return;
+    if (!ftIsDayTracked(iso)) return; // < 1000 kcal = nicht eingetragen
     FT_MEAL_KEYS.forEach(k => (ftDays[iso][k]||[]).forEach(e => {
       if(e.kind === 'mealGroup'){
         (e.items||[]).forEach(i => add(i.name, (i[macroKey] || 0) * (e.portion ?? 1)));

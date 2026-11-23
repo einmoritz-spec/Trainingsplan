@@ -802,7 +802,7 @@ function ftOpenCopyPrevDayPrompt(){
    (eigene Seite mit Zurück-Pfeil, Hardware-Zurück-Taste funktioniert automatisch richtig). */
 function ftMonthOverviewDayMarker(year, month, day){
   const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  const hasEntries = ftDays[iso] && FT_MEAL_KEYS.some(k => (ftDays[iso][k]||[]).length);
+  const hasEntries = ftIsDayTracked(iso);
   return {
     color: hasEntries ? cssVar('--accent') : null,
     isToday: iso === ftTodayISO(),

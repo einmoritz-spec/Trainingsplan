@@ -146,7 +146,7 @@ function monthOverviewDayMarker(year, month, day){
   // kleine Punkt unter der Tageszahl ist entfernt), sorgt aber weiterhin dafür, dass reine
   // Ernährungstage ohne Training antippbar bleiben (siehe openDayTrainingPopup()).
   const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  const hasFood = typeof ftDays !== 'undefined' && !!ftDays[iso] && FT_MEAL_KEYS.some(k => (ftDays[iso][k]||[]).length);
+  const hasFood = typeof ftIsDayTracked === 'function' && ftIsDayTracked(iso);
   return { color, isToday, hasFood };
 }
 
