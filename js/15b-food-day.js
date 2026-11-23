@@ -897,6 +897,11 @@ function renderFtMonthOverview(){
     if (entries.some(e => e.isIntersecting)){
       appendFtMonthOverviewMonth(-ftMonthOverviewNextOffset);
       ftMonthOverviewNextOffset++;
+      // IntersectionObserver meldet nur Zustandswechsel — bleibt der Sentinel nach dem Anhängen
+      // noch im Vorlade-Bereich, käme sonst kein weiterer Monat. Neu beobachten erzwingt eine
+      // frische Prüfung (lädt weiter, bis der Sentinel wirklich außerhalb liegt).
+      ftMonthOverviewObserver.unobserve(sentinel);
+      ftMonthOverviewObserver.observe(sentinel);
     }
   }, { rootMargin: '600px 0px' });
   ftMonthOverviewObserver.observe(sentinel);
