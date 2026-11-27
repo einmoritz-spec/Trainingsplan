@@ -376,14 +376,15 @@ function ftRenderCurrentResults(){
 }
 
 function ftLocalResultsHTML(q){
-  const {custom, saved, base} = ftSearchLocal(q);
+  const {recent, custom, saved, base} = ftSearchLocal(q);
   let html = '';
+  if(recent.length) html += ftSection('Zuletzt gegessen', recent);
   if(custom.length) html += ftSection('Eigene Lebensmittel', custom);
   // Bereits online gefundene/gescannte Produkte liegen dauerhaft auf dem Gerät und werden
   // hier ganz normal mitangezeigt — kein erneuter Online-Abruf nötig (siehe ftSearchLocal()).
   if(saved.length) html += ftSection('Bereits genutzt (offline)', saved);
   if(base.length) html += ftSection('Basisliste', base);
-  if(!custom.length && !saved.length && !base.length) html += `<div class="no-results">Keine Treffer in deiner Liste.</div>`;
+  if(!recent.length && !custom.length && !saved.length && !base.length) html += `<div class="no-results">Keine Treffer in deiner Liste.</div>`;
   return html;
 }
 function ftShowLocalResultsOnly(q){
@@ -421,7 +422,8 @@ async function ftHandleSearchInput(q, opts){
   if(offResults.length){
     // Treffer, die bereits im Offline-Abschnitt "Bereits genutzt" stehen (ftOffCache, siehe
     // ftSearchLocal()), hier auslassen — sonst stünde dasselbe Produkt zweimal in der Liste.
-    const shownIds = new Set(ftSearchLocal(q).saved.map(f => f.id));
+    const local = ftSearchLocal(q);
+    const shownIds = new Set([...local.recent, ...local.saved].map(f => f.id));
     const fresh = offResults.filter(f => !shownIds.has(f.id));
     if(!fresh.length){
       loadingRow.outerHTML = `<div class="no-results">Keine weiteren Online-Treffer.</div>`;
@@ -430,7 +432,8 @@ async function ftHandleSearchInput(q, opts){
     }
     // Gleiches Prinzip wie ftRankFoods() für die lokalen Treffer: schon getrackte Online-
     // Ergebnisse zuerst, nach Häufigkeit sortiert.
-    const sorted = fresh.slice().sort((a,b) => (ftFoodUsageCount[b.id]||0) - (ftFoodUsageCount[a.id]||0));
+    const lastUsed = ftRecentUsageMap();
+    const sorted = fresh.slice().sort((a,b) => (lastUsed[b.id]||0) - (lastUsed[a.id]||0) || (ftFoodUsageCount[b.id]||0) - (ftFoodUsageCount[a.id]||0));
     loadingRow.outerHTML = sorted.map(ftResultRowHTML).join('');
   } else if(reason === 'offline'){
     // Echtes "kein Internet" (navigator.onLine meldet false, siehe ftOffSearch()).

@@ -276,6 +276,28 @@ function ftRankFoods(list, q){
     .map(x=>x.f);
 }
 
+// Wann wurde ein Lebensmittel zuletzt gegessen? food.id -> Zeitstempel (ms), abgeleitet direkt
+// aus dem Tagebuch (ftDays) der letzten FT_RECENT_DAYS Tage — dadurch braucht es keinen neuen
+// gespeicherten Zustand, es funktioniert sofort auch für bereits getrackte Tage, und gelöschte
+// Einträge zählen automatisch nicht mehr. Wird bei jeder Suche frisch berechnet (wenige Dutzend
+// Einträge, praktisch kostenlos).
+const FT_RECENT_DAYS = 14;
+function ftRecentUsageMap(){
+  const map = {};
+  const cutoff = ftAddDays(ftTodayISO(), -FT_RECENT_DAYS);
+  const bump = (id, t) => { if(id && (!map[id] || t > map[id])) map[id] = t; };
+  Object.keys(ftDays).forEach(iso => {
+    if(iso < cutoff) return;
+    const dayStart = ftParseISO(iso).getTime();
+    FT_MEAL_KEYS.forEach(k => (ftDays[iso][k]||[]).forEach(e => {
+      const t = e.ts || dayStart;
+      if(e.kind === 'mealGroup') (e.items||[]).forEach(i => bump(i.sourceFoodId, t));
+      else bump(e.sourceFoodId, t);
+    }));
+  });
+  return map;
+}
+
 // Lokale Suche über ALLE offline verfügbaren Quellen. Dritte Gruppe `saved`: Produkte, die
 // schon einmal online gefunden oder per Barcode gescannt UND benutzt wurden — sie liegen
 // dauerhaft in ftOffCache (siehe ftPersistOffFoodIfNeeded()), tauchten bisher aber NUR über
@@ -283,13 +305,29 @@ function ftRankFoods(list, q){
 // also jedes Mal erneut online suchen, obwohl alle Nährwerte längst auf dem Gerät lagen.
 // Jetzt werden sie ganz normal mitdurchsucht und funktionieren damit auch offline und ohne
 // Verbrauch des Open-Food-Facts-Minutenbudgets.
+// Vierte Gruppe `recent`: Treffer, die in den letzten FT_RECENT_DAYS Tagen gegessen wurden —
+// ganz oben, das zuletzt gegessene zuerst, und aus den anderen Gruppen herausgenommen (so
+// steht z. B. "Reis, gekocht" von heute Mittag vor einem Eigenen Lebensmittel, das nur
+// zufällig auch "Reis" im Namen hat).
 function ftSearchLocal(query){
   const q = query.trim().toLowerCase();
-  if(!q) return {custom:[], base:[], saved:[]};
+  if(!q) return {recent:[], custom:[], base:[], saved:[]};
+  const lastUsed = ftRecentUsageMap();
+  const custom = ftRankFoods(ftCustomFoods, q);
+  const saved = ftRankFoods(Object.values(ftOffCache), q).slice(0, 40);
+  // Basisliste NICHT vorher kappen, sonst fiele ein zuletzt gegessener Treffer weg, der nur
+  // textlich weiter hinten liegt.
+  const base = ftRankFoods(BASE_FOODS, q);
+  const recent = [...custom, ...saved, ...base]
+    .filter(f => lastUsed[f.id])
+    .sort((a,b) => lastUsed[b.id] - lastUsed[a.id]);
+  const recentIds = new Set(recent.map(f => f.id));
+  const rest = list => list.filter(f => !recentIds.has(f.id));
   return {
-    custom: ftRankFoods(ftCustomFoods, q),
-    saved: ftRankFoods(Object.values(ftOffCache), q).slice(0, 40),
-    base: ftRankFoods(BASE_FOODS, q).slice(0, 40),
+    recent,
+    custom: rest(custom),
+    saved: rest(saved),
+    base: rest(base).slice(0, 40),
   };
 }
 
